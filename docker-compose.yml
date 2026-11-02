@@ -1,0 +1,64 @@
+services:
+  # Bong Garment Application (Ubuntu 24.04/26.04 + PHP 8.3-FPM + Nginx + Node.js 20)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bong_garment_app
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: bong_garment_db
+      DB_USERNAME: bong_user
+      DB_PASSWORD: bong_secret_password
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - bong_network
+
+  # MySQL 8.0 Database (InnoDB Storage Engine)
+  mysql:
+    image: mysql:8.0
+    container_name: bong_garment_mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: bong_garment_db
+      MYSQL_USER: bong_user
+      MYSQL_PASSWORD: bong_secret_password
+      MYSQL_ROOT_PASSWORD: root_secret_password
+    command:
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-storage-engine=InnoDB
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./database/sql/bong_garment_17_tables.sql:/docker-entrypoint-initdb.d/01_bong_garment_17_tables.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_secret_password"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - bong_network
+
+networks:
+  bong_network:
+    driver: bridge
+
+volumes:
+  db_data:
+    driver: local
+

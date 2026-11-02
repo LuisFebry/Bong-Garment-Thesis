@@ -183,6 +183,10 @@
               <i data-lucide="shield-alert" class="w-[18px] h-[18px] shrink-0"></i>
               <span class="flex-1">Quality Control &amp; Kerusakan</span><span class="role-dot"></span>
             </a>
+            <a href="#gudang" id="nav-gudang" data-tab="gudang" class="nav-link">
+              <i data-lucide="boxes" class="w-[18px] h-[18px] shrink-0"></i>
+              <span class="flex-1">Gudang &amp; Aksesoris</span><span class="role-dot"></span>
+            </a>
             <a href="#laporan" id="nav-laporan" data-tab="laporan" class="nav-link">
               <i data-lucide="file-bar-chart" class="w-[18px] h-[18px] shrink-0"></i>
               <span class="flex-1">Laporan Eksekutif</span><span class="role-dot"></span>
@@ -248,6 +252,11 @@
               <span id="notif-dot" class="absolute top-2 right-2.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white"></span>
             </button>
             <div id="notif-menu" class="dropdown hidden right-0 mt-2 w-96"></div>
+          </div>
+
+          <div id="audit-mode-badge" class="hidden px-2.5 py-1 bg-amber-100 text-amber-800 text-[11px] font-semibold rounded-full flex items-center gap-1.5 border border-amber-200">
+            <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+            <span>Mode Audit (Read-Only)</span>
           </div>
 
           <div class="w-px h-8 bg-slate-200"></div>
@@ -1320,6 +1329,90 @@
               <button type="button" data-action="goto" data-target="dashboard" class="btn btn-outline">Batal</button>
               <button type="button" data-action="submit-qc" class="btn btn-primary"><i data-lucide="save" class="w-4 h-4"></i>SIMPAN &amp; INISIASI REWORK</button>
             </div>
+          </div>
+        </section>
+
+        <!-- ============ SCREEN 7: GUDANG & AKSESORIS ============ -->
+        <section id="screen-gudang" class="screen-section" aria-labelledby="title-gudang">
+          <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+            <div>
+              <nav class="crumb mb-1.5" aria-label="Breadcrumb">
+                <button type="button" data-action="goto" data-target="gudang">GUDANG &amp; AKSESORIS</button>
+                <span class="text-slate-300">/</span><span class="text-indigo-600">STOK BARANG JADI &amp; AKSESORIS CMT</span>
+                <span class="badge ml-2 bg-indigo-50 text-indigo-700 ring-indigo-200 font-mono">17-Table Schema · MySQL 8.0</span>
+              </nav>
+              <h2 id="title-gudang" class="screen-title">Gudang &amp; Inventori Stok Barang Jadi</h2>
+              <p class="screen-sub">Inventori perpetual barang jadi hasil produksi (Stok_Barang_Jadi) dan manajemen stok fisik aksesoris (Aksesoris).</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <button type="button" data-action="modal-add-aksesoris" class="btn btn-outline"><i data-lucide="plus" class="w-4 h-4"></i>Tambah Aksesoris Baru</button>
+              <button type="button" data-action="modal-adjust-stok" class="btn btn-primary"><i data-lucide="sliders" class="w-4 h-4"></i>Penyesuaian Stok Jadi</button>
+            </div>
+          </div>
+
+          <div class="space-y-6 max-w-6xl">
+            <!-- Card 1: Stok Barang Jadi (Perpetual Inventory) -->
+            <article class="card">
+              <header class="card-head items-center justify-between">
+                <div class="flex items-start gap-3">
+                  <span class="card-icon"><i data-lucide="boxes" class="w-[18px] h-[18px]"></i></span>
+                  <div>
+                    <h3 class="card-title">1. Stok Barang Jadi (Perpetual Inventory · <code class="font-mono text-xs">Stok_Barang_Jadi</code>)</h3>
+                    <p class="card-sub">Stok bertambah secara otomatis setiap kali inspeksi QC tahap Jahit Akhir dinyatakan lolos (<code class="font-mono text-xs">jumlah_lolos &gt; 0</code>).</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span id="badge-total-stok-jadi" class="badge bg-emerald-50 text-emerald-700 ring-emerald-200 font-mono font-bold">0 Pcs</span>
+                </div>
+              </header>
+              <div class="overflow-x-auto max-h-[380px] overflow-y-auto thin-scroll">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase tracking-wider sticky top-0 z-10">
+                    <tr>
+                      <th class="th pl-5 py-3">ID Stok</th>
+                      <th class="th py-3">Pola Pakaian</th>
+                      <th class="th py-3">Spesifikasi Ukuran</th>
+                      <th class="th py-3">Variasi Warna</th>
+                      <th class="th py-3 text-right">Jumlah Stok (Pcs)</th>
+                      <th class="th pr-5 py-3 text-right">Pembaruan Terakhir</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbl-stok-jadi-body" class="divide-y divide-slate-100 bg-white"></tbody>
+                </table>
+              </div>
+            </article>
+
+            <!-- Card 2: Inventori Aksesoris CMT -->
+            <article class="card">
+              <header class="card-head items-center justify-between">
+                <div class="flex items-start gap-3">
+                  <span class="card-icon"><i data-lucide="package-search" class="w-[18px] h-[18px]"></i></span>
+                  <div>
+                    <h3 class="card-title">2. Inventori Fisik Aksesoris CMT (<code class="font-mono text-xs">Aksesoris</code>)</h3>
+                    <p class="card-sub">Kebutuhan kancing, ritsleting, benang, karet, dan woven label garment per pola pakaian.</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span id="badge-total-aksesoris" class="badge bg-indigo-50 text-indigo-700 ring-indigo-200 font-mono">0 Item</span>
+                </div>
+              </header>
+              <div class="overflow-x-auto max-h-[380px] overflow-y-auto thin-scroll">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase tracking-wider sticky top-0 z-10">
+                    <tr>
+                      <th class="th pl-5 py-3">ID</th>
+                      <th class="th py-3">Nama Aksesoris</th>
+                      <th class="th py-3">Ukuran</th>
+                      <th class="th py-3">Stok Saat Ini</th>
+                      <th class="th py-3">Satuan</th>
+                      <th class="th py-3">Supplier Rekanan</th>
+                      <th class="th pr-5 py-3 text-right">Tindakan</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbl-aksesoris-body" class="divide-y divide-slate-100 bg-white"></tbody>
+                </table>
+              </div>
+            </article>
           </div>
         </section>
 

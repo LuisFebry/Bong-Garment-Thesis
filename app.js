@@ -18,8 +18,8 @@
   /* --------------------------------------------------------------------------
    * 0. CONSTANTS & HELPERS
    * ------------------------------------------------------------------------ */
-  const DB_KEY = 'bong_garment_db_v1';
-  const DB_VERSION = 1;
+  const DB_KEY = 'bong_garment_db_v2_17tables';
+  const DB_VERSION = 2;
   const ROLE_KEY = 'bong_garment_role';
 
   /** Fixed "today" of the demo world so seeded data stays meaningful. */
@@ -28,49 +28,60 @@
   const TARGET_HARIAN_PCS = 1250;           // daily cutting capacity target
   const ORDER_ROWS_DEFAULT = 5;
   const CHART_LABELS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Hari Ini'];
-  const ACTIVE_STATUSES = ['ANTREAN', 'PEMOTONGAN', 'DALAM QC'];
+  const ACTIVE_STATUSES = ['ANTREAN', 'PEMOTONGAN', 'DALAM QC', 'Jahit', 'Finishing'];
 
-  /** Primary key of each of the 14 physical tables (thesis proposal order). */
+  /** Primary key of each of the 17 physical tables (canonical schema). */
   const TABLE_PK = {
     Sumber_Inisiasi: 'id_sumber',
     Kategori_Pola: 'id_kategori',
     Pola: 'id_pola',
     Spesifikasi_Ukuran: 'id_spesifikasi',
     User: 'id_user',
-    Pesanan: 'id_pesanan',
     Supplier: 'id_supplier',
+    Aksesoris: 'id_aksesoris',
+    Detail_Aksesoris_Pola: 'id_pola',
     Penerimaan_Bahan: 'id_penerimaan',
     Detail_Bahan_Warna: 'id_detail_warna',
     Detail_Roll_Bahan: 'id_roll',
+    Pesanan: 'id_pesanan',
+    Stok_Barang_Jadi: 'id_stok',
     Pemotongan_Seri: 'id_potong',
     Detail_Pemotongan_Warna: 'id_potong_warna',
     Detail_Gelaran_Kain: 'id_gelar',
-    Kerusakan: 'id_qc',
+    QC: 'id_qc',
+    Kerusakan: 'id_qc', // backward-compatibility alias
   };
 
-  const TABS = ['dashboard', 'pesanan', 'penerimaan', 'pemotongan', 'qc', 'laporan'];
+  const TABS = ['dashboard', 'pesanan', 'penerimaan', 'pemotongan', 'qc', 'gudang', 'laporan'];
   const TAB_META = {
     dashboard: { label: 'Dashboard', step: 1 },
     pesanan: { label: 'Kelola Pesanan & Pola', step: 2 },
     penerimaan: { label: 'Penerimaan & Roll Bahan', step: 3 },
     pemotongan: { label: 'Pemotongan Seri & Gelaran', step: 4 },
     qc: { label: 'Quality Control & Kerusakan', step: 5 },
-    laporan: { label: 'Laporan Eksekutif', step: 6 },
+    gudang: { label: 'Gudang & Aksesoris', step: 6 },
+    laporan: { label: 'Laporan Eksekutif', step: 7 },
     pengaturan: { label: 'Pengaturan Sistem' },
   };
 
   const ROLES = {
-    Admin: { icon: 'user-cog', desc: 'Kelola pesanan, penerimaan bahan & laporan', tabs: ['dashboard', 'pesanan', 'penerimaan', 'laporan', 'pengaturan'] },
+    Admin: { icon: 'user-cog', desc: 'Kelola penuh pesanan, master pola, inventori & laporan', tabs: ['dashboard', 'pesanan', 'penerimaan', 'pemotongan', 'qc', 'gudang', 'laporan', 'pengaturan'] },
+    Pemilik: { icon: 'crown', desc: 'Mode Audit (Read-Only) pemantauan kinerja & laporan eksekutif', tabs: ['dashboard', 'laporan'] },
     Pemotong: { icon: 'scissors', desc: 'Eksekusi pemotongan seri & input gelaran', tabs: ['dashboard', 'pemotongan'] },
-    QC: { icon: 'shield-check', desc: 'Inspeksi mutu & pencatatan temuan cacat', tabs: ['dashboard', 'qc'] },
-    Pemilik: { icon: 'crown', desc: 'Pemantauan kinerja & laporan eksekutif', tabs: ['dashboard', 'laporan'] },
+    QC: { icon: 'shield-check', desc: 'Inspeksi mutu berjenjang & penanganan cacat', tabs: ['dashboard', 'qc'] },
+    Gudang: { icon: 'boxes', desc: 'Penerimaan bahan, roll fisik, aksesoris & stok jadi', tabs: ['dashboard', 'penerimaan', 'gudang'] },
   };
 
   const STATUS_META = {
     'ANTREAN': { badge: 'bg-slate-100 text-slate-700 ring-slate-200', bar: 'bg-slate-400' },
+    'Antrean': { badge: 'bg-slate-100 text-slate-700 ring-slate-200', bar: 'bg-slate-400' },
     'PEMOTONGAN': { badge: 'bg-indigo-50 text-indigo-700 ring-indigo-200', bar: 'bg-indigo-500' },
+    'Pemotongan': { badge: 'bg-indigo-50 text-indigo-700 ring-indigo-200', bar: 'bg-indigo-500' },
     'DALAM QC': { badge: 'bg-amber-50 text-amber-700 ring-amber-200', bar: 'bg-amber-400' },
+    'Jahit': { badge: 'bg-blue-50 text-blue-700 ring-blue-200', bar: 'bg-blue-500' },
+    'Finishing': { badge: 'bg-purple-50 text-purple-700 ring-purple-200', bar: 'bg-purple-500' },
     'SELESAI': { badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', bar: 'bg-emerald-500' },
+    'Selesai': { badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', bar: 'bg-emerald-500' },
   };
 
   const SUMBER_META = {
@@ -88,8 +99,9 @@
   };
 
   const QC_META = {
+    'Lolos QC': { badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: 'check-circle-2', iconCls: 'bg-emerald-50 text-emerald-600 ring-emerald-100' },
     'Need Rework': { badge: 'bg-rose-50 text-rose-700 ring-rose-200', icon: 'rotate-ccw', iconCls: 'bg-rose-50 text-rose-600 ring-rose-100' },
-    'Rework Selesai': { badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: 'circle-check', iconCls: 'bg-emerald-50 text-emerald-600 ring-emerald-100' },
+    'Rework Selesai': { badge: 'bg-blue-50 text-blue-700 ring-blue-200', icon: 'check-check', iconCls: 'bg-blue-50 text-blue-600 ring-blue-100' },
     'Retur Supplier': { badge: 'bg-amber-50 text-amber-700 ring-amber-200', icon: 'undo-2', iconCls: 'bg-amber-50 text-amber-600 ring-amber-100' },
     'Scrapped': { badge: 'bg-rose-100 text-rose-800 ring-rose-300', icon: 'trash-2', iconCls: 'bg-rose-100 text-rose-700 ring-rose-200' },
     'Finished': { badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: 'check-circle-2', iconCls: 'bg-emerald-50 text-emerald-600 ring-emerald-100' },
@@ -137,10 +149,7 @@
   }
 
   /* --------------------------------------------------------------------------
-   * 1. SEED DATA — 14 physical tables
-   *    Engineered so the dashboard derives exactly the wireframe figures:
-   *    18 active orders (8/6/4), 142 rolls Tersedia, 1,250 pcs today across
-   *    19 gelaran / 8 rolls, avg 68.4 pcs/roll (7 days), 3 orders pending rework.
+   * 1. SEED DATA — 17 physical tables (canonical schema)
    * ------------------------------------------------------------------------ */
   function buildSeed() {
     const rnd = mulberry32(825220088);
@@ -155,25 +164,25 @@
 
     // 2. Kategori_Pola
     const Kategori_Pola = [
-      { id_kategori: 1, nama_kategori: 'Kemeja' },
+      { id_kategori: 1, nama_kategori: 'Kemeja & Formal' },
       { id_kategori: 2, nama_kategori: 'Kaos & Polo' },
       { id_kategori: 3, nama_kategori: 'Jaket & Outerwear' },
-      { id_kategori: 4, nama_kategori: 'Celana' },
+      { id_kategori: 4, nama_kategori: 'Celana & Chino' },
     ];
 
     // 3. Pola
     const Pola = [
-      { id_pola: 1, id_kategori: 1, kode_pola: 'KMJ-FLN-01', nama_pola: 'Kemeja Flanel' },
-      { id_pola: 2, id_kategori: 3, kode_pola: 'JKT-CNV-02', nama_pola: 'Jaket Canvas' },
-      { id_pola: 3, id_kategori: 2, kode_pola: 'KOS-PLS-03', nama_pola: 'Kaos Polos' },
-      { id_pola: 4, id_kategori: 1, kode_pola: 'KMJ-OXF-04', nama_pola: 'Kemeja Oxford' },
-      { id_pola: 5, id_kategori: 2, kode_pola: 'POL-SHR-05', nama_pola: 'Polo Shirt' },
-      { id_pola: 6, id_kategori: 4, kode_pola: 'CLN-CHN-06', nama_pola: 'Celana Chino' },
-      { id_pola: 7, id_kategori: 3, kode_pola: 'HDY-FLC-07', nama_pola: 'Hoodie Fleece' },
-      { id_pola: 8, id_kategori: 2, kode_pola: 'KOS-RGL-08', nama_pola: 'Kaos Raglan' },
+      { id_pola: 1, id_kategori: 1, kode_pola: 'KMJ-FLN-01', nama_pola: 'Kemeja Flanel Casual' },
+      { id_pola: 2, id_kategori: 3, kode_pola: 'JKT-CNV-02', nama_pola: 'Jaket Canvas Utility' },
+      { id_pola: 3, id_kategori: 2, kode_pola: 'KOS-PLS-03', nama_pola: 'Kaos Polos Cotton Combed 30s' },
+      { id_pola: 4, id_kategori: 1, kode_pola: 'KMJ-OXF-04', nama_pola: 'Kemeja Oxford Slim Fit' },
+      { id_pola: 5, id_kategori: 2, kode_pola: 'POL-SHR-05', nama_pola: 'Polo Shirt Lacoste CVC' },
+      { id_pola: 6, id_kategori: 4, kode_pola: 'CLN-CHN-06', nama_pola: 'Celana Chino Stretch Kasual' },
+      { id_pola: 7, id_kategori: 3, kode_pola: 'HDY-FLC-07', nama_pola: 'Hoodie Fleece Heavyweight' },
+      { id_pola: 8, id_kategori: 2, kode_pola: 'KOS-RGL-08', nama_pola: 'Kaos Raglan Two-Tone' },
     ];
 
-    // 4. Spesifikasi_Ukuran (S–XL per pola)
+    // 4. Spesifikasi_Ukuran (11 metric columns)
     const ukuranBase = { // [lingkar_dada, panjang, lebar_bahu, panjang_lengan]
       1: [100, 72, 44, 60], 2: [108, 70, 47, 62], 3: [96, 68, 42, 20], 4: [102, 73, 44, 60],
       5: [98, 69, 43, 22], 7: [110, 68, 50, 60], 8: [96, 68, 42, 58],
@@ -183,24 +192,64 @@
     Pola.forEach((p) => {
       ['S', 'M', 'L', 'XL'].forEach((uk, i) => {
         if (p.id_pola === 6) {
-          Spesifikasi_Ukuran.push({ id_spesifikasi: idSpec++, id_pola: 6, nama_ukuran: uk, lingkar_dada: null, panjang: 98 + i, lebar_bahu: null, panjang_lengan: null, lingkar_pinggang: 72 + i * 4 });
+          // Bottom / Trousers (Celana Chino)
+          Spesifikasi_Ukuran.push({
+            id_spesifikasi: idSpec++,
+            id_pola: 6,
+            nama_ukuran: uk,
+            diameter_leher: null,
+            panjang_pundak: null,
+            lingkar_lengan: null,
+            panjang_tangan: null,
+            lingkar_dada: null,
+            lingkar_pinggang: 72 + i * 4,
+            lingkar_selangkang: round1(26 + i * 1.5),
+            lingkar_paha: 56 + i * 2,
+            lebar_kaki: 34 + i * 1,
+            lebar_baju: null,
+            panjang_baju_celana: 98 + i * 2,
+            // Backwards compatibility aliases
+            panjang: 98 + i * 2,
+            lebar_bahu: null,
+            panjang_lengan: null,
+          });
         } else {
+          // Top garments (Kemeja, Kaos, Polo, Jaket, Hoodie)
           const [dd, pj, bh, lg] = ukuranBase[p.id_pola];
-          Spesifikasi_Ukuran.push({ id_spesifikasi: idSpec++, id_pola: p.id_pola, nama_ukuran: uk, lingkar_dada: dd + i * 4, panjang: pj + i * 2, lebar_bahu: round1(bh + i * 1.5), panjang_lengan: round1(lg + i), lingkar_pinggang: null });
+          Spesifikasi_Ukuran.push({
+            id_spesifikasi: idSpec++,
+            id_pola: p.id_pola,
+            nama_ukuran: uk,
+            diameter_leher: round1(17.5 + i * 0.5),
+            panjang_pundak: round1(bh + i * 1.5),
+            lingkar_lengan: 42 + i * 2,
+            panjang_tangan: round1(lg + i),
+            lingkar_dada: dd + i * 4,
+            lingkar_pinggang: (dd + i * 4) - 2,
+            lingkar_selangkang: null,
+            lingkar_paha: null,
+            lebar_kaki: null,
+            lebar_baju: round1((dd + i * 4) / 2),
+            panjang_baju_celana: pj + i * 2,
+            // Backwards compatibility aliases
+            panjang: pj + i * 2,
+            lebar_bahu: round1(bh + i * 1.5),
+            panjang_lengan: round1(lg + i),
+          });
         }
       });
     });
 
-    // 5. User
+    // 5. User (5 RBAC Roles)
     const User = [
       { id_user: 1, username: 'luis.febry', nama_user: 'Luis Febry', role: 'Admin' },
-      { id_user: 2, username: 'budi.cutter', nama_user: 'Budi Santoso', role: 'Pemotong' },
-      { id_user: 3, username: 'sari.qc', nama_user: 'Sari Wulandari', role: 'QC' },
-      { id_user: 4, username: 'bong.owner', nama_user: 'Bong Hartono', role: 'Pemilik' },
-      { id_user: 5, username: 'agus.cutter', nama_user: 'Agus Pratama', role: 'Pemotong' },
+      { id_user: 2, username: 'bong.owner', nama_user: 'Bong Hartono', role: 'Pemilik' },
+      { id_user: 3, username: 'budi.cutter', nama_user: 'Budi Santoso', role: 'Pemotong' },
+      { id_user: 4, username: 'sari.qc', nama_user: 'Siti Rahma', role: 'QC' },
+      { id_user: 5, username: 'agus.gudang', nama_user: 'Agus Hermawan', role: 'Gudang' },
     ];
 
-    // 7. Supplier
+    // 6. Supplier
     const Supplier = [
       { id_supplier: 1, nama_supplier: 'PT Sinar Tekstil Abadi', kontak: '022-6012345', alamat: 'Jl. Soekarno-Hatta No. 112, Bandung' },
       { id_supplier: 2, nama_supplier: 'CV Kahatex Mandiri', kontak: '0812-2201-7788', alamat: 'Jl. Raya Rancaekek KM 23, Sumedang' },
@@ -208,24 +257,51 @@
       { id_supplier: 4, nama_supplier: 'Toko Kain Cigondewah Jaya', kontak: '0857-2034-1122', alamat: 'Jl. Cigondewah Kaler No. 8, Bandung' },
     ];
 
-    // 8. Penerimaan_Bahan
+    // 7. Aksesoris
+    const Aksesoris = [
+      { id_aksesoris: 1, id_supplier: 2, nama_aksesoris: 'Kancing Jamur Resin Smoke Grey 18L', ukuran: '18L', stok: 15000, satuan: 'pcs' },
+      { id_aksesoris: 2, id_supplier: 2, nama_aksesoris: 'Ritsleting Metal YKK Antique Brass 7 Inch', ukuran: '7 Inch', stok: 2400, satuan: 'pcs' },
+      { id_aksesoris: 3, id_supplier: 2, nama_aksesoris: 'Benang Jahit Katun Astra 40/2 Hitam', ukuran: '5000 Yds', stok: 180, satuan: 'pcs' },
+      { id_aksesoris: 4, id_supplier: 2, nama_aksesoris: 'Label Woven Tag Bong Garment Premium', ukuran: '5x2.5 cm', stok: 12000, satuan: 'pcs' },
+      { id_aksesoris: 5, id_supplier: 2, nama_aksesoris: 'Karet Pinggang Stretch Elastic 3.8cm', ukuran: '3.8 cm', stok: 45, satuan: 'gross' },
+    ];
+
+    // 8. Detail_Aksesoris_Pola
+    const Detail_Aksesoris_Pola = [
+      { id_pola: 1, id_aksesoris: 1, jumlah_digunakan: 8 },
+      { id_pola: 1, id_aksesoris: 4, jumlah_digunakan: 1 },
+      { id_pola: 1, id_aksesoris: 3, jumlah_digunakan: 1 },
+      { id_pola: 2, id_aksesoris: 2, jumlah_digunakan: 1 },
+      { id_pola: 2, id_aksesoris: 4, jumlah_digunakan: 1 },
+      { id_pola: 3, id_aksesoris: 4, jumlah_digunakan: 1 },
+      { id_pola: 3, id_aksesoris: 3, jumlah_digunakan: 1 },
+      { id_pola: 4, id_aksesoris: 1, jumlah_digunakan: 8 },
+      { id_pola: 4, id_aksesoris: 4, jumlah_digunakan: 1 },
+      { id_pola: 5, id_aksesoris: 1, jumlah_digunakan: 3 },
+      { id_pola: 5, id_aksesoris: 4, jumlah_digunakan: 1 },
+      { id_pola: 6, id_aksesoris: 2, jumlah_digunakan: 1 },
+      { id_pola: 6, id_aksesoris: 1, jumlah_digunakan: 1 },
+      { id_pola: 6, id_aksesoris: 5, jumlah_digunakan: 1 },
+      { id_pola: 6, id_aksesoris: 4, jumlah_digunakan: 1 },
+    ];
+
+    // 9. Penerimaan_Bahan
     const pb = (id_penerimaan, id_supplier, no_nota, tgl_nota, nama_kain, lebar_gramasi, no_kendaraan, penerima) =>
       ({ id_penerimaan, id_supplier, no_nota, tgl_nota, nama_kain, lebar_gramasi, no_kendaraan, penerima });
     const Penerimaan_Bahan = [
-      pb(1, 2, '796', d(-16), 'Combed 30s', '72" · 180 gsm', 'D 8123 AB', 'Dedi Kurniawan'),
-      pb(2, 3, '797', d(-14), 'Flanel Yarn Dyed', '58" · 165 gsm', 'B 9012 KLA', 'Dedi Kurniawan'),
-      pb(3, 4, '798', d(-13), 'Lacoste PE', '72" · 220 gsm', 'D 1456 TR', 'Dedi Kurniawan'),
+      pb(1, 2, '796', d(-16), 'Combed 30s', '72" · 180 gsm', 'D 8123 AB', 'Agus Hermawan'),
+      pb(2, 3, '797', d(-14), 'Flanel Yarn Dyed', '58" · 165 gsm', 'B 9012 KLA', 'Agus Hermawan'),
+      pb(3, 4, '798', d(-13), 'Lacoste PE', '72" · 220 gsm', 'D 1456 TR', 'Agus Hermawan'),
       pb(4, 1, '799', d(-12), 'Cotton Oxford', '58" · 130 gsm', 'D 7781 UF', 'Luis Febry'),
       pb(5, 1, '800', d(-11), 'Twill Drill', '58" · 240 gsm', 'D 7781 UF', 'Luis Febry'),
-      pb(6, 2, '801', d(-8), 'Combed 30s', '72" · 180 gsm', 'D 8123 AB', 'Dedi Kurniawan'),
-      pb(7, 4, '802', d(-7), 'Canvas', '60" · 12 oz', 'D 1456 TR', 'Dedi Kurniawan'),
+      pb(6, 2, '801', d(-8), 'Combed 30s', '72" · 180 gsm', 'D 8123 AB', 'Agus Hermawan'),
+      pb(7, 4, '802', d(-7), 'Canvas', '60" · 12 oz', 'D 1456 TR', 'Agus Hermawan'),
       pb(8, 1, '803', d(-2), 'Drill', '58" · 230 gsm', 'D 7781 UF', 'Luis Febry'),
-      pb(9, 2, '804', d(-1), 'Fleece Cotton', '72" · 280 gsm', 'D 8123 AB', 'Dedi Kurniawan'),
+      pb(9, 2, '804', d(-1), 'Fleece Cotton', '72" · 280 gsm', 'D 8123 AB', 'Agus Hermawan'),
       pb(10, 4, '805', d(0), 'Canvas', '60" · 12 oz', 'D 1456 TR', 'Luis Febry'),
     ];
 
-    // 9 + 10. Detail_Bahan_Warna & Detail_Roll_Bahan
-    // [id_detail_warna, id_penerimaan, nama_warna, kode_warna, rak, usedRollIds, tersediaCount]
+    // 10 + 11. Detail_Bahan_Warna & Detail_Roll_Bahan
     const warnaSpec = [
       [1, 1, 'White', 'WHT-01', 'A-03', range(4452, 4458), 0],
       [2, 1, 'Misty Grey', 'GRY-02', 'A-04', range(4459, 4466), 0],
@@ -259,23 +335,53 @@
       const rolls = ids.map((rid, i) => {
         let status = 'Tersedia';
         if (used.includes(rid)) status = rid === 4501 ? 'Dipotong' : rid === 4489 ? 'Retur' : 'Habis';
+        const initialWeight = beratOverride[rid] ?? round1(20 + rnd() * 8);
+        const sisaWeight = status === 'Habis' ? 0.0 : (status === 'Dipotong' ? 6.2 : initialWeight);
         return {
-          id_roll: rid, id_detail_warna: id, no_roll_ke: i + 1,
-          berat_kg: beratOverride[rid] ?? round1(20 + rnd() * 8),
-          total_roll: ids.length, status_roll: status,
+          id_roll: rid,
+          id_detail_warna: id,
+          no_roll_ke: i + 1,
+          berat_kg: initialWeight, // alias
+          ukuran_awal: initialWeight,
+          ukuran_sisa: sisaWeight,
+          satuan: 'Kg',
+          total_roll: ids.length,
+          status_roll: status,
           rak_alokasi: status === 'Tersedia' ? rak : status === 'Dipotong' ? 'Meja Potong 02' : '-',
         };
       });
       Detail_Roll_Bahan.push(...rolls);
-      Detail_Bahan_Warna.push({ id_detail_warna: id, id_penerimaan: idPen, nama_warna: nama, kode_warna: kode, total_roll: ids.length, total_kg: round1(sum(rolls, (r) => r.berat_kg)) });
+      const totalKg = round1(sum(rolls, (r) => r.ukuran_awal));
+      Detail_Bahan_Warna.push({
+        id_detail_warna: id,
+        id_penerimaan: idPen,
+        nama_warna: nama,
+        kode_warna: kode,
+        total_roll: ids.length,
+        total_kg: totalKg,
+        total_ukuran: totalKg,
+        satuan_ukur: 'Kg',
+      });
     });
     Detail_Roll_Bahan.sort((a, b) => a.id_roll - b.id_roll);
 
-    // 6. Pesanan
-    const ps = (id, pola, sumber, pen, mitra, order, deadline, status, pct) => ({
-      id_pesanan: id, id_pola: pola, id_sumber: sumber, id_penerimaan: pen, id_user_admin: 1,
-      jenis_pesanan: sumber === 1 ? 'Makloon CMT (Mitra)' : 'Produksi Mandiri',
-      nama_mitra: mitra, tgl_order: d(order), deadline: d(deadline), status_pesanan: status, progress_pct: pct,
+    // 12. Pesanan
+    const ps = (id, pola, sumber, pen, mitra, order, deadline, status, pct, revDl = null, alasan = null) => ({
+      id_pesanan: id,
+      id_pola: pola,
+      id_sumber: sumber,
+      id_penerimaan: pen,
+      id_user_admin: 1,
+      jenis_pesanan: sumber === 1 ? 'Makloon CMT (Mitra)' : (sumber === 2 ? 'Produk Abadi (Bong Garment)' : 'Inisiatif Tren Pasar'),
+      nama_mitra: sumber === 1 ? mitra : null,
+      tgl_order: d(order),
+      deadline_awal: d(deadline),
+      deadline_terbaru: revDl ? d(revDl) : d(deadline),
+      deadline: revDl ? d(revDl) : d(deadline), // alias
+      tgl_perubahan_deadline: revDl ? (d(-2) + ' 14:00:00') : null,
+      alasan_perubahan_deadline: alasan,
+      status_pesanan: status,
+      progress_pct: pct,
     });
     const Pesanan = [
       ps(96, 8, 2, 1, null, -24, -5, 'SELESAI', 100),
@@ -283,7 +389,7 @@
       ps(98, 5, 1, 3, 'CV Sport Wear Indo', -21, -2, 'SELESAI', 100),
       ps(99, 4, 1, 4, 'PT Seragam Nusantara', -20, -1, 'SELESAI', 100),
       ps(100, 3, 2, 1, null, -19, -1, 'SELESAI', 100),
-      ps(101, 1, 1, 2, 'PT Busana Indah', -18, 8, 'PEMOTONGAN', 70),
+      ps(101, 1, 1, 2, 'PT Busana Indah', -18, 8, 'PEMOTONGAN', 70, 6, 'Permintaan percepatan jadwal distribusi oleh mitra untuk event peluncuran produk'),
       ps(102, 2, 3, 10, null, -1, 23, 'ANTREAN', 25),
       ps(103, 3, 2, 1, null, -20, 3, 'DALAM QC', 90),
       ps(104, 2, 1, 7, 'CV Maju Garmindo', -10, 11, 'PEMOTONGAN', 55),
@@ -303,8 +409,17 @@
       ps(118, 4, 1, 4, 'PT Seragam Nusantara', -13, 7, 'DALAM QC', 92),
     ];
 
-    // 11 + 12 + 13. Pemotongan_Seri, Detail_Pemotongan_Warna, Detail_Gelaran_Kain
-    // Past days: one gelaran per roll, layers spread evenly. Today: explicit gelaran (lembar per gelaran).
+    // 13. Stok_Barang_Jadi
+    const Stok_Barang_Jadi = [
+      { id_stok: 1, id_pola: 3, id_spesifikasi: 9, nama_warna: 'White', jumlah_stok_pcs: 180, tgl_update_terakhir: d(-2) + ' 16:30:00' },
+      { id_stok: 2, id_pola: 3, id_spesifikasi: 10, nama_warna: 'White', jumlah_stok_pcs: 240, tgl_update_terakhir: d(-2) + ' 16:30:00' },
+      { id_stok: 3, id_pola: 3, id_spesifikasi: 11, nama_warna: 'Misty Grey', jumlah_stok_pcs: 150, tgl_update_terakhir: d(-3) + ' 14:15:00' },
+      { id_stok: 4, id_pola: 1, id_spesifikasi: 2, nama_warna: 'Red Check', jumlah_stok_pcs: 95, tgl_update_terakhir: d(-4) + ' 11:00:00' },
+      { id_stok: 5, id_pola: 5, id_spesifikasi: 18, nama_warna: 'Navy', jumlah_stok_pcs: 120, tgl_update_terakhir: d(-1) + ' 17:00:00' },
+      { id_stok: 6, id_pola: 6, id_spesifikasi: 22, nama_warna: 'Khaki', jumlah_stok_pcs: 85, tgl_update_terakhir: d(-5) + ' 10:30:00' },
+    ];
+
+    // 14 + 15 + 16. Pemotongan_Seri, Detail_Pemotongan_Warna, Detail_Gelaran_Kain
     const potongSpec = [
       { id: 294, ord: 103, day: -6, ppl: 4, pjg: 5.2, total: 380, rolls: range(4452, 4458) },
       { id: 295, ord: 117, day: -5, ppl: 6, pjg: 6.0, total: 420, rolls: range(4459, 4466) },
@@ -344,6 +459,7 @@
         id_potong_warna: idPW++, id_potong: s.id, id_detail_warna: rollById[rollIds[0]].id_detail_warna,
         total_lembar_direncanakan: Math.ceil(total / 50) * 50,
         berat_terpakai_kg: round1(sum(rollIds, (rid) => rollById[rid].berat_kg * (rollById[rid].status_roll === 'Dipotong' ? 0.6 : 1))),
+        kain_terpakai: round1(sum(rollIds, (rid) => rollById[rid].berat_kg * (rollById[rid].status_roll === 'Dipotong' ? 0.6 : 1))),
       };
       Detail_Pemotongan_Warna.push(pw);
       rollIds.forEach((rid) => gel[rid].forEach((lembar) => {
@@ -351,22 +467,23 @@
       }));
     });
 
-    // 14. Kerusakan
-    const Kerusakan = [
-      { id_qc: 82, id_pesanan: 96, id_user_qc: 3, jenis_cacat: 'Cacat Jahit', jumlah_pcs: 5, catatan: 'Jahitan rantai lepas pada ujung lengan', tgl_temuan: d(-9), status: 'Rework Selesai', tgl_selesai_perbaikan: d(-8), pic_rework: 'Tim Jahit B' },
-      { id_qc: 83, id_pesanan: 100, id_user_qc: 3, jenis_cacat: 'Cacat Potong', jumlah_pcs: 4, catatan: 'Selisih ukuran panel badan belakang (±1 cm)', tgl_temuan: d(-5), status: 'Rework Selesai', tgl_selesai_perbaikan: d(-4), pic_rework: 'Tim Potong A' },
-      { id_qc: 84, id_pesanan: 116, id_user_qc: 3, jenis_cacat: 'Cacat Jahit', jumlah_pcs: 6, catatan: 'Jahitan kerah polo miring & bergelombang', tgl_temuan: d(-1), status: 'Need Rework', tgl_selesai_perbaikan: null, pic_rework: 'Tim Jahit A' },
-      { id_qc: 85, id_pesanan: 103, id_user_qc: 3, jenis_cacat: 'Cacat Potong', jumlah_pcs: 8, catatan: 'Ukuran panel tidak presisi akibat pergeseran layer tumpuk ke-7', tgl_temuan: d(-1), status: 'Need Rework', tgl_selesai_perbaikan: null, pic_rework: 'Tim Potong B (Agus)' },
-      { id_qc: 86, id_pesanan: 98, id_user_qc: 3, jenis_cacat: 'Cacat Bahan', jumlah_pcs: 1, catatan: 'Shading warna belang di tengah roll id_roll: 4489', tgl_temuan: d(-2), status: 'Retur Supplier', tgl_selesai_perbaikan: null, pic_rework: 'Gudang · Retur Supplier' },
-      { id_qc: 87, id_pesanan: 99, id_user_qc: 3, jenis_cacat: 'Cacat Jahit', jumlah_pcs: 3, catatan: 'Kerutan pada kerah leher', tgl_temuan: d(-1), status: 'Rework Selesai', tgl_selesai_perbaikan: d(0), pic_rework: 'Tim Jahit A' },
-      { id_qc: 88, id_pesanan: 101, id_user_qc: 3, jenis_cacat: 'Cacat Potong', jumlah_pcs: 12, catatan: 'Pergeseran pola kain pada gelaran layer 4', tgl_temuan: d(0), status: 'Need Rework', tgl_selesai_perbaikan: null, pic_rework: 'Tim Potong A (Budi)' },
+    // 17. QC (Multi-stage Inspection & Kerusakan)
+    const QC = [
+      { id_qc: 82, id_pesanan: 96, id_user_qc: 4, tahap_qc: 'Jahit Akhir', tgl_pemeriksaan: d(-9) + ' 14:00:00', jumlah_diperiksa: 380, jumlah_lolos: 375, jumlah_cacat: 5, jenis_cacat: 'Cacat Jahit', catatan_qc: 'Jahitan rantai lepas pada ujung lengan', status_qc: 'Rework Selesai', tgl_target_perbaikan: d(-8), tgl_selesai_perbaikan: d(-8) + ' 16:00:00', pic_rework: 'Tim Jahit B', status: 'Rework Selesai', jumlah_pcs: 5, catatan: 'Jahitan rantai lepas pada ujung lengan', tgl_temuan: d(-9) },
+      { id_qc: 83, id_pesanan: 100, id_user_qc: 4, tahap_qc: 'Potong', tgl_pemeriksaan: d(-5) + ' 11:30:00', jumlah_diperiksa: 420, jumlah_lolos: 416, jumlah_cacat: 4, jenis_cacat: 'Cacat Potong', catatan_qc: 'Selisih ukuran panel badan belakang (±1 cm)', status_qc: 'Rework Selesai', tgl_target_perbaikan: d(-4), tgl_selesai_perbaikan: d(-4) + ' 15:00:00', pic_rework: 'Tim Potong A', status: 'Rework Selesai', jumlah_pcs: 4, catatan: 'Selisih ukuran panel badan belakang (±1 cm)', tgl_temuan: d(-5) },
+      { id_qc: 84, id_pesanan: 116, id_user_qc: 4, tahap_qc: 'Jahit Akhir', tgl_pemeriksaan: d(-1) + ' 16:15:00', jumlah_diperiksa: 290, jumlah_lolos: 284, jumlah_cacat: 6, jenis_cacat: 'Cacat Jahit', catatan_qc: 'Jahitan kerah polo miring & bergelombang', status_qc: 'Need Rework', tgl_target_perbaikan: d(1), tgl_selesai_perbaikan: null, pic_rework: 'Tim Jahit A', status: 'Need Rework', jumlah_pcs: 6, catatan: 'Jahitan kerah polo miring & bergelombang', tgl_temuan: d(-1) },
+      { id_qc: 85, id_pesanan: 103, id_user_qc: 4, tahap_qc: 'Potong', tgl_pemeriksaan: d(-1) + ' 10:00:00', jumlah_diperiksa: 380, jumlah_lolos: 372, jumlah_cacat: 8, jenis_cacat: 'Cacat Potong', catatan_qc: 'Ukuran panel tidak presisi akibat pergeseran layer tumpuk ke-7', status_qc: 'Need Rework', tgl_target_perbaikan: d(1), tgl_selesai_perbaikan: null, pic_rework: 'Tim Potong B (Agus)', status: 'Need Rework', jumlah_pcs: 8, catatan: 'Ukuran panel tidak presisi akibat pergeseran layer tumpuk ke-7', tgl_temuan: d(-1) },
+      { id_qc: 86, id_pesanan: 98, id_user_qc: 4, tahap_qc: 'Prototipe', tgl_pemeriksaan: d(-2) + ' 13:00:00', jumlah_diperiksa: 10, jumlah_lolos: 9, jumlah_cacat: 1, jenis_cacat: 'Cacat Bahan', catatan_qc: 'Shading warna belang di tengah roll id_roll: 4489', status_qc: 'Scrapped', tgl_target_perbaikan: null, tgl_selesai_perbaikan: null, pic_rework: 'Gudang · Retur Supplier', status: 'Retur Supplier', jumlah_pcs: 1, catatan: 'Shading warna belang di tengah roll id_roll: 4489', tgl_temuan: d(-2) },
+      { id_qc: 87, id_pesanan: 99, id_user_qc: 4, tahap_qc: 'Jahit Akhir', tgl_pemeriksaan: d(-1) + ' 15:45:00', jumlah_diperiksa: 310, jumlah_lolos: 307, jumlah_cacat: 3, jenis_cacat: 'Cacat Jahit', catatan_qc: 'Kerutan pada kerah leher', status_qc: 'Rework Selesai', tgl_target_perbaikan: d(0), tgl_selesai_perbaikan: d(0) + ' 11:30:00', pic_rework: 'Tim Jahit A', status: 'Rework Selesai', jumlah_pcs: 3, catatan: 'Kerutan pada kerah leher', tgl_temuan: d(-1) },
+      { id_qc: 88, id_pesanan: 101, id_user_qc: 4, tahap_qc: 'Potong', tgl_pemeriksaan: d(0) + ' 14:00:00', jumlah_diperiksa: 360, jumlah_lolos: 348, jumlah_cacat: 12, jenis_cacat: 'Cacat Potong', catatan_qc: 'Pergeseran pola kain pada gelaran layer 4', status_qc: 'Need Rework', tgl_target_perbaikan: d(1), tgl_selesai_perbaikan: null, pic_rework: 'Tim Potong A (Budi)', status: 'Need Rework', jumlah_pcs: 12, catatan: 'Pergeseran pola kain pada gelaran layer 4', tgl_temuan: d(0) },
     ];
 
     return {
       _meta: { version: DB_VERSION, app_today: APP_TODAY, seeded_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-      Sumber_Inisiasi, Kategori_Pola, Pola, Spesifikasi_Ukuran, User, Pesanan, Supplier,
-      Penerimaan_Bahan, Detail_Bahan_Warna, Detail_Roll_Bahan, Pemotongan_Seri,
-      Detail_Pemotongan_Warna, Detail_Gelaran_Kain, Kerusakan,
+      Sumber_Inisiasi, Kategori_Pola, Pola, Spesifikasi_Ukuran, User, Supplier, Aksesoris, Detail_Aksesoris_Pola,
+      Penerimaan_Bahan, Detail_Bahan_Warna, Detail_Roll_Bahan, Pesanan, Stok_Barang_Jadi,
+      Pemotongan_Seri, Detail_Pemotongan_Warna, Detail_Gelaran_Kain, QC,
+      Kerusakan: QC, // backward-compatibility alias
     };
   }
 
@@ -419,57 +536,76 @@
     },
 
     pk(table) {
+      if (table === 'Kerusakan') table = 'QC';
       const key = TABLE_PK[table];
       if (!key) throw new Error(`[BongDB] Tabel tidak dikenal: ${table}`);
       return key;
     },
-    all(table) { this.pk(table); return this.data[table]; },
+    all(table) {
+      if (table === 'Kerusakan') table = 'QC';
+      this.pk(table);
+      return this.data[table] || (table === 'QC' ? (this.data.Kerusakan || []) : []);
+    },
     find(table, id) {
       if (id === null || id === undefined) return null;
+      if (table === 'Kerusakan') table = 'QC';
       const key = this.pk(table);
-      return this.data[table].find((r) => r[key] === Number(id)) || null;
+      const list = this.all(table);
+      return list.find((r) => r[key] === Number(id)) || null;
     },
     where(table, predicate) { return this.all(table).filter(predicate); },
     nextId(table) {
+      if (table === 'Kerusakan') table = 'QC';
       const key = this.pk(table);
-      return this.data[table].reduce((m, r) => Math.max(m, Number(r[key]) || 0), 0) + 1;
+      return (this.data[table] || []).reduce((m, r) => Math.max(m, Number(r[key]) || 0), 0) + 1;
     },
 
     insert(table, record) {
+      if (table === 'Kerusakan') table = 'QC';
       const key = this.pk(table);
       const rec = { ...record };
       if (rec[key] === undefined || rec[key] === null) rec[key] = this.nextId(table);
       if (this.find(table, rec[key])) throw new Error(`[BongDB] Duplikat PK ${key}=${rec[key]} pada ${table}`);
+      if (!this.data[table]) this.data[table] = [];
       this.data[table].push(rec);
+      if (table === 'QC') this.data.Kerusakan = this.data.QC;
       this.save();
       this._emit({ type: 'insert', table, record: rec });
       return rec;
     },
     insertMany(table, records) {
+      if (table === 'Kerusakan') table = 'QC';
       const out = records.map((r) => {
         const key = this.pk(table);
         const rec = { ...r };
         if (rec[key] === undefined || rec[key] === null) rec[key] = this.nextId(table);
+        if (!this.data[table]) this.data[table] = [];
         this.data[table].push(rec);
         return rec;
       });
+      if (table === 'QC') this.data.Kerusakan = this.data.QC;
       this.save();
       this._emit({ type: 'insert', table, records: out });
       return out;
     },
     update(table, id, patch) {
+      if (table === 'Kerusakan') table = 'QC';
       const rec = this.find(table, id);
       if (!rec) return null;
       Object.assign(rec, patch, { [this.pk(table)]: rec[this.pk(table)] });
+      if (table === 'QC') this.data.Kerusakan = this.data.QC;
       this.save();
       this._emit({ type: 'update', table, record: rec });
       return rec;
     },
     remove(table, id) {
+      if (table === 'Kerusakan') table = 'QC';
       const key = this.pk(table);
+      if (!this.data[table]) return false;
       const before = this.data[table].length;
       this.data[table] = this.data[table].filter((r) => r[key] !== Number(id));
       const removed = before !== this.data[table].length;
+      if (table === 'QC') this.data.Kerusakan = this.data.QC;
       if (removed) { this.save(); this._emit({ type: 'remove', table, id: Number(id) }); }
       return removed;
     },
@@ -480,9 +616,9 @@
       this._emit({ type: 'reset' });
     },
     stats() {
-      return Object.keys(TABLE_PK).map((t, i) => ({ no: i + 1, table: t, pk: TABLE_PK[t], count: this.data[t].length }));
+      return Object.keys(TABLE_PK).map((t, i) => ({ no: i + 1, table: t, pk: TABLE_PK[t], count: (this.data[t] || []).length }));
     },
-    totalRecords() { return sum(Object.keys(TABLE_PK), (t) => this.data[t].length); },
+    totalRecords() { return sum(Object.keys(TABLE_PK), (t) => (this.data[t] || []).length); },
     exportJSON() { return JSON.stringify(this.data, null, 2); },
 
     subscribe(fn) {
@@ -508,6 +644,10 @@
     supplier: (id) => BongDB.find('Supplier', id),
     warna: (id) => BongDB.find('Detail_Bahan_Warna', id),
     roll: (id) => BongDB.find('Detail_Roll_Bahan', id),
+    aksesoris: (id) => BongDB.find('Aksesoris', id),
+    spesifikasi: (id) => BongDB.find('Spesifikasi_Ukuran', id),
+    stokJadi: (id) => BongDB.find('Stok_Barang_Jadi', id),
+    qc: (id) => BongDB.find('QC', id),
 
     rollInfo(roll) {
       const w = Q.warna(roll.id_detail_warna);
@@ -783,6 +923,17 @@
     });
     const screens = cfg.tabs.filter((t) => TABS.includes(t));
     $('#role-access-label').textContent = `${role} · ${screens.length} layar utama`;
+
+    const auditBadge = $('#audit-mode-badge');
+    if (auditBadge) {
+      if (role === 'Pemilik') {
+        auditBadge.classList.remove('hidden');
+        auditBadge.classList.add('inline-flex');
+      } else {
+        auditBadge.classList.add('hidden');
+        auditBadge.classList.remove('inline-flex');
+      }
+    }
 
     $('#role-options').innerHTML = Object.entries(ROLES).map(([name, r]) => {
       const on = name === role;
@@ -1256,8 +1407,8 @@
     const queue = BongDB.data.Pesanan
       .filter((p) => (p.status_pesanan === 'ANTREAN' || p.status_pesanan === 'PEMOTONGAN') && p.id_penerimaan)
       .sort((a, b) => {
-        const da = a.deadline || addDays(a.tgl_order || APP_TODAY, 14);
-        const db = b.deadline || addDays(b.tgl_order || APP_TODAY, 14);
+        const da = a.deadline_terbaru || a.deadline_awal || a.deadline || addDays(a.tgl_order || APP_TODAY, 14);
+        const db = b.deadline_terbaru || b.deadline_awal || b.deadline || addDays(b.tgl_order || APP_TODAY, 14);
         return da.localeCompare(db) || a.id_pesanan - b.id_pesanan;
       });
     const countEl = $('#edf-count');
@@ -1266,16 +1417,17 @@
 
     host.innerHTML = queue.map((p, i) => {
       const pola = Q.pola(p.id_pola);
-      const dl = p.deadline || addDays(p.tgl_order || APP_TODAY, 14);
+      const dl = p.deadline_terbaru || p.deadline_awal || p.deadline || addDays(p.tgl_order || APP_TODAY, 14);
       const sisa = diffDays(APP_TODAY, dl);
       const urg = sisa <= 7 ? 'bg-rose-50 text-rose-700 ring-rose-200' : sisa <= 14 ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-slate-100 text-slate-600 ring-slate-200';
       const on = p.id_pesanan === state.selectedEdf;
+      const isRevised = Boolean(p.deadline_terbaru);
       return `
         <button type="button" data-action="select-edf" data-id="${p.id_pesanan}" class="w-full flex items-center gap-3 p-3 rounded-lg border text-left transition ${on ? 'border-indigo-400 bg-indigo-50/60 ring-2 ring-indigo-500/15' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}">
           <span class="w-7 h-7 shrink-0 rounded-md grid place-items-center text-[11px] font-bold font-mono ${i === 0 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}">${i + 1}</span>
           <span class="flex-1 min-w-0">
             <span class="block text-[13px] font-semibold text-slate-900 truncate"><span class="font-mono text-indigo-600">#${p.id_pesanan}</span> · ${esc(pola?.nama_pola || '-')}</span>
-            <span class="block text-[11px] text-slate-500">Deadline ${fmtDate(dl)} · ${p.status_pesanan}</span>
+            <span class="block text-[11px] text-slate-500">Deadline ${fmtDate(dl)} ${isRevised ? '<span class="text-amber-600 font-semibold font-mono">(Revisi)</span>' : ''} · ${p.status_pesanan}</span>
           </span>
           <span class="badge ${urg} font-mono">${sisa < 0 ? 'Lewat ' + Math.abs(sisa) : sisa} hr</span>
         </button>`;
@@ -1285,22 +1437,25 @@
     const edfSel = $('#edf-selected');
     if (edfSel) {
       edfSel.innerHTML = sel ? `
-        <div class="flex items-center gap-3 p-3 rounded-lg bg-indigo-50/60 border border-indigo-100">
-          <i data-lucide="crosshair" class="w-4 h-4 text-indigo-600"></i>
-          <p class="text-xs text-slate-600">Pesanan terpilih: <b class="font-mono text-indigo-700">#${sel.id_pesanan}</b> · ${esc(Q.pola(sel.id_pola)?.nama_pola || '')} · Nota bahan <b class="font-mono">#${esc(Q.penerimaan(sel.id_penerimaan)?.no_nota || '-')}</b></p>
+        <div class="flex items-center justify-between gap-3 p-3 rounded-lg bg-indigo-50/60 border border-indigo-100">
+          <div class="flex items-center gap-2 min-w-0">
+            <i data-lucide="crosshair" class="w-4 h-4 text-indigo-600 shrink-0"></i>
+            <p class="text-xs text-slate-600 truncate">Pesanan: <b class="font-mono text-indigo-700">#${sel.id_pesanan}</b> · ${esc(Q.pola(sel.id_pola)?.nama_pola || '')} · Nota <b class="font-mono">#${esc(Q.penerimaan(sel.id_penerimaan)?.no_nota || '-')}</b></p>
+          </div>
+          <button type="button" class="btn btn-xs btn-outline shrink-0 text-amber-700 hover:bg-amber-50" data-action="revise-deadline" data-id="${sel.id_pesanan}" title="Revisi deadline target pesanan"><i data-lucide="calendar-clock" class="w-3.5 h-3.5 text-amber-600"></i>Revisi Deadline</button>
         </div>` : '';
     }
   }
 
   function renderShellMeta() {
     const st = $('#db-status');
-    if (st) st.textContent = `14 tabel · ${fmtNum(BongDB.totalRecords())} record`;
+    if (st) st.textContent = `17 tabel · ${fmtNum(BongDB.totalRecords())} record`;
     const nr = $('#next-roll-id');
     if (nr) nr.textContent = BongDB.nextId('Detail_Roll_Bahan');
     const np = $('#next-potong-id');
     if (np) np.textContent = BongDB.nextId('Pemotongan_Seri');
     const nq = $('#next-qc-id');
-    if (nq) nq.textContent = BongDB.nextId('Kerusakan');
+    if (nq) nq.textContent = BongDB.nextId('QC');
   }
 
   /* --------------------------------------------------------------------------
@@ -2458,13 +2613,27 @@
     }));
     BongDB.insertMany('Detail_Gelaran_Kain', gelaranToInsert);
 
-    // 4. Update status of each used physical roll
+    // 4. Update status & deduct ukuran_sisa of each used physical roll
     const uniqueRollIds = [...new Set(rows.map((r) => Number(r.id_roll)))];
     uniqueRollIds.forEach((rid) => {
       const chosenStatus = state.pemotongan.rollStatusMap[rid] || 'Dipotong';
+      const rollRecord = BongDB.find('Detail_Roll_Bahan', rid);
+      const usedInRows = rows.filter((r) => Number(r.id_roll) === rid);
+      const totalLen = usedInRows.reduce((acc, curr) => acc + (Number(curr.panjang_gelar) || 0) * (Number(curr.jumlah_tumpuk) || 0), 0);
+
+      let sisa = rollRecord ? Number(rollRecord.ukuran_sisa ?? rollRecord.berat_kg ?? 25.0) : 25.0;
+      if (chosenStatus === 'Habis') {
+        sisa = 0;
+      } else {
+        const deduction = totalLen > 0 ? (totalLen * 0.15) : 5.0;
+        sisa = Math.max(0, round1(sisa - Math.min(sisa, deduction)));
+      }
+      const finalStatus = (sisa <= 0) ? 'Habis' : chosenStatus;
+
       BongDB.update('Detail_Roll_Bahan', rid, {
-        status_roll: chosenStatus,
-        rak_alokasi: chosenStatus === 'Dipotong' ? 'Meja Potong 01' : '-',
+        status_roll: finalStatus,
+        ukuran_sisa: sisa,
+        rak_alokasi: finalStatus === 'Habis' ? '-' : 'Meja Potong 01',
       });
     });
 
@@ -2678,16 +2847,27 @@
     if (jumlahPcs <= 0) { showToast('Jumlah terkena cacat harus lebih dari 0.', { type: 'error' }); $('#inp-jumlah-cacat')?.focus(); return; }
     if (!catatan) { showToast('Catatan detail temuan kerusakan wajib diisi.', { type: 'error' }); $('#inp-catatan-qc')?.focus(); return; }
 
-    const newQc = BongDB.insert('Kerusakan', {
+    const isFinished = decision === 'Finished' || decision === 'Rework Selesai';
+    const newQc = BongDB.insert('QC', {
       id_pesanan: idPesanan,
       id_user_qc: idUserQc,
+      tahap_qc: 'Jahit Akhir',
+      tgl_pemeriksaan: tglTemuan + ' 14:00:00',
+      jumlah_diperiksa: jumlahPcs + 50,
+      jumlah_lolos: isFinished ? 50 : 0,
+      jumlah_cacat: jumlahPcs,
       jenis_cacat: jenisCacat,
+      kategori_cacat: jenisCacat,
+      catatan_qc: catatan + (idRoll ? ` [Roll ID: #${idRoll}]` : ''),
+      status_qc: isFinished ? 'Rework Selesai' : decision,
+      tgl_target_perbaikan: (decision === 'Need Rework') ? tglSelesai : null,
+      tgl_selesai_perbaikan: isFinished ? tglSelesai : null,
+      pic_rework: picRework,
+      // Compatibility aliases
+      status: isFinished ? 'Rework Selesai' : decision,
       jumlah_pcs: jumlahPcs,
       catatan: catatan + (idRoll ? ` [Roll ID: #${idRoll}]` : ''),
       tgl_temuan: tglTemuan,
-      status: decision === 'Finished' ? 'Rework Selesai' : decision,
-      tgl_selesai_perbaikan: (decision === 'Finished' || decision === 'Rework Selesai') ? tglSelesai : null,
-      pic_rework: picRework,
     });
 
     if (decision === 'Need Rework') {
@@ -2704,6 +2884,20 @@
       });
     }
 
+    // Increment perpetual finished stock if Jahit Akhir passed units exist
+    if (newQc.jumlah_lolos > 0) {
+      const p = Q.pesanan(idPesanan);
+      if (p) {
+        const existingStock = BongDB.where('Stok_Barang_Jadi', (s) => s.id_pola === p.id_pola)[0];
+        if (existingStock) {
+          BongDB.update('Stok_Barang_Jadi', existingStock.id_stok, {
+            jumlah_stok_pcs: Number(existingStock.jumlah_stok_pcs || 0) + newQc.jumlah_lolos,
+            tgl_update: APP_TODAY,
+          });
+        }
+      }
+    }
+
     showToast(`Temuan QC <b>#${newQc.id_qc}</b> (${esc(jenisCacat)}) berhasil dicatat dengan keputusan <b>${esc(newQc.status)}</b>. Disposisi PIC: <b>${esc(picRework)}</b>.`, { title: 'Inspeksi QC Tersimpan' });
 
     resetQcForm();
@@ -2716,25 +2910,82 @@
 
     const p = Q.pesanan(idPesanan);
     const pola = p ? Q.pola(p.id_pola) : null;
+    const qtyLolos = 120;
 
+    // 1. Record QC pass in table QC
+    BongDB.insert('QC', {
+      id_pesanan: idPesanan,
+      id_user_qc: 4,
+      tahap_qc: 'Jahit Akhir',
+      tgl_pemeriksaan: APP_TODAY + ' 16:00:00',
+      jumlah_diperiksa: qtyLolos,
+      jumlah_lolos: qtyLolos,
+      jumlah_cacat: 0,
+      jenis_cacat: '-',
+      kategori_cacat: 'Lainnya',
+      catatan_qc: 'Inspeksi Jahit Akhir Lolos Sempurna (100% lolos mutu).',
+      status_qc: 'Lolos Sempurna',
+      tgl_target_perbaikan: null,
+      tgl_selesai_perbaikan: null,
+      pic_rework: '-',
+      // Compatibility aliases
+      status: 'Rework Selesai',
+      jumlah_pcs: 0,
+      catatan: 'Lolos inspeksi 100% sempurna',
+      tgl_temuan: APP_TODAY,
+    });
+
+    // 2. Increment Stok_Barang_Jadi perpetual stock
+    if (p) {
+      const existingStock = BongDB.where('Stok_Barang_Jadi', (s) => s.id_pola === p.id_pola)[0];
+      if (existingStock) {
+        BongDB.update('Stok_Barang_Jadi', existingStock.id_stok, {
+          jumlah_stok_pcs: Number(existingStock.jumlah_stok_pcs || 0) + qtyLolos,
+          tgl_update: APP_TODAY,
+        });
+      } else {
+        const spec = BongDB.where('Spesifikasi_Ukuran', (s) => s.id_pola === p.id_pola)[0];
+        BongDB.insert('Stok_Barang_Jadi', {
+          id_pola: p.id_pola,
+          id_spesifikasi: spec ? spec.id_spesifikasi : 1,
+          id_detail_warna: 1,
+          jumlah_stok_pcs: qtyLolos,
+          tgl_update: APP_TODAY,
+        });
+      }
+    }
+
+    // 3. Mark order SELESAI (100%)
     BongDB.update('Pesanan', idPesanan, {
       status_pesanan: 'SELESAI',
       progress_pct: 100,
     });
 
-    showToast(`QC Passed: Pesanan <b>#${idPesanan}</b> (${esc(pola?.nama_pola || '')}) dinyatakan <b>Lolos QC (Tanpa Cacat)</b> dan berstatus <b>SELESAI (100%)</b>.`, { title: 'Pesanan Selesai Produksi' });
+    showToast(`QC Passed: Pesanan <b>#${idPesanan}</b> (${esc(pola?.nama_pola || '')}) dinyatakan <b>Lolos QC (Tanpa Cacat)</b> dan berstatus <b>SELESAI (100%)</b>. Stok Barang Jadi bertambah <b>+${qtyLolos} Pcs</b>.`, { title: 'Pesanan Selesai Produksi' });
 
     renderAll();
   }
 
   function resolveQc(idQc) {
-    const qc = BongDB.find('Kerusakan', Number(idQc));
+    const qc = BongDB.find('QC', Number(idQc));
     if (!qc) return;
 
-    BongDB.update('Kerusakan', Number(idQc), {
+    BongDB.update('QC', Number(idQc), {
       status: 'Rework Selesai',
+      status_qc: 'Rework Selesai',
       tgl_selesai_perbaikan: APP_TODAY,
     });
+
+    // If order was in QC and no other need rework exists, check progress
+    if (qc.id_pesanan) {
+      const activeDefects = BongDB.where('QC', (k) => k.id_pesanan === qc.id_pesanan && (k.status === 'Need Rework' || k.status_qc === 'Need Rework'));
+      if (!activeDefects.length) {
+        const p = Q.pesanan(qc.id_pesanan);
+        if (p && p.status_pesanan === 'DALAM QC') {
+          BongDB.update('Pesanan', qc.id_pesanan, { progress_pct: 95 });
+        }
+      }
+    }
 
     showToast(`Rework untuk temuan QC <b>#${idQc}</b> telah diselesaikan dan diverifikasi. Pending counter berkurang.`, { title: 'Rework Selesai' });
     renderAll();
@@ -3088,10 +3339,10 @@
     const pola = Q.pola(p.id_pola);
     const pen = Q.penerimaan(p.id_penerimaan);
     const st = STATUS_META[p.status_pesanan] || STATUS_META.ANTREAN;
-    const dl = p.deadline || addDays(p.tgl_order || APP_TODAY, 14);
-    const sisa = diffDays(APP_TODAY, dl);
+    const effectiveDl = p.deadline_terbaru || p.deadline_awal || p.deadline || addDays(p.tgl_order || APP_TODAY, 14);
+    const sisa = diffDays(APP_TODAY, effectiveDl);
     const seri = BongDB.where('Pemotongan_Seri', (s) => s.id_pesanan === p.id_pesanan).sort((a, b) => String(a.tgl_potong || '').localeCompare(String(b.tgl_potong || '')));
-    const qc = BongDB.where('Kerusakan', (k) => k.id_pesanan === p.id_pesanan);
+    const qc = BongDB.where('QC', (k) => k.id_pesanan === p.id_pesanan);
     const totalCut = sum(seri, (s) => s.total_lembar_hasil);
 
     openModal({
@@ -3102,13 +3353,16 @@
         <div class="flex flex-wrap items-center gap-2 mb-5">
           <span class="badge ${st.badge}">${p.status_pesanan}</span>
           <span class="badge bg-slate-100 text-slate-600 ring-slate-200">${progressLabel(p)} · ${p.progress_pct}%</span>
-          ${p.status_pesanan !== 'SELESAI' ? `<span class="badge ${sisa <= 7 ? 'bg-rose-50 text-rose-700 ring-rose-200' : 'bg-slate-100 text-slate-600 ring-slate-200'}">Sisa ${sisa} hari</span>` : ''}
+          ${p.status_pesanan !== 'SELESAI' ? `<span class="badge ${sisa <= 7 ? 'bg-rose-50 text-rose-700 ring-rose-200' : 'bg-slate-100 text-slate-600 ring-slate-200'}">Sisa ${sisa} hari (EDF)</span>` : ''}
+          ${p.deadline_terbaru ? `<span class="badge bg-amber-50 text-amber-700 ring-amber-200 font-mono font-medium">Revisi Deadline Aktif</span>` : ''}
         </div>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
           ${kv('Sumber Inisiasi', esc(Q.sumber(p.id_sumber)?.nama_sumber || '-'))}
           ${kv('Mitra / Klien', esc(p.nama_mitra || '-'))}
           ${kv('Tanggal Order', fmtDate(p.tgl_order))}
-          ${kv('Deadline', fmtDate(dl))}
+          ${kv('Deadline Awal', fmtDate(p.deadline_awal || p.deadline))}
+          ${kv('Deadline Terbaru', p.deadline_terbaru ? `<span class="font-mono font-semibold text-amber-600">${fmtDate(p.deadline_terbaru)}</span>` : '<span class="text-slate-400">Tidak ada revisi</span>')}
+          ${kv('Alasan Revisi', esc(p.alasan_revisi_deadline || '-'))}
           ${kv('Penerimaan Bahan', pen ? `<span class="font-mono">Nota #${esc(pen.no_nota)}</span> · ${esc(pen.nama_kain)}` : '<span class="text-slate-400">Menunggu bahan</span>')}
           ${kv('Supplier', esc(pen ? Q.supplier(pen.id_supplier)?.nama_supplier : '-'))}
           ${kv('Admin', esc(Q.user(p.id_user_admin)?.nama_user || '-'))}
@@ -3122,12 +3376,14 @@
             <td class="px-3 py-2">${fmtDate(s.tgl_potong)}</td><td class="px-3 py-2">${esc(Q.user(s.id_user_pemotong)?.nama_user || '-')}</td>
             <td class="px-3 py-2 text-right font-mono">${Q.gelaranOfPotong([s]).length}</td><td class="px-3 py-2 pr-4 text-right font-mono font-semibold">${fmtNum(s.total_lembar_hasil)}</td></tr>`).join('')}</tbody></table></div>`
           : '<p class="text-xs text-slate-400">Belum ada pemotongan seri.</p>'}
-        <h4 class="mt-6 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Temuan QC <span class="font-mono text-slate-400">(${qc.length})</span></h4>
+        <h4 class="mt-6 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Temuan QC Berjenjang <span class="font-mono text-slate-400">(${qc.length})</span></h4>
         ${qc.length ? qc.map((k) => `<div class="flex items-start justify-between gap-3 p-3 rounded-lg border border-slate-200 mb-2">
-            <div><p class="text-xs"><span class="font-mono text-slate-400">id_qc: ${k.id_qc}</span> · <b>${esc(k.jenis_cacat)} (${k.jumlah_pcs} ${qcUnit(k)})</b></p><p class="text-xs text-slate-600 mt-0.5">${esc(k.catatan)}</p></div>
-            <span class="badge ${(QC_META[k.status] || QC_META['Need Rework']).badge}">${esc(k.status.toUpperCase())}</span></div>`).join('')
+            <div><p class="text-xs"><span class="font-mono text-slate-400">id_qc: ${k.id_qc}</span> · <b>[${esc(k.tahap_qc || 'Inspeksi')}] ${esc(k.jenis_cacat || k.kategori_cacat || 'Temuan')} (${k.jumlah_pcs || k.jumlah_cacat} pcs)</b></p><p class="text-xs text-slate-600 mt-0.5">${esc(k.catatan || k.catatan_qc)}</p></div>
+            <span class="badge ${(QC_META[k.status] || QC_META[k.status_qc] || QC_META['Need Rework']).badge}">${esc((k.status || k.status_qc || '').toUpperCase())}</span></div>`).join('')
           : '<p class="text-xs text-slate-400">Tidak ada temuan cacat.</p>'}`,
-      footer: `<button type="button" class="btn btn-outline" data-action="close-modal">Tutup</button>`,
+      footer: `
+        <button type="button" class="btn btn-outline mr-auto text-amber-700 hover:bg-amber-50" data-action="revise-deadline" data-id="${p.id_pesanan}"><i data-lucide="calendar-clock" class="w-4 h-4 text-amber-600"></i>Revisi Deadline (EDF)</button>
+        <button type="button" class="btn btn-outline" data-action="close-modal">Tutup</button>`,
     });
   }
 
@@ -3171,21 +3427,289 @@
     const p = Q.pola(id);
     if (!p) return;
     const specs = BongDB.where('Spesifikasi_Ukuran', (s) => s.id_pola === p.id_pola);
-    const isCelana = specs.some((s) => s.lingkar_pinggang !== null);
+    const accList = BongDB.where('Detail_Aksesoris_Pola', (d) => d.id_pola === p.id_pola);
     const orders = BongDB.where('Pesanan', (o) => o.id_pola === p.id_pola);
+
     openModal({
-      title: esc(p.nama_pola), subtitle: `${esc(p.kode_pola)} · Kategori ${esc(Q.kategori(p.id_kategori)?.nama_kategori || '-')} · ${orders.length} pesanan`,
-      icon: 'shirt',
+      title: esc(p.nama_pola),
+      subtitle: `${esc(p.kode_pola)} · Kategori ${esc(Q.kategori(p.id_kategori)?.nama_kategori || '-')} · ${orders.length} pesanan terkait`,
+      icon: 'shirt', size: 'max-w-4xl',
       body: `
-        <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Spesifikasi Ukuran (cm)</h4>
-        <div class="rounded-lg border border-slate-200 overflow-hidden"><table class="w-full text-xs">
-          <thead class="bg-slate-50"><tr><th class="th">Ukuran</th>${isCelana ? '<th class="th text-right">Lingkar Pinggang</th><th class="th text-right pr-4">Panjang</th>' : '<th class="th text-right">Lingkar Dada</th><th class="th text-right">Panjang</th><th class="th text-right">Lebar Bahu</th><th class="th text-right pr-4">Panjang Lengan</th>'}</tr></thead>
-          <tbody class="divide-y divide-slate-100">${specs.map((s) => `<tr><td class="px-3 py-2 font-semibold">${s.nama_ukuran}</td>${isCelana
-            ? `<td class="px-3 py-2 text-right font-mono">${s.lingkar_pinggang ?? '-'}</td><td class="px-3 py-2 pr-4 text-right font-mono">${s.panjang ?? '-'}</td>`
-            : `<td class="px-3 py-2 text-right font-mono">${s.lingkar_dada ?? '-'}</td><td class="px-3 py-2 text-right font-mono">${s.panjang ?? '-'}</td><td class="px-3 py-2 text-right font-mono">${s.lebar_bahu ?? s.panjang_pundak ?? '-'}</td><td class="px-3 py-2 pr-4 text-right font-mono">${s.panjang_lengan ?? s.panjang_tangan ?? '-'}</td>`}</tr>`).join('')}</tbody>
-        </table></div>`,
+        <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">1. Spesifikasi Ukuran 11 Metrik Garment (cm)</h4>
+        <div class="rounded-lg border border-slate-200 overflow-x-auto thin-scroll mb-5">
+          <table class="w-full text-xs text-left whitespace-nowrap">
+            <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+              <tr>
+                <th class="px-2.5 py-2">Ukuran</th>
+                <th class="px-2 py-2 text-right">Pjg</th>
+                <th class="px-2 py-2 text-right">Dada</th>
+                <th class="px-2 py-2 text-right">Bahu</th>
+                <th class="px-2 py-2 text-right">Lengan</th>
+                <th class="px-2 py-2 text-right">Leher</th>
+                <th class="px-2 py-2 text-right">Manset</th>
+                <th class="px-2 py-2 text-right">Ketiak</th>
+                <th class="px-2 py-2 text-right">Bawah</th>
+                <th class="px-2 py-2 text-right">Pinggang</th>
+                <th class="px-2 py-2 text-right">Pinggul</th>
+                <th class="px-2 py-2 text-right pr-3">Paha</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              ${specs.map((s) => `
+                <tr class="hover:bg-slate-50">
+                  <td class="px-2.5 py-2 font-bold text-slate-800">${esc(s.nama_ukuran)}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.panjang ?? '-'}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.lebar_dada ?? '-'}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.lebar_bahu ?? '-'}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.panjang_lengan ?? '-'}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.lebar_leher ?? '-'}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.lingkar_manset ?? '-'}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.lingkar_ketiak ?? '-'}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.lebar_bawah ?? '-'}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.lingkar_pinggang ?? '-'}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.lingkar_pinggul ?? '-'}</td>
+                  <td class="px-2 py-2 text-right pr-3 font-mono">${s.lingkar_paha ?? '-'}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">2. Kebutuhan Aksesoris CMT (<code class="font-mono text-xs">Detail_Aksesoris_Pola</code>)</h4>
+        ${accList.length ? `
+          <div class="rounded-lg border border-slate-200 overflow-hidden">
+            <table class="w-full text-xs text-left">
+              <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                <tr>
+                  <th class="px-3 py-2">Aksesoris</th>
+                  <th class="px-3 py-2">Ukuran</th>
+                  <th class="px-3 py-2 text-right">Kebutuhan / Pcs</th>
+                  <th class="px-3 py-2">Satuan</th>
+                  <th class="px-3 py-2 pr-4">Keterangan</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                ${accList.map((d) => {
+                  const a = BongDB.find('Aksesoris', d.id_aksesoris);
+                  return `
+                    <tr class="hover:bg-slate-50">
+                      <td class="px-3 py-2 font-medium text-slate-800">${esc(a?.nama_aksesoris || '-')}</td>
+                      <td class="px-3 py-2 text-slate-600 font-mono">${esc(a?.ukuran_aksesoris || '-')}</td>
+                      <td class="px-3 py-2 text-right font-mono font-semibold text-indigo-600">${fmtNum(d.jumlah_kebutuhan, 2)}</td>
+                      <td class="px-3 py-2 text-slate-500">${esc(a?.satuan || '-')}</td>
+                      <td class="px-3 py-2 pr-4 text-slate-600">${esc(d.keterangan || '-')}</td>
+                    </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>` : '<p class="text-xs text-slate-400">Pola ini tidak memerlukan aksesoris khusus.</p>'}`,
       footer: `<button type="button" class="btn btn-outline" data-action="close-modal">Tutup</button>`,
     });
+    refreshIcons();
+  }
+
+  function showReviseDeadlineModal(idPesanan) {
+    const p = Q.pesanan(Number(idPesanan));
+    if (!p) return showToast(`Pesanan #${idPesanan} tidak ditemukan.`, { type: 'error' });
+    const currentDl = p.deadline_terbaru || p.deadline_awal || p.deadline || APP_TODAY;
+
+    openModal({
+      title: `Revisi Deadline Pesanan #${p.id_pesanan}`,
+      subtitle: `Audit Trail & Real-time Earliest Deadline First (EDF) Priority Shift`,
+      icon: 'calendar-clock', size: 'max-w-lg',
+      body: `
+        <div class="space-y-4">
+          <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1">
+            <div class="flex justify-between">
+              <span class="text-slate-500">Pola Pakaian:</span>
+              <span class="font-semibold text-slate-800">${esc(Q.pola(p.id_pola)?.nama_pola || '-')}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">Mitra:</span>
+              <span class="font-semibold text-slate-800">${esc(p.nama_mitra || 'Produksi Internal')}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">Deadline Saat Ini:</span>
+              <span class="font-mono font-semibold text-indigo-600">${fmtDate(currentDl)}</span>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Deadline Baru (Target Selesai) *</label>
+            <input type="date" id="inp-revise-deadline-val" value="${currentDl}" class="input font-mono w-full text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Alasan Revisi Deadline *</label>
+            <select id="sel-revise-deadline-reason" class="input w-full text-xs">
+              <option value="Permintaan Percepatan Mitra / Pelanggan">Permintaan Percepatan Mitra / Pelanggan</option>
+              <option value="Keterlambatan Pasokan Bahan dari Supplier">Keterlambatan Pasokan Bahan dari Supplier</option>
+              <option value="Penyesuaian Kapasitas Meja Potong & Antrean Gelaran">Penyesuaian Kapasitas Meja Potong & Antrean Gelaran</option>
+              <option value="Temuan Kerusakan QC & Memerlukan Pengerjaan Ulang (Rework)">Temuan Kerusakan QC & Memerlukan Pengerjaan Ulang (Rework)</option>
+              <option value="Perubahan Spesifikasi atau Aksesoris Tambahan">Perubahan Spesifikasi atau Aksesoris Tambahan</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Catatan Tambahan (Opsional)</label>
+            <textarea id="inp-revise-deadline-note" rows="2" class="input w-full text-xs" placeholder="Detail memo persetujuan revisi..."></textarea>
+          </div>
+        </div>`,
+      footer: `
+        <button type="button" class="btn btn-outline mr-auto" data-action="close-modal">Batal</button>
+        <button type="button" class="btn btn-primary" data-action="save-revise-deadline" data-id="${p.id_pesanan}"><i data-lucide="save" class="w-4 h-4"></i>Simpan Revisi &amp; Geser Antrean</button>`,
+    });
+    refreshIcons();
+  }
+
+  function showAddAksesorisModal() {
+    const suppliers = BongDB.all('Supplier');
+    openModal({
+      title: 'Tambah Aksesoris Baru',
+      subtitle: 'Registrasi Master Aksesoris CMT ke Tabel Aksesoris',
+      icon: 'plus', size: 'max-w-md',
+      body: `
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Aksesoris *</label>
+            <input type="text" id="inp-new-acc-nama" class="input w-full text-xs" placeholder="Contoh: Kancing Kemeja 4 Lubang">
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Ukuran / Varian *</label>
+              <input type="text" id="inp-new-acc-ukuran" class="input w-full text-xs" placeholder="Contoh: 18L (11.5mm)">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Satuan *</label>
+              <select id="sel-new-acc-satuan" class="input w-full text-xs">
+                <option value="Pcs">Pcs</option>
+                <option value="Gross">Gross (144 pcs)</option>
+                <option value="Meter">Meter</option>
+                <option value="Yard">Yard</option>
+                <option value="Roll">Roll</option>
+                <option value="Lusin">Lusin (12 pcs)</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Stok Awal Fisik *</label>
+              <input type="number" id="inp-new-acc-stok" class="input font-mono w-full text-xs" value="500" min="0">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Supplier Rekanan</label>
+              <select id="sel-new-acc-supplier" class="input w-full text-xs">
+                ${suppliers.map((s) => `<option value="${s.id_supplier}">${esc(s.nama_supplier)}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+        </div>`,
+      footer: `
+        <button type="button" class="btn btn-outline mr-auto" data-action="close-modal">Batal</button>
+        <button type="button" class="btn btn-primary" data-action="save-new-aksesoris"><i data-lucide="save" class="w-4 h-4"></i>Simpan Aksesoris</button>`,
+    });
+    refreshIcons();
+  }
+
+  function showAdjustStokModal() {
+    const existingStok = BongDB.all('Stok_Barang_Jadi');
+    openModal({
+      title: 'Penyesuaian Stok Barang Jadi',
+      subtitle: 'Audit Fisik Perpetual Inventory (Stok_Barang_Jadi)',
+      icon: 'sliders', size: 'max-w-md',
+      body: `
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Pilih Item Stok Tersedia</label>
+            <select id="sel-adjust-stok-id" class="input w-full text-xs">
+              ${existingStok.map((s) => {
+                const po = BongDB.find('Pola', s.id_pola);
+                const sp = BongDB.find('Spesifikasi_Ukuran', s.id_spesifikasi);
+                const w = BongDB.find('Detail_Bahan_Warna', s.id_detail_warna);
+                return `<option value="${s.id_stok}">[#${s.id_stok}] ${esc(po?.kode_pola || '')} - Size ${esc(sp?.nama_ukuran || '-')} - ${esc(w?.nama_warna || '-')} (Stok: ${s.jumlah_stok_pcs} pcs)</option>`;
+              }).join('')}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Jumlah Penyesuaian (+ / - Pcs) *</label>
+            <input type="number" id="inp-adjust-stok-qty" class="input font-mono w-full text-xs" value="10" placeholder="+/- Pcs">
+            <p class="text-[11px] text-slate-400 mt-1">Masukkan angka positif untuk menambah stok fisik, atau negatif untuk mencatat pengurangan (misal penjualan/pengiriman).</p>
+          </div>
+        </div>`,
+      footer: `
+        <button type="button" class="btn btn-outline mr-auto" data-action="close-modal">Batal</button>
+        <button type="button" class="btn btn-primary" data-action="save-adjust-stok"><i data-lucide="check" class="w-4 h-4"></i>Terapkan Penyesuaian</button>`,
+    });
+    refreshIcons();
+  }
+
+  function renderGudangScreen() {
+    const tblStok = $('#tbl-stok-jadi-body');
+    const tblAcc = $('#tbl-aksesoris-body');
+    if (!tblStok && !tblAcc) return;
+
+    // 1. Render Stok Barang Jadi
+    const stokList = BongDB.all('Stok_Barang_Jadi') || [];
+    const totalPcs = stokList.reduce((sum, s) => sum + (Number(s.jumlah_stok_pcs) || 0), 0);
+    const badgeStok = $('#badge-total-stok-jadi');
+    if (badgeStok) badgeStok.textContent = `${fmtNum(totalPcs)} Pcs`;
+
+    if (tblStok) {
+      tblStok.innerHTML = stokList.map((s) => {
+        const pola = BongDB.find('Pola', s.id_pola);
+        const spec = BongDB.find('Spesifikasi_Ukuran', s.id_spesifikasi);
+        const warna = BongDB.find('Detail_Bahan_Warna', s.id_detail_warna);
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="pl-5 py-3 font-mono font-medium text-indigo-600">#${s.id_stok}</td>
+            <td class="py-3">
+              <span class="font-medium text-slate-900">${esc(pola?.nama_pola || '-')}</span>
+              <span class="block font-mono text-[11px] text-slate-400">${esc(pola?.kode_pola || '')}</span>
+            </td>
+            <td class="py-3 font-semibold text-slate-700">${esc(spec?.nama_ukuran || '-')}</td>
+            <td class="py-3">
+              <span class="inline-flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full border border-slate-300" style="background-color: ${warna?.kode_warna?.toLowerCase().includes('nvy') ? '#1E3A8A' : warna?.kode_warna?.toLowerCase().includes('khk') ? '#D97706' : '#334155'}"></span>
+                <span>${esc(warna?.nama_warna || '-')}</span>
+              </span>
+            </td>
+            <td class="py-3 text-right font-mono font-bold text-emerald-600 text-sm">${fmtNum(s.jumlah_stok_pcs)} Pcs</td>
+            <td class="pr-5 py-3 text-right font-mono text-slate-500">${fmtDate(s.tgl_update)}</td>
+          </tr>`;
+      }).join('') || '<tr><td colspan="6" class="text-center py-6 text-slate-400">Belum ada data stok barang jadi.</td></tr>';
+    }
+
+    // 2. Render Aksesoris
+    const accList = BongDB.all('Aksesoris') || [];
+    const badgeAcc = $('#badge-total-aksesoris');
+    if (badgeAcc) badgeAcc.textContent = `${accList.length} Item Master`;
+
+    if (tblAcc) {
+      tblAcc.innerHTML = accList.map((a) => {
+        const sup = BongDB.find('Supplier', a.id_supplier);
+        const stock = Number(a.stok_saat_ini) || 0;
+        const stockBadge = stock < 200
+          ? 'bg-rose-50 text-rose-700 ring-rose-200'
+          : stock < 500
+          ? 'bg-amber-50 text-amber-700 ring-amber-200'
+          : 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="pl-5 py-3 font-mono font-medium text-indigo-600">#${a.id_aksesoris}</td>
+            <td class="py-3 font-medium text-slate-900">${esc(a.nama_aksesoris)}</td>
+            <td class="py-3 font-mono text-slate-600">${esc(a.ukuran_aksesoris)}</td>
+            <td class="py-3 font-mono font-bold">
+              <span class="badge ${stockBadge}">${fmtNum(stock)}</span>
+            </td>
+            <td class="py-3 text-slate-600 font-mono text-xs">${esc(a.satuan)}</td>
+            <td class="py-3 text-slate-600">${esc(sup?.nama_supplier || '-')}</td>
+            <td class="pr-5 py-3 text-right">
+              <div class="inline-flex items-center gap-1.5">
+                <button type="button" class="btn btn-xs btn-outline" data-action="quick-add-acc-stock" data-id="${a.id_aksesoris}" data-amount="100" title="Tambah 100 ${esc(a.satuan)}">+100</button>
+                <button type="button" class="btn btn-xs btn-outline" data-action="quick-add-acc-stock" data-id="${a.id_aksesoris}" data-amount="500" title="Tambah 500 ${esc(a.satuan)}">+500</button>
+              </div>
+            </td>
+          </tr>`;
+      }).join('') || '<tr><td colspan="7" class="text-center py-6 text-slate-400">Belum ada master aksesoris.</td></tr>';
+    }
+    refreshIcons();
   }
 
   function openSettingsModal() {
@@ -3193,10 +3717,10 @@
     const meta = BongDB.data._meta;
     openModal({
       title: 'Pengaturan Sistem · BongDB',
-      subtitle: `localStorage key <code class="font-mono">${DB_KEY}</code> · ${fmtNum(BongDB.totalRecords())} record di 14 tabel`,
+      subtitle: `localStorage key <code class="font-mono">${DB_KEY}</code> · ${fmtNum(BongDB.totalRecords())} record di 17 tabel MySQL 8.0 Schema`,
       icon: 'database', size: 'max-w-3xl',
       body: `
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[360px] overflow-y-auto thin-scroll">
           ${stats.map((s) => `
             <div class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2.5 hover:border-indigo-200 transition">
               <div class="min-w-0">
@@ -3213,7 +3737,7 @@
         </div>
         <div class="mt-5 flex items-start gap-3 p-4 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
           <i data-lucide="triangle-alert" class="w-4 h-4 shrink-0 mt-0.5"></i>
-          <p><b>Reset &amp; Seed Ulang</b> akan menghapus seluruh perubahan pada 14 tabel dan memulihkan data demo awal (18 pesanan aktif, 142 roll tersedia, 1,250 pcs hasil potong hari ini).</p>
+          <p><b>Reset &amp; Seed Ulang</b> akan menghapus seluruh perubahan pada 17 tabel MySQL 8.0 schema dan memulihkan data demo awal (18 pesanan aktif, 142 roll tersedia, stok perpetual barang jadi, dan 11 metrik ukuran).</p>
         </div>`,
       footer: `
         <button type="button" class="btn btn-outline mr-auto" data-action="export-json"><i data-lucide="file-json" class="w-4 h-4"></i>Ekspor Backup JSON</button>
@@ -3585,6 +4109,81 @@
     'print-report': () => printReport(),
     'apply-laporan-filter': () => applyLaporanFilter(),
     'reset-laporan-filter': () => resetLaporanFilter(),
+
+    // Screen 7 Actions (Gudang & Aksesoris)
+    'modal-add-aksesoris': () => showAddAksesorisModal(),
+    'save-new-aksesoris': () => {
+      const nama = $('#inp-new-acc-nama')?.value.trim();
+      const ukuran = $('#inp-new-acc-ukuran')?.value.trim();
+      const satuan = $('#sel-new-acc-satuan')?.value || 'Pcs';
+      const stok = Number($('#inp-new-acc-stok')?.value) || 0;
+      const idSupplier = Number($('#sel-new-acc-supplier')?.value) || 1;
+
+      if (!nama) { showToast('Nama Aksesoris wajib diisi.', { type: 'error' }); $('#inp-new-acc-nama')?.focus(); return; }
+      if (!ukuran) { showToast('Ukuran Aksesoris wajib diisi.', { type: 'error' }); $('#inp-new-acc-ukuran')?.focus(); return; }
+
+      const newAcc = BongDB.insert('Aksesoris', {
+        nama_aksesoris: nama,
+        ukuran_aksesoris: ukuran,
+        satuan,
+        stok_saat_ini: stok,
+        id_supplier: idSupplier,
+      });
+
+      closeModal();
+      showToast(`Aksesoris <b>${esc(nama)}</b> (#${newAcc.id_aksesoris}) berhasil ditambahkan ke inventori.`, { title: 'Aksesoris Terdaftar' });
+      renderAll();
+    },
+    'quick-add-acc-stock': (el) => {
+      const id = Number(el.dataset.id);
+      const amount = Number(el.dataset.amount) || 100;
+      const acc = BongDB.find('Aksesoris', id);
+      if (acc) {
+        const nextVal = Number(acc.stok_saat_ini || 0) + amount;
+        BongDB.update('Aksesoris', id, { stok_saat_ini: nextVal });
+        showToast(`Stok <b>${esc(acc.nama_aksesoris)}</b> bertambah +${amount} ${esc(acc.satuan)} (Total: ${fmtNum(nextVal)} ${esc(acc.satuan)}).`, { title: 'Stok Aksesoris Ditambah' });
+        renderAll();
+      }
+    },
+    'modal-adjust-stok': () => showAdjustStokModal(),
+    'save-adjust-stok': () => {
+      const idStok = Number($('#sel-adjust-stok-id')?.value);
+      const delta = Number($('#inp-adjust-stok-qty')?.value) || 0;
+      const st = BongDB.find('Stok_Barang_Jadi', idStok);
+      if (st) {
+        const nextVal = Math.max(0, Number(st.jumlah_stok_pcs || 0) + delta);
+        BongDB.update('Stok_Barang_Jadi', idStok, {
+          jumlah_stok_pcs: nextVal,
+          tgl_update: APP_TODAY,
+        });
+        closeModal();
+        showToast(`Stok Barang Jadi ID #${idStok} disesuaikan ${delta >= 0 ? '+' + delta : delta} pcs (Stok Baru: ${fmtNum(nextVal)} pcs).`, { title: 'Penyesuaian Stok Disimpan' });
+        renderAll();
+      }
+    },
+
+    // EDF Deadline Revision Actions
+    'revise-deadline': (el) => {
+      showReviseDeadlineModal(Number(el.dataset.id));
+    },
+    'save-revise-deadline': (el) => {
+      const idPesanan = Number(el.dataset.id);
+      const newDate = $('#inp-revise-deadline-val')?.value;
+      const reasonSelect = $('#sel-revise-deadline-reason')?.value;
+      const reasonNote = $('#inp-revise-deadline-note')?.value.trim();
+      if (!newDate) {
+        showToast('Tanggal deadline baru wajib diisi.', { type: 'error' });
+        return;
+      }
+      const fullReason = reasonNote ? `${reasonSelect} (${reasonNote})` : reasonSelect;
+      BongDB.update('Pesanan', idPesanan, {
+        deadline_terbaru: newDate,
+        alasan_revisi_deadline: fullReason,
+      });
+      closeModal();
+      showToast(`Deadline Pesanan <b>#${idPesanan}</b> diperbarui menjadi <b>${fmtDate(newDate)}</b>. Urutan Cutter Queue EDF telah disesuaikan secara real-time.`, { title: 'Revisi Deadline Berhasil' });
+      renderAll();
+    },
   };
 
   function bindEvents() {
@@ -3599,7 +4198,21 @@
 
       const el = target.closest('[data-action]');
       if (!el) return;
-      const fn = ACTIONS[el.dataset.action];
+      const action = el.dataset.action;
+
+      const mutatingActions = [
+        'submit-pesanan', 'submit-penerimaan', 'submit-pemotongan', 'submit-qc',
+        'approve-qc-pass', 'resolve-qc', 'modal-add-supplier', 'save-new-supplier',
+        'modal-add-aksesoris', 'save-new-aksesoris', 'modal-adjust-stok', 'save-adjust-stok',
+        'quick-add-acc-stock', 'save-revise-deadline', 'reset-db', 'siap-gelar'
+      ];
+      if (state.role === 'Pemilik' && mutatingActions.includes(action)) {
+        e.preventDefault();
+        showToast('<b>Mode Audit Pemilik Aktif:</b> Peran Pemilik memiliki izin baca penuh (read-only) untuk pengawasan eksekutif dan tidak dapat melakukan mutasi data.', { type: 'warning', title: 'Mode Audit (Read-Only)' });
+        return;
+      }
+
+      const fn = ACTIONS[action];
       if (fn) { e.preventDefault(); fn(el, e); }
     });
 
@@ -3832,6 +4445,7 @@
     renderPenerimaanScreen();
     renderPemotonganScreen();
     renderQcScreen();
+    renderGudangScreen();
     renderLaporanScreen();
     refreshIcons();
     runCountUps();
@@ -3853,13 +4467,14 @@
     BongDB.subscribe(() => renderAll());
   }
 
-  // Public API for Steps 2–6
+  // Public API for Steps 1–7
   window.BongApp = {
     state, switchTab, applyRole, showToast, openModal, closeModal, confirmDialog,
     renderAll, renderDashboard, renderPesananScreen, renderPenerimaanScreen,
-    renderPemotonganScreen, renderQcScreen, renderLaporanScreen,
+    renderPemotonganScreen, renderQcScreen, renderGudangScreen, renderLaporanScreen,
     submitPesanan, submitPenerimaan, resetPesananForm, resetPenerimaanForm,
     submitPemotongan, resetPemotonganForm, submitQc, resetQcForm, approveQcPass, resolveQc,
+    showReviseDeadlineModal, showAddAksesorisModal, showAdjustStokModal,
     applyLaporanFilter, resetLaporanFilter, printReport,
     computeMetrics, refreshIcons, Q,
     utils: { addDays, diffDays, fmtDate, fmtNum, esc, sum, round1, downloadFile, toCsv },
