@@ -1,4 +1,4 @@
-# Bong-Garment-Thesis-Prototype
+# Bong Garment Thesis Prototype
 
 **Pembangunan Manajemen Produksi dan Inventori Garment Berbasis Web (Bong Garment)**  
 *Skripsi Program Studi Sistem Informasi - Universitas Tarumanagara (2026)*  
