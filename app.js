@@ -1,16 +1,16 @@
 /* ============================================================================
- * BONG GARMENT — Sistem Produksi & Inventori CMT (Cut, Make, Trim)
- * Prototipe Skripsi · Luis Febry (NIM 825220088) · Sistem Informasi UNTAR
+ * BONG GARMENT — CMT (Cut, Make, Trim) Production & Inventory Management System
+ * Undergraduate Thesis · Luis Febry (NIM 825220088) · Information Systems UNTAR
  * ----------------------------------------------------------------------------
- * app.js · STEP 1
- *   1. BongDB   — 14-table relational store with localStorage persistence
- *   2. Router   — switchTab() across 6 screens + URL hash sync
- *   3. Roles    — Admin / Pemotong / QC / Pemilik switcher
+ * app.js · Canonical 17-Table Relational Engine & Interactive SPA
+ *   1. BongDB   — 17-table relational store with localStorage persistence
+ *   2. Router   — switchTab() across 7 screens + URL hash sync
+ *   3. Roles    — Admin / Pemilik / Pemotong / QC / Gudang RBAC switcher
  *   4. UI utils — toast, modal, confirm dialog, global search, notifications
- *   5. Dashboard renderer — fully derived from BongDB (auto re-render on change)
+ *   5. Renderers — derived from BongDB (auto re-render on state mutation)
  *
- * Later steps (2–6) should mutate data ONLY through BongDB.insert/update/remove;
- * every mutation emits a change event and the dashboard re-renders itself.
+ * All mutations execute through BongDB.insert/update/remove;
+ * every mutation emits a change event and re-renders active views in real time.
  * ========================================================================== */
 (function () {
   'use strict';
@@ -183,7 +183,7 @@
     ];
 
     // 4. Spesifikasi_Ukuran (11 metric columns)
-    const ukuranBase = { // [lingkar_dada, panjang, lebar_bahu, panjang_lengan]
+    const ukuranBase = { // [lingkar_dada, panjang_baju_celana, panjang_pundak, panjang_tangan]
       1: [100, 72, 44, 60], 2: [108, 70, 47, 62], 3: [96, 68, 42, 20], 4: [102, 73, 44, 60],
       5: [98, 69, 43, 22], 7: [110, 68, 50, 60], 8: [96, 68, 42, 58],
     };
@@ -208,10 +208,6 @@
             lebar_kaki: 34 + i * 1,
             lebar_baju: null,
             panjang_baju_celana: 98 + i * 2,
-            // Backwards compatibility aliases
-            panjang: 98 + i * 2,
-            lebar_bahu: null,
-            panjang_lengan: null,
           });
         } else {
           // Top garments (Kemeja, Kaos, Polo, Jaket, Hoodie)
@@ -231,10 +227,6 @@
             lebar_kaki: null,
             lebar_baju: round1((dd + i * 4) / 2),
             panjang_baju_celana: pj + i * 2,
-            // Backwards compatibility aliases
-            panjang: pj + i * 2,
-            lebar_bahu: round1(bh + i * 1.5),
-            panjang_lengan: round1(lg + i),
           });
         }
       });
@@ -334,14 +326,13 @@
       const ids = [...used, ...(tersediaIds[id] || [])].sort((a, b) => a - b);
       const rolls = ids.map((rid, i) => {
         let status = 'Tersedia';
-        if (used.includes(rid)) status = rid === 4501 ? 'Dipotong' : rid === 4489 ? 'Retur' : 'Habis';
+        if (used.includes(rid)) status = rid === 4501 ? 'Dipotong' : 'Habis';
         const initialWeight = beratOverride[rid] ?? round1(20 + rnd() * 8);
         const sisaWeight = status === 'Habis' ? 0.0 : (status === 'Dipotong' ? 6.2 : initialWeight);
         return {
           id_roll: rid,
           id_detail_warna: id,
           no_roll_ke: i + 1,
-          berat_kg: initialWeight, // alias
           ukuran_awal: initialWeight,
           ukuran_sisa: sisaWeight,
           satuan: 'Kg',
@@ -351,15 +342,14 @@
         };
       });
       Detail_Roll_Bahan.push(...rolls);
-      const totalKg = round1(sum(rolls, (r) => r.ukuran_awal));
+      const totalUkuran = round1(sum(rolls, (r) => r.ukuran_awal));
       Detail_Bahan_Warna.push({
         id_detail_warna: id,
         id_penerimaan: idPen,
         nama_warna: nama,
         kode_warna: kode,
         total_roll: ids.length,
-        total_kg: totalKg,
-        total_ukuran: totalKg,
+        total_ukuran: totalUkuran,
         satuan_ukur: 'Kg',
       });
     });
@@ -458,8 +448,7 @@
       const pw = {
         id_potong_warna: idPW++, id_potong: s.id, id_detail_warna: rollById[rollIds[0]].id_detail_warna,
         total_lembar_direncanakan: Math.ceil(total / 50) * 50,
-        berat_terpakai_kg: round1(sum(rollIds, (rid) => rollById[rid].berat_kg * (rollById[rid].status_roll === 'Dipotong' ? 0.6 : 1))),
-        kain_terpakai: round1(sum(rollIds, (rid) => rollById[rid].berat_kg * (rollById[rid].status_roll === 'Dipotong' ? 0.6 : 1))),
+        kain_terpakai: round1(sum(rollIds, (rid) => rollById[rid].ukuran_awal * (rollById[rid].status_roll === 'Dipotong' ? 0.6 : 1))),
       };
       Detail_Pemotongan_Warna.push(pw);
       rollIds.forEach((rid) => gel[rid].forEach((lembar) => {
@@ -1090,8 +1079,8 @@
         </div>
         <div class="mt-auto pt-4">
           ${pendingOk
-            ? '<span class="badge bg-emerald-50 text-emerald-700 ring-emerald-200">TERKENDALI</span><p class="mt-2 text-[11px] text-slate-500">Tidak ada rework tertunda.</p>'
-            : `<span class="badge bg-rose-50 text-rose-700 ring-rose-200"><span class="pulse-dot w-1.5 h-1.5 rounded-full bg-rose-500 text-rose-500"></span>PERLU TINDAK LANJUT</span>
+        ? '<span class="badge bg-emerald-50 text-emerald-700 ring-emerald-200">TERKENDALI</span><p class="mt-2 text-[11px] text-slate-500">Tidak ada rework tertunda.</p>'
+        : `<span class="badge bg-rose-50 text-rose-700 ring-rose-200"><span class="pulse-dot w-1.5 h-1.5 rounded-full bg-rose-500 text-rose-500"></span>PERLU TINDAK LANJUT</span>
                <p class="mt-2 text-[11px] text-slate-600">${esc(m.pendingText)}</p>`}
         </div>
       </article>`;
@@ -1227,7 +1216,7 @@
           </div>
           <div class="mt-2.5 mb-3 flex items-center gap-4 text-[11px] text-slate-500">
             <span class="inline-flex items-center gap-1"><i data-lucide="receipt" class="w-3 h-3"></i>Nota #${esc(info.penerimaan?.no_nota || '-')}</span>
-            <span class="inline-flex items-center gap-1"><i data-lucide="weight" class="w-3 h-3"></i><b class="font-mono text-slate-700">${fmtNum(r.berat_kg, 1)}</b> kg</span>
+            <span class="inline-flex items-center gap-1"><i data-lucide="weight" class="w-3 h-3"></i><b class="font-mono text-slate-700">${fmtNum(r.ukuran_awal, 1)}</b> ${esc(r.satuan || 'Kg')}</span>
             <span class="inline-flex items-center gap-1 font-mono">Roll ${r.no_roll_ke}/${r.total_roll}</span>
           </div>
           ${footer}
@@ -1619,8 +1608,8 @@
                 <p class="font-bold font-mono text-slate-900">${s.nama_ukuran}</p>
                 <p class="text-[11px] text-slate-500 mt-0.5">
                   ${isCelana
-                    ? `Pinggang: <b class="font-mono text-slate-700">${s.lingkar_pinggang ?? '-'}</b> cm · Pjg: <b class="font-mono text-slate-700">${s.panjang ?? '-'}</b> cm`
-                    : `Dada: <b class="font-mono text-slate-700">${s.lingkar_dada ?? '-'}</b> cm · Pjg: <b class="font-mono text-slate-700">${s.panjang ?? '-'}</b> cm`}
+            ? `Pinggang: <b class="font-mono text-slate-700">${s.lingkar_pinggang ?? '-'}</b> cm · Pjg: <b class="font-mono text-slate-700">${s.panjang_baju_celana ?? '-'}</b> cm`
+            : `Dada: <b class="font-mono text-slate-700">${s.lingkar_dada ?? '-'}</b> cm · Pjg: <b class="font-mono text-slate-700">${s.panjang_baju_celana ?? '-'}</b> cm`}
                 </p>
               </div>`).join('')}
           </div>`;
@@ -1804,13 +1793,17 @@
         return {
           id_pola: idPola,
           nama_ukuran: uk,
-          lingkar_dada: ld ? Number(ld) : null,
-          panjang: pj ? Number(pj) : 70,
-          lebar_bahu: lb ? Number(lb) : null,
+          diameter_leher: ld ? 18.0 : null,
           panjang_pundak: lb ? Number(lb) : null,
-          panjang_lengan: pl ? Number(pl) : null,
+          lingkar_lengan: ld ? 44.0 : null,
           panjang_tangan: pl ? Number(pl) : null,
-          lingkar_pinggang: lp ? Number(lp) : null,
+          lingkar_dada: ld ? Number(ld) : null,
+          lingkar_pinggang: lp ? Number(lp) : (ld ? Number(ld) - 2 : null),
+          lingkar_selangkang: ld ? null : 28.0,
+          lingkar_paha: ld ? null : 58.0,
+          lebar_kaki: ld ? null : 34.0,
+          lebar_baju: ld ? round1(Number(ld) / 2) : null,
+          panjang_baju_celana: pj ? Number(pj) : 70,
         };
       });
       BongDB.insertMany('Spesifikasi_Ukuran', specs);
@@ -1838,7 +1831,11 @@
       jenis_pesanan: jenisPesanan,
       nama_mitra: namaMitra,
       tgl_order: tglOrder,
+      deadline_awal: deadline,
+      deadline_terbaru: deadline,
       deadline: deadline,
+      tgl_perubahan_deadline: null,
+      alasan_perubahan_deadline: null,
       status_pesanan: 'ANTREAN',
       progress_pct: idPenerimaan ? 15 : 0,
     });
@@ -2024,7 +2021,7 @@
             <p class="font-mono">Nota #${esc(info.penerimaan?.no_nota || '-')}</p>
             <p class="text-[11px] text-slate-400 truncate max-w-[140px]">${esc(sup?.nama_supplier || '-')}</p>
           </td>
-          <td class="px-3 py-3 text-xs font-mono font-semibold text-slate-800">${fmtNum(r.berat_kg, 1)} kg</td>
+          <td class="px-3 py-3 text-xs font-mono font-semibold text-slate-800">${fmtNum(r.ukuran_awal, 1)} ${esc(r.satuan || 'Kg')}</td>
           <td class="px-3 py-3 text-xs font-mono text-slate-600">${r.no_roll_ke} / ${r.total_roll}</td>
           <td class="px-3 py-3 text-xs font-mono text-slate-700">${esc(r.rak_alokasi)}</td>
           <td class="pl-3 pr-5 py-3 text-right"><span class="badge ${meta.badge}">${r.status_roll}</span></td>
@@ -2197,14 +2194,17 @@
         nama_warna: cg.namaWarna,
         kode_warna: cg.kodeWarna || 'LOT-01',
         total_roll: totalRoll,
-        total_kg: totalKg,
+        total_ukuran: totalKg,
+        satuan_ukur: 'Kg',
       });
 
       groupRolls.forEach((r, idx) => {
         allRollsToInsert.push({
           id_detail_warna: newWarna.id_detail_warna,
           no_roll_ke: idx + 1,
-          berat_kg: round1(r.beratKg),
+          ukuran_awal: round1(r.beratKg),
+          ukuran_sisa: round1(r.beratKg),
+          satuan: 'Kg',
           total_roll: totalRoll,
           status_roll: 'Tersedia',
           rak_alokasi: r.rakAlokasi || cg.rakDefault || 'A-01',
@@ -2217,7 +2217,7 @@
     const maxId = insertedRolls[insertedRolls.length - 1]?.id_roll;
     const idRangeStr = minId === maxId ? `#${minId}` : `#${minId} s/d #${maxId}`;
 
-    showToast(`Penerimaan Nota <b>#${esc(noNota)}</b> berhasil disimpan! <b>${insertedRolls.length} roll</b> (${sum(allRollsToInsert, (r) => r.berat_kg).toFixed(1)} kg) teregistrasi dengan integer PK id_roll: <b>${idRangeStr}</b>.`, { title: 'Penerimaan Bahan Berhasil' });
+    showToast(`Penerimaan Nota <b>#${esc(noNota)}</b> berhasil disimpan! <b>${insertedRolls.length} roll</b> (${sum(allRollsToInsert, (r) => r.ukuran_awal).toFixed(1)} kg) teregistrasi dengan integer PK id_roll: <b>${idRangeStr}</b>.`, { title: 'Penerimaan Bahan Berhasil' });
 
     state.penerimaan.flashRollId = minId;
 
@@ -2409,7 +2409,7 @@
       const rollOptionsHtml = availRolls.map((ar) => {
         const info = Q.rollInfo(ar);
         const isMatch = ar.id_detail_warna === selectedWarnaId;
-        return `<option value="${ar.id_roll}" ${ar.id_roll === r.id_roll ? 'selected' : ''}>[ID Roll: ${ar.id_roll}] ${esc(info.label)} (${ar.berat_kg} kg · ${ar.status_roll} · Rak ${esc(ar.rak_alokasi || '-')})${isMatch ? ' ★' : ''}</option>`;
+        return `<option value="${ar.id_roll}" ${ar.id_roll === r.id_roll ? 'selected' : ''}>[ID Roll: ${ar.id_roll}] ${esc(info.label)} (${ar.ukuran_awal} ${esc(ar.satuan || 'Kg')} · ${ar.status_roll} · Rak ${esc(ar.rak_alokasi || '-')})${isMatch ? ' ★' : ''}</option>`;
       }).join('');
 
       return `
@@ -2482,7 +2482,7 @@
     const uniqueRollIds = [...new Set(rows.map((r) => r.id_roll))];
     const inpBerat = $('#inp-berat-terpakai');
     if (inpBerat && (!inpBerat.value || inpBerat.dataset.auto === '1')) {
-      const totalRollKg = sum(uniqueRollIds.map((id) => Q.roll(id)), (r) => r?.berat_kg || 24);
+      const totalRollKg = sum(uniqueRollIds.map((id) => Q.roll(id)), (r) => r?.ukuran_awal || 24);
       inpBerat.value = (Math.round(totalRollKg * 10) / 10).toFixed(1);
       inpBerat.dataset.auto = '1';
     }
@@ -2502,7 +2502,7 @@
           <div class="flex items-center justify-between p-2.5 rounded-lg border border-slate-200 bg-white">
             <div class="min-w-0 pr-2">
               <p class="text-xs font-semibold font-mono text-slate-800 truncate">Roll ID: #${idRoll} (${esc(info.label)})</p>
-              <p class="text-[11px] text-slate-400 font-mono">${roll?.berat_kg || '-'} kg · Rak ${esc(roll?.rak_alokasi || '-')}</p>
+              <p class="text-[11px] text-slate-400 font-mono">${roll?.ukuran_awal || '-'} ${esc(roll?.satuan || 'Kg')} · Rak ${esc(roll?.rak_alokasi || '-')}</p>
             </div>
             <div class="flex items-center gap-1 shrink-0">
               <button type="button" data-action="set-roll-post-status" data-roll-id="${idRoll}" data-status="Dipotong" class="px-2.5 py-1 text-[11px] font-mono rounded font-semibold transition ${isDipotong ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">• Dipotong</button>
@@ -2600,7 +2600,7 @@
       id_potong: newSeri.id_potong,
       id_detail_warna: idDetailWarna,
       total_lembar_direncanakan: lembarRencana,
-      berat_terpakai_kg: beratTerpakai,
+      kain_terpakai: beratTerpakai,
     });
 
     // 3. Insert into Detail_Gelaran_Kain
@@ -2621,7 +2621,7 @@
       const usedInRows = rows.filter((r) => Number(r.id_roll) === rid);
       const totalLen = usedInRows.reduce((acc, curr) => acc + (Number(curr.panjang_gelar) || 0) * (Number(curr.jumlah_tumpuk) || 0), 0);
 
-      let sisa = rollRecord ? Number(rollRecord.ukuran_sisa ?? rollRecord.berat_kg ?? 25.0) : 25.0;
+      let sisa = rollRecord ? Number(rollRecord.ukuran_sisa ?? rollRecord.ukuran_awal ?? 25.0) : 25.0;
       if (chosenStatus === 'Habis') {
         sisa = 0;
       } else {
@@ -2749,7 +2749,7 @@
       selRoll.innerHTML = `<option value="">— Tidak Spesifik Roll —</option>` +
         availableRolls.map((r) => {
           const info = Q.rollInfo(r);
-          return `<option value="${r.id_roll}">[ID: ${r.id_roll}] ${esc(info.label)} (${r.berat_kg} kg · ${r.status_roll})</option>`;
+          return `<option value="${r.id_roll}">[ID: ${r.id_roll}] ${esc(info.label)} (${r.ukuran_awal} ${r.satuan || 'Kg'} · ${r.status_roll})</option>`;
         }).join('');
     }
 
@@ -2848,6 +2848,11 @@
     if (!catatan) { showToast('Catatan detail temuan kerusakan wajib diisi.', { type: 'error' }); $('#inp-catatan-qc')?.focus(); return; }
 
     const isFinished = decision === 'Finished' || decision === 'Rework Selesai';
+    const mappedStatusQc = isFinished
+      ? 'Rework Selesai'
+      : (decision === 'Retur Supplier' || decision === 'Scrapped')
+        ? 'Scrapped'
+        : 'Need Rework';
     const newQc = BongDB.insert('QC', {
       id_pesanan: idPesanan,
       id_user_qc: idUserQc,
@@ -2857,20 +2862,18 @@
       jumlah_lolos: isFinished ? 50 : 0,
       jumlah_cacat: jumlahPcs,
       jenis_cacat: jenisCacat,
-      kategori_cacat: jenisCacat,
       catatan_qc: catatan + (idRoll ? ` [Roll ID: #${idRoll}]` : ''),
-      status_qc: isFinished ? 'Rework Selesai' : decision,
-      tgl_target_perbaikan: (decision === 'Need Rework') ? tglSelesai : null,
+      status_qc: mappedStatusQc,
+      tgl_target_perbaikan: (mappedStatusQc === 'Need Rework') ? tglSelesai : null,
       tgl_selesai_perbaikan: isFinished ? tglSelesai : null,
       pic_rework: picRework,
-      // Compatibility aliases
-      status: isFinished ? 'Rework Selesai' : decision,
+      status: mappedStatusQc,
       jumlah_pcs: jumlahPcs,
       catatan: catatan + (idRoll ? ` [Roll ID: #${idRoll}]` : ''),
       tgl_temuan: tglTemuan,
     });
 
-    if (decision === 'Need Rework') {
+    if (mappedStatusQc === 'Need Rework') {
       BongDB.update('Pesanan', idPesanan, {
         status_pesanan: 'DALAM QC',
         progress_pct: 85,
@@ -2879,7 +2882,8 @@
 
     if (jenisCacat === 'Cacat Bahan' && idRoll) {
       BongDB.update('Detail_Roll_Bahan', idRoll, {
-        status_roll: 'Retur',
+        status_roll: 'Habis',
+        ukuran_sisa: 0.0,
         rak_alokasi: 'Karantina BS',
       });
     }
@@ -2892,13 +2896,13 @@
         if (existingStock) {
           BongDB.update('Stok_Barang_Jadi', existingStock.id_stok, {
             jumlah_stok_pcs: Number(existingStock.jumlah_stok_pcs || 0) + newQc.jumlah_lolos,
-            tgl_update: APP_TODAY,
+            tgl_update_terakhir: APP_TODAY + ' 15:00:00',
           });
         }
       }
     }
 
-    showToast(`Temuan QC <b>#${newQc.id_qc}</b> (${esc(jenisCacat)}) berhasil dicatat dengan keputusan <b>${esc(newQc.status)}</b>. Disposisi PIC: <b>${esc(picRework)}</b>.`, { title: 'Inspeksi QC Tersimpan' });
+    showToast(`Temuan QC <b>#${newQc.id_qc}</b> (${esc(jenisCacat)}) berhasil dicatat dengan keputusan <b>${esc(newQc.status_qc)}</b>. Disposisi PIC: <b>${esc(picRework)}</b>.`, { title: 'Inspeksi QC Tersimpan' });
 
     resetQcForm();
     renderAll();
@@ -2921,14 +2925,12 @@
       jumlah_diperiksa: qtyLolos,
       jumlah_lolos: qtyLolos,
       jumlah_cacat: 0,
-      jenis_cacat: '-',
-      kategori_cacat: 'Lainnya',
-      catatan_qc: 'Inspeksi Jahit Akhir Lolos Sempurna (100% lolos mutu).',
-      status_qc: 'Lolos Sempurna',
+      jenis_cacat: 'Tidak Ada',
+      catatan_qc: 'Inspeksi Jahit Akhir Lolos QC (100% lolos mutu).',
+      status_qc: 'Lolos QC',
       tgl_target_perbaikan: null,
       tgl_selesai_perbaikan: null,
       pic_rework: '-',
-      // Compatibility aliases
       status: 'Rework Selesai',
       jumlah_pcs: 0,
       catatan: 'Lolos inspeksi 100% sempurna',
@@ -2941,16 +2943,16 @@
       if (existingStock) {
         BongDB.update('Stok_Barang_Jadi', existingStock.id_stok, {
           jumlah_stok_pcs: Number(existingStock.jumlah_stok_pcs || 0) + qtyLolos,
-          tgl_update: APP_TODAY,
+          tgl_update_terakhir: APP_TODAY + ' 16:00:00',
         });
       } else {
         const spec = BongDB.where('Spesifikasi_Ukuran', (s) => s.id_pola === p.id_pola)[0];
         BongDB.insert('Stok_Barang_Jadi', {
           id_pola: p.id_pola,
           id_spesifikasi: spec ? spec.id_spesifikasi : 1,
-          id_detail_warna: 1,
+          nama_warna: 'White',
           jumlah_stok_pcs: qtyLolos,
-          tgl_update: APP_TODAY,
+          tgl_update_terakhir: APP_TODAY + ' 16:00:00',
         });
       }
     }
@@ -3044,7 +3046,7 @@
     const usedRollIds = new Set(gelaranList.map((g) => g.id_roll));
     const usedRolls = [...usedRollIds].map((id) => Q.roll(id)).filter(Boolean);
 
-    const totalKgUsed = round1(sum(usedRolls, (r) => r.berat_kg));
+    const totalKgUsed = round1(sum(usedRolls, (r) => r.ukuran_awal));
     const totalYieldPcs = sum(seriList, (s) => s.total_lembar_hasil);
     const avgYield = usedRollIds.size ? Math.round(totalYieldPcs / usedRollIds.size) : 0;
     const totalGelaran = gelaranList.length;
@@ -3195,19 +3197,19 @@
     const hostStok = $('#laporan-stok-breakdown');
     if (hostStok) {
       const allRolls = BongDB.data.Detail_Roll_Bahan;
-      const statuses = ['Tersedia', 'Dipotong', 'Habis', 'Retur'];
+      const statuses = ['Tersedia', 'Dipotong', 'Habis'];
       const stData = statuses.map((st) => {
         const group = allRolls.filter((r) => r.status_roll === st);
         return {
           status: st,
           count: group.length,
-          kg: round1(sum(group, (r) => r.berat_kg)),
+          kg: round1(sum(group, (r) => r.ukuran_awal)),
           meta: ROLL_META[st] || ROLL_META['Tersedia'],
         };
       });
 
       hostStok.innerHTML = `
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-3 gap-3">
           ${stData.map((d) => `
             <div class="p-3 rounded-lg border border-slate-200 bg-slate-50 flex flex-col justify-between">
               <div class="flex items-center justify-between">
@@ -3219,7 +3221,7 @@
         </div>
         <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
           <span>Total Seluruh Roll: <b class="font-mono text-slate-800">${allRolls.length} Roll</b></span>
-          <span>Total Berat Gudang: <b class="font-mono text-slate-800">${round1(sum(allRolls, (r) => r.berat_kg))} kg</b></span>
+          <span>Total Ukuran Gudang: <b class="font-mono text-slate-800">${round1(sum(allRolls, (r) => r.ukuran_awal))} kg</b></span>
         </div>`;
     }
 
@@ -3317,7 +3319,7 @@
 
     const html = [
       group('Pesanan', orders.map((p) => item('open-order', p.id_pesanan, 'clipboard-list', `<span class="font-mono text-indigo-600">#${p.id_pesanan}</span> · ${esc(Q.pola(p.id_pola)?.nama_pola || '')}`, `${esc(Q.sumber(p.id_sumber)?.nama_sumber || '')}${p.nama_mitra ? ' · ' + esc(p.nama_mitra) : ''}`, `<span class="badge ${(STATUS_META[p.status_pesanan] || STATUS_META.ANTREAN).badge}">${p.status_pesanan}</span>`))),
-      group('Roll Kain', rolls.map((r) => item('open-roll', r.id_roll, 'cylinder', `<span class="font-mono">id_roll: ${r.id_roll}</span> · ${esc(Q.rollInfo(r).label)}`, `${fmtNum(r.berat_kg, 1)} kg · Rak ${esc(r.rak_alokasi)}`, `<span class="badge ${(ROLL_META[r.status_roll] || ROLL_META.Habis).badge}">${r.status_roll}</span>`))),
+      group('Roll Kain', rolls.map((r) => item('open-roll', r.id_roll, 'cylinder', `<span class="font-mono">id_roll: ${r.id_roll}</span> · ${esc(Q.rollInfo(r).label)}`, `${fmtNum(r.ukuran_awal, 1)} ${esc(r.satuan || 'Kg')} · Rak ${esc(r.rak_alokasi)}`, `<span class="badge ${(ROLL_META[r.status_roll] || ROLL_META.Habis).badge}">${r.status_roll}</span>`))),
       group('Pola', polas.map((p) => item('open-pola', p.id_pola, 'shirt', esc(p.nama_pola), `<span class="font-mono">${esc(p.kode_pola)}</span> · ${esc(Q.kategori(p.id_kategori)?.nama_kategori || '')}`))),
     ].join('');
 
@@ -3362,7 +3364,7 @@
           ${kv('Tanggal Order', fmtDate(p.tgl_order))}
           ${kv('Deadline Awal', fmtDate(p.deadline_awal || p.deadline))}
           ${kv('Deadline Terbaru', p.deadline_terbaru ? `<span class="font-mono font-semibold text-amber-600">${fmtDate(p.deadline_terbaru)}</span>` : '<span class="text-slate-400">Tidak ada revisi</span>')}
-          ${kv('Alasan Revisi', esc(p.alasan_revisi_deadline || '-'))}
+          ${kv('Alasan Revisi', esc(p.alasan_perubahan_deadline || '-'))}
           ${kv('Penerimaan Bahan', pen ? `<span class="font-mono">Nota #${esc(pen.no_nota)}</span> · ${esc(pen.nama_kain)}` : '<span class="text-slate-400">Menunggu bahan</span>')}
           ${kv('Supplier', esc(pen ? Q.supplier(pen.id_supplier)?.nama_supplier : '-'))}
           ${kv('Admin', esc(Q.user(p.id_user_admin)?.nama_user || '-'))}
@@ -3378,8 +3380,8 @@
           : '<p class="text-xs text-slate-400">Belum ada pemotongan seri.</p>'}
         <h4 class="mt-6 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Temuan QC Berjenjang <span class="font-mono text-slate-400">(${qc.length})</span></h4>
         ${qc.length ? qc.map((k) => `<div class="flex items-start justify-between gap-3 p-3 rounded-lg border border-slate-200 mb-2">
-            <div><p class="text-xs"><span class="font-mono text-slate-400">id_qc: ${k.id_qc}</span> · <b>[${esc(k.tahap_qc || 'Inspeksi')}] ${esc(k.jenis_cacat || k.kategori_cacat || 'Temuan')} (${k.jumlah_pcs || k.jumlah_cacat} pcs)</b></p><p class="text-xs text-slate-600 mt-0.5">${esc(k.catatan || k.catatan_qc)}</p></div>
-            <span class="badge ${(QC_META[k.status] || QC_META[k.status_qc] || QC_META['Need Rework']).badge}">${esc((k.status || k.status_qc || '').toUpperCase())}</span></div>`).join('')
+            <div><p class="text-xs"><span class="font-mono text-slate-400">id_qc: ${k.id_qc}</span> · <b>[${esc(k.tahap_qc || 'Inspeksi')}] ${esc(k.jenis_cacat || 'Temuan')} (${k.jumlah_cacat ?? k.jumlah_pcs} pcs)</b></p><p class="text-xs text-slate-600 mt-0.5">${esc(k.catatan_qc || k.catatan)}</p></div>
+            <span class="badge ${(QC_META[k.status_qc] || QC_META[k.status] || QC_META['Need Rework']).badge}">${esc((k.status_qc || k.status || '').toUpperCase())}</span></div>`).join('')
           : '<p class="text-xs text-slate-400">Tidak ada temuan cacat.</p>'}`,
       footer: `
         <button type="button" class="btn btn-outline mr-auto text-amber-700 hover:bg-amber-50" data-action="revise-deadline" data-id="${p.id_pesanan}"><i data-lucide="calendar-clock" class="w-4 h-4 text-amber-600"></i>Revisi Deadline (EDF)</button>
@@ -3401,8 +3403,8 @@
       body: `
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
           ${kv('Status', `<span class="badge ${meta.badge}">${r.status_roll}</span>`)}
-          ${kv('Berat', `<span class="font-mono font-semibold">${fmtNum(r.berat_kg, 1)}</span> kg`)}
-          ${kv('Roll Ke', `<span class="font-mono">${r.no_roll_ke} / ${r.total_roll}</span>`)}
+          ${kv('Ukuran Awal / Sisa', `<span class="font-mono font-semibold">${fmtNum(r.ukuran_awal, 1)} / ${fmtNum(r.ukuran_sisa, 1)}</span> ${esc(r.satuan || 'Kg')}`)}
+          ${kv('Roll Ke', `<span class="font-mono">#${r.no_roll_ke}</span>`)}
           ${kv('Rak Alokasi', `<span class="font-mono">${esc(r.rak_alokasi)}</span>`)}
           ${kv('Warna', `${esc(info.warna?.nama_warna || '-')} <span class="font-mono text-xs text-slate-400">${esc(info.warna?.kode_warna || '')}</span>`)}
           ${kv('Nota', `<span class="font-mono">#${esc(info.penerimaan?.no_nota || '-')}</span> · ${fmtDate(info.penerimaan?.tgl_nota)}`)}
@@ -3441,34 +3443,34 @@
             <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
               <tr>
                 <th class="px-2.5 py-2">Ukuran</th>
-                <th class="px-2 py-2 text-right">Pjg</th>
-                <th class="px-2 py-2 text-right">Dada</th>
-                <th class="px-2 py-2 text-right">Bahu</th>
-                <th class="px-2 py-2 text-right">Lengan</th>
-                <th class="px-2 py-2 text-right">Leher</th>
-                <th class="px-2 py-2 text-right">Manset</th>
-                <th class="px-2 py-2 text-right">Ketiak</th>
-                <th class="px-2 py-2 text-right">Bawah</th>
-                <th class="px-2 py-2 text-right">Pinggang</th>
-                <th class="px-2 py-2 text-right">Pinggul</th>
-                <th class="px-2 py-2 text-right pr-3">Paha</th>
+                <th class="px-2 py-2 text-right">diameter_leher</th>
+                <th class="px-2 py-2 text-right">panjang_pundak</th>
+                <th class="px-2 py-2 text-right">lingkar_lengan</th>
+                <th class="px-2 py-2 text-right">panjang_tangan</th>
+                <th class="px-2 py-2 text-right">lingkar_dada</th>
+                <th class="px-2 py-2 text-right">lingkar_pinggang</th>
+                <th class="px-2 py-2 text-right">lingkar_selangkang</th>
+                <th class="px-2 py-2 text-right">lingkar_paha</th>
+                <th class="px-2 py-2 text-right">lebar_kaki</th>
+                <th class="px-2 py-2 text-right">lebar_baju</th>
+                <th class="px-2 py-2 text-right pr-3">panjang_baju_celana</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
               ${specs.map((s) => `
                 <tr class="hover:bg-slate-50">
                   <td class="px-2.5 py-2 font-bold text-slate-800">${esc(s.nama_ukuran)}</td>
-                  <td class="px-2 py-2 text-right font-mono">${s.panjang ?? '-'}</td>
-                  <td class="px-2 py-2 text-right font-mono">${s.lebar_dada ?? '-'}</td>
-                  <td class="px-2 py-2 text-right font-mono">${s.lebar_bahu ?? '-'}</td>
-                  <td class="px-2 py-2 text-right font-mono">${s.panjang_lengan ?? '-'}</td>
-                  <td class="px-2 py-2 text-right font-mono">${s.lebar_leher ?? '-'}</td>
-                  <td class="px-2 py-2 text-right font-mono">${s.lingkar_manset ?? '-'}</td>
-                  <td class="px-2 py-2 text-right font-mono">${s.lingkar_ketiak ?? '-'}</td>
-                  <td class="px-2 py-2 text-right font-mono">${s.lebar_bawah ?? '-'}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.diameter_leher ?? '-'}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.panjang_pundak ?? '-'}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.lingkar_lengan ?? '-'}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.panjang_tangan ?? '-'}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.lingkar_dada ?? '-'}</td>
                   <td class="px-2 py-2 text-right font-mono">${s.lingkar_pinggang ?? '-'}</td>
-                  <td class="px-2 py-2 text-right font-mono">${s.lingkar_pinggul ?? '-'}</td>
-                  <td class="px-2 py-2 text-right pr-3 font-mono">${s.lingkar_paha ?? '-'}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.lingkar_selangkang ?? '-'}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.lingkar_paha ?? '-'}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.lebar_kaki ?? '-'}</td>
+                  <td class="px-2 py-2 text-right font-mono">${s.lebar_baju ?? '-'}</td>
+                  <td class="px-2 py-2 text-right pr-3 font-mono">${s.panjang_baju_celana ?? '-'}</td>
                 </tr>`).join('')}
             </tbody>
           </table>
@@ -3482,23 +3484,21 @@
                 <tr>
                   <th class="px-3 py-2">Aksesoris</th>
                   <th class="px-3 py-2">Ukuran</th>
-                  <th class="px-3 py-2 text-right">Kebutuhan / Pcs</th>
-                  <th class="px-3 py-2">Satuan</th>
-                  <th class="px-3 py-2 pr-4">Keterangan</th>
+                  <th class="px-3 py-2 text-right">jumlah_digunakan</th>
+                  <th class="px-3 py-2 pr-4">Satuan</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100">
                 ${accList.map((d) => {
-                  const a = BongDB.find('Aksesoris', d.id_aksesoris);
-                  return `
+        const a = BongDB.find('Aksesoris', d.id_aksesoris);
+        return `
                     <tr class="hover:bg-slate-50">
                       <td class="px-3 py-2 font-medium text-slate-800">${esc(a?.nama_aksesoris || '-')}</td>
-                      <td class="px-3 py-2 text-slate-600 font-mono">${esc(a?.ukuran_aksesoris || '-')}</td>
-                      <td class="px-3 py-2 text-right font-mono font-semibold text-indigo-600">${fmtNum(d.jumlah_kebutuhan, 2)}</td>
-                      <td class="px-3 py-2 text-slate-500">${esc(a?.satuan || '-')}</td>
-                      <td class="px-3 py-2 pr-4 text-slate-600">${esc(d.keterangan || '-')}</td>
+                      <td class="px-3 py-2 text-slate-600 font-mono">${esc(a?.ukuran || '-')}</td>
+                      <td class="px-3 py-2 text-right font-mono font-semibold text-indigo-600">${fmtNum(d.jumlah_digunakan, 2)}</td>
+                      <td class="px-3 py-2 pr-4 text-slate-500">${esc(a?.satuan || '-')}</td>
                     </tr>`;
-                }).join('')}
+      }).join('')}
               </tbody>
             </table>
           </div>` : '<p class="text-xs text-slate-400">Pola ini tidak memerlukan aksesoris khusus.</p>'}`,
@@ -3619,11 +3619,10 @@
             <label class="block text-xs font-semibold text-slate-700 mb-1">Pilih Item Stok Tersedia</label>
             <select id="sel-adjust-stok-id" class="input w-full text-xs">
               ${existingStok.map((s) => {
-                const po = BongDB.find('Pola', s.id_pola);
-                const sp = BongDB.find('Spesifikasi_Ukuran', s.id_spesifikasi);
-                const w = BongDB.find('Detail_Bahan_Warna', s.id_detail_warna);
-                return `<option value="${s.id_stok}">[#${s.id_stok}] ${esc(po?.kode_pola || '')} - Size ${esc(sp?.nama_ukuran || '-')} - ${esc(w?.nama_warna || '-')} (Stok: ${s.jumlah_stok_pcs} pcs)</option>`;
-              }).join('')}
+        const po = BongDB.find('Pola', s.id_pola);
+        const sp = BongDB.find('Spesifikasi_Ukuran', s.id_spesifikasi);
+        return `<option value="${s.id_stok}">[#${s.id_stok}] ${esc(po?.kode_pola || '')} - Size ${esc(sp?.nama_ukuran || '-')} - ${esc(s.nama_warna || '-')} (Stok: ${s.jumlah_stok_pcs} pcs)</option>`;
+      }).join('')}
             </select>
           </div>
           <div>
@@ -3654,7 +3653,7 @@
       tblStok.innerHTML = stokList.map((s) => {
         const pola = BongDB.find('Pola', s.id_pola);
         const spec = BongDB.find('Spesifikasi_Ukuran', s.id_spesifikasi);
-        const warna = BongDB.find('Detail_Bahan_Warna', s.id_detail_warna);
+        const colorName = s.nama_warna || '-';
         return `
           <tr class="hover:bg-slate-50 transition">
             <td class="pl-5 py-3 font-mono font-medium text-indigo-600">#${s.id_stok}</td>
@@ -3665,12 +3664,12 @@
             <td class="py-3 font-semibold text-slate-700">${esc(spec?.nama_ukuran || '-')}</td>
             <td class="py-3">
               <span class="inline-flex items-center gap-1.5">
-                <span class="w-2.5 h-2.5 rounded-full border border-slate-300" style="background-color: ${warna?.kode_warna?.toLowerCase().includes('nvy') ? '#1E3A8A' : warna?.kode_warna?.toLowerCase().includes('khk') ? '#D97706' : '#334155'}"></span>
-                <span>${esc(warna?.nama_warna || '-')}</span>
+                <span class="w-2.5 h-2.5 rounded-full border border-slate-300" style="background-color: ${colorName.toLowerCase().includes('navy') ? '#1E3A8A' : colorName.toLowerCase().includes('khaki') ? '#D97706' : '#334155'}"></span>
+                <span>${esc(colorName)}</span>
               </span>
             </td>
             <td class="py-3 text-right font-mono font-bold text-emerald-600 text-sm">${fmtNum(s.jumlah_stok_pcs)} Pcs</td>
-            <td class="pr-5 py-3 text-right font-mono text-slate-500">${fmtDate(s.tgl_update)}</td>
+            <td class="pr-5 py-3 text-right font-mono text-slate-500">${fmtDate(s.tgl_update_terakhir)}</td>
           </tr>`;
       }).join('') || '<tr><td colspan="6" class="text-center py-6 text-slate-400">Belum ada data stok barang jadi.</td></tr>';
     }
@@ -3683,18 +3682,18 @@
     if (tblAcc) {
       tblAcc.innerHTML = accList.map((a) => {
         const sup = BongDB.find('Supplier', a.id_supplier);
-        const stock = Number(a.stok_saat_ini) || 0;
+        const stock = Number(a.stok) || 0;
         const stockBadge = stock < 200
           ? 'bg-rose-50 text-rose-700 ring-rose-200'
           : stock < 500
-          ? 'bg-amber-50 text-amber-700 ring-amber-200'
-          : 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+            ? 'bg-amber-50 text-amber-700 ring-amber-200'
+            : 'bg-emerald-50 text-emerald-700 ring-emerald-200';
 
         return `
           <tr class="hover:bg-slate-50 transition">
             <td class="pl-5 py-3 font-mono font-medium text-indigo-600">#${a.id_aksesoris}</td>
             <td class="py-3 font-medium text-slate-900">${esc(a.nama_aksesoris)}</td>
-            <td class="py-3 font-mono text-slate-600">${esc(a.ukuran_aksesoris)}</td>
+            <td class="py-3 font-mono text-slate-600">${esc(a.ukuran)}</td>
             <td class="py-3 font-mono font-bold">
               <span class="badge ${stockBadge}">${fmtNum(stock)}</span>
             </td>
@@ -4123,11 +4122,11 @@
       if (!ukuran) { showToast('Ukuran Aksesoris wajib diisi.', { type: 'error' }); $('#inp-new-acc-ukuran')?.focus(); return; }
 
       const newAcc = BongDB.insert('Aksesoris', {
-        nama_aksesoris: nama,
-        ukuran_aksesoris: ukuran,
-        satuan,
-        stok_saat_ini: stok,
         id_supplier: idSupplier,
+        nama_aksesoris: nama,
+        ukuran,
+        stok,
+        satuan,
       });
 
       closeModal();
@@ -4139,8 +4138,8 @@
       const amount = Number(el.dataset.amount) || 100;
       const acc = BongDB.find('Aksesoris', id);
       if (acc) {
-        const nextVal = Number(acc.stok_saat_ini || 0) + amount;
-        BongDB.update('Aksesoris', id, { stok_saat_ini: nextVal });
+        const nextVal = Number(acc.stok || 0) + amount;
+        BongDB.update('Aksesoris', id, { stok: nextVal });
         showToast(`Stok <b>${esc(acc.nama_aksesoris)}</b> bertambah +${amount} ${esc(acc.satuan)} (Total: ${fmtNum(nextVal)} ${esc(acc.satuan)}).`, { title: 'Stok Aksesoris Ditambah' });
         renderAll();
       }
@@ -4154,7 +4153,7 @@
         const nextVal = Math.max(0, Number(st.jumlah_stok_pcs || 0) + delta);
         BongDB.update('Stok_Barang_Jadi', idStok, {
           jumlah_stok_pcs: nextVal,
-          tgl_update: APP_TODAY,
+          tgl_update_terakhir: APP_TODAY + ' 16:00:00',
         });
         closeModal();
         showToast(`Stok Barang Jadi ID #${idStok} disesuaikan ${delta >= 0 ? '+' + delta : delta} pcs (Stok Baru: ${fmtNum(nextVal)} pcs).`, { title: 'Penyesuaian Stok Disimpan' });
@@ -4178,7 +4177,8 @@
       const fullReason = reasonNote ? `${reasonSelect} (${reasonNote})` : reasonSelect;
       BongDB.update('Pesanan', idPesanan, {
         deadline_terbaru: newDate,
-        alasan_revisi_deadline: fullReason,
+        tgl_perubahan_deadline: APP_TODAY + ' 14:00:00',
+        alasan_perubahan_deadline: fullReason,
       });
       closeModal();
       showToast(`Deadline Pesanan <b>#${idPesanan}</b> diperbarui menjadi <b>${fmtDate(newDate)}</b>. Urutan Cutter Queue EDF telah disesuaikan secara real-time.`, { title: 'Revisi Deadline Berhasil' });
