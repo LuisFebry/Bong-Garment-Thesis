@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bong Garment — Sistem Produksi &amp; Inventori CMT</title>
+  <meta name="description" content="Prototipe Sistem Manajemen Produksi & Inventori CMT Bong Garment: pelacakan roll kain per id_roll, antrean pemotongan EDF, pencatatan gelaran & yield, serta kontrol mutu (QC)." />
+  <meta name="author" content="Luis Febry — NIM 825220088, Sistem Informasi, Universitas Tarumanagara" />
+  <meta name="theme-color" content="#4F46E5" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS (Play CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+          },
+          colors: {
+            brand: { 50: '#EEF2FF', 100: '#E0E7FF', 500: '#6366F1', 600: '#4F46E5', 700: '#4338CA' },
+          },
+        },
+      },
+    };
+  </script>
+
+  <style type="text/tailwindcss">
+    @layer base {
+      html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+      body { @apply font-sans text-slate-700 bg-slate-50; }
+    }
+    @layer components {
+      /* Layout primitives */
+      .card       { @apply bg-white border border-slate-200 rounded-xl shadow-sm; }
+      .card-head  { @apply flex items-start gap-3 px-6 py-4 border-b border-slate-100; }
+      .card-icon  { @apply w-9 h-9 shrink-0 rounded-lg grid place-items-center bg-indigo-50 text-indigo-600 ring-1 ring-inset ring-indigo-100; }
+      .card-title { @apply text-[15px] font-semibold text-slate-900 leading-snug; }
+      .card-sub   { @apply text-xs text-slate-500 mt-0.5; }
+
+      /* Buttons */
+      .btn         { @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg text-sm font-medium whitespace-nowrap transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none; }
+      .btn-primary { @apply bg-indigo-600 text-white shadow-sm shadow-indigo-600/20 hover:bg-indigo-700 hover:shadow-md hover:shadow-indigo-600/25; }
+      .btn-outline { @apply bg-white text-slate-700 border border-slate-200 shadow-sm hover:bg-slate-50 hover:border-slate-300; }
+      .btn-danger  { @apply bg-rose-600 text-white shadow-sm hover:bg-rose-700; }
+      .btn-ghost   { @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900; }
+      .btn-sm      { @apply h-8 px-3 text-xs rounded-md; }
+      .icon-btn    { @apply relative w-10 h-10 grid place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40; }
+
+      /* Sidebar navigation */
+      .nav-label { @apply px-3 pb-2 text-[10.5px] font-semibold tracking-[0.12em] text-slate-400 uppercase; }
+      .nav-link  { @apply relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] text-slate-600 text-left transition-all duration-150 hover:bg-slate-100 hover:text-slate-900; }
+      .nav-link.is-active { @apply bg-indigo-600 text-white font-medium shadow-sm shadow-indigo-600/25 hover:bg-indigo-600 hover:text-white; }
+      .nav-link.role-dim:not(.is-active) { @apply opacity-50; }
+      .nav-link .role-dot { @apply hidden w-1.5 h-1.5 rounded-full bg-indigo-500 ring-2 ring-indigo-100; }
+      .nav-link.role-ok .role-dot { @apply block; }
+      .nav-link.is-active .role-dot { @apply bg-white ring-indigo-400; }
+
+      /* Badges & typography */
+      .badge      { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-semibold tracking-wide ring-1 ring-inset whitespace-nowrap; }
+      .crumb      { @apply flex flex-wrap items-center gap-1.5 text-[11px] font-semibold tracking-[0.08em] uppercase text-slate-400; }
+      .crumb button:hover { @apply text-indigo-600; }
+      .screen-title { @apply text-2xl font-bold tracking-tight text-slate-900; }
+      .screen-sub   { @apply text-sm text-slate-500 mt-1; }
+      .kpi-label  { @apply text-[11px] font-semibold tracking-[0.1em] text-slate-500 uppercase; }
+      .kpi-value  { @apply text-[32px] leading-none font-bold tracking-tight text-slate-900 font-mono tabular-nums; }
+      .kpi-icon   { @apply w-10 h-10 rounded-lg grid place-items-center; }
+      .th         { @apply px-3 py-3 text-left text-[10.5px] font-semibold tracking-[0.1em] text-slate-500 uppercase; }
+      .chip       { @apply inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors; }
+      .chip.is-active { @apply bg-white text-slate-900 shadow-sm ring-1 ring-slate-200; }
+      .dropdown   { @apply absolute z-30 bg-white border border-slate-200 rounded-xl shadow-xl shadow-slate-900/10; }
+      .field-label { @apply block text-xs font-medium text-slate-600 mb-1.5; }
+      .field-input { @apply w-full h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition; }
+    }
+  </style>
+
+  <style>
+    /* Screen transitions */
+    .screen-section { display: none; }
+    .screen-section.is-active { display: block; animation: screenIn .38s cubic-bezier(.2, .8, .2, 1); }
+    @keyframes screenIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    /* Skeleton shimmer */
+    .shimmer { position: relative; overflow: hidden; }
+    .shimmer::after {
+      content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+      background: linear-gradient(90deg, transparent, rgba(99, 102, 241, .08), transparent);
+      animation: shimmer 1.8s infinite;
+    }
+    @keyframes shimmer { to { transform: translateX(100%); } }
+
+    /* Toasts */
+    .toast { animation: toastIn .35s cubic-bezier(.2, .9, .3, 1.2); }
+    .toast.is-leaving { animation: toastOut .25s ease forwards; }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(12px) scale(.96); } to { opacity: 1; transform: none; } }
+    @keyframes toastOut { to { opacity: 0; transform: translateX(24px); } }
+    .toast-progress { animation: toastBar linear forwards; transform-origin: left; }
+    @keyframes toastBar { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+    /* Modal + dropdown */
+    .modal-backdrop { animation: fadeIn .2s ease; }
+    .modal-panel { animation: modalIn .28s cubic-bezier(.2, .9, .3, 1.1); }
+    .pop-in { animation: modalIn .18s ease; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes modalIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+
+    /* Chart bars */
+    .bar { transition: height .8s cubic-bezier(.2, .8, .2, 1), background-color .2s; }
+
+    /* Live pulse */
+    .pulse-dot { position: relative; }
+    .pulse-dot::before { content: ''; position: absolute; inset: -3px; border-radius: 9999px; background: currentColor; opacity: .35; animation: pulse 1.8s ease-out infinite; }
+    @keyframes pulse { 0% { transform: scale(.6); opacity: .5; } 100% { transform: scale(1.8); opacity: 0; } }
+
+    /* Scrollbars */
+    #main-content::-webkit-scrollbar, .thin-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+    #main-content::-webkit-scrollbar-thumb, .thin-scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 9999px; border: 3px solid #F8FAFC; }
+    #main-content::-webkit-scrollbar-track { background: transparent; }
+
+    tbody tr { transition: background-color .15s; }
+    .row-flash { animation: rowFlash 1.6s ease; }
+    @keyframes rowFlash { 0%, 40% { background: #EEF2FF; } 100% { background: transparent; } }
+
+    /* Print styles */
+    @media print {
+      #sidebar, header, #toast-root, #modal-root, .no-print, button[data-action] { display: none !important; }
+      body, #main-content { overflow: visible !important; height: auto !important; }
+      #main-content { padding: 0 !important; margin: 0 !important; width: 100% !important; max-width: 100% !important; }
+      .screen-section { display: none !important; }
+      .screen-section.is-active { display: block !important; }
+      .card { box-shadow: none !important; border: 1px solid #cbd5e1 !important; break-inside: avoid; }
+    }
+  </style>
+</head>
+
+<body class="h-screen overflow-hidden">
+  <h1 class="sr-only">Bong Garment — Sistem Produksi &amp; Inventori CMT</h1>
+
+  <div class="flex h-full">
+    <!-- ================================================================
+         SIDEBAR
+         ================================================================ -->
+    <aside id="sidebar" class="w-64 shrink-0 bg-white border-r border-slate-200 flex flex-col justify-between">
+      <div class="flex flex-col min-h-0">
+        <!-- Brand -->
+        <div class="h-16 px-5 flex items-center gap-3 border-b border-slate-100">
+          <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-700 text-white grid place-items-center shadow-md shadow-indigo-600/30">
+            <i data-lucide="scissors" class="w-[18px] h-[18px]"></i>
+          </div>
+          <div class="leading-tight">
+            <p class="text-[15px] font-extrabold tracking-tight text-slate-900">BONG GARMENT</p>
+            <p class="text-[10px] font-semibold tracking-[0.14em] text-slate-400">SISTEM PRODUKSI CMT</p>
+          </div>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="flex-1 overflow-y-auto px-3 py-5" aria-label="Menu navigasi utama">
+          <p class="nav-label">Menu Navigasi</p>
+          <div class="space-y-1">
+            <a href="#dashboard" id="nav-dashboard" data-tab="dashboard" class="nav-link is-active">
+              <i data-lucide="layout-grid" class="w-[18px] h-[18px] shrink-0"></i>
+              <span class="flex-1">Dashboard</span><span class="role-dot"></span>
+            </a>
+            <a href="#pesanan" id="nav-pesanan" data-tab="pesanan" class="nav-link">
+              <i data-lucide="clipboard-list" class="w-[18px] h-[18px] shrink-0"></i>
+              <span class="flex-1">Kelola Pesanan &amp; Pola</span><span class="role-dot"></span>
+            </a>
+            <a href="#penerimaan" id="nav-penerimaan" data-tab="penerimaan" class="nav-link">
+              <i data-lucide="package-check" class="w-[18px] h-[18px] shrink-0"></i>
+              <span class="flex-1">Penerimaan &amp; Roll Bahan</span><span class="role-dot"></span>
+            </a>
+            <a href="#pemotongan" id="nav-pemotongan" data-tab="pemotongan" class="nav-link">
+              <i data-lucide="scissors" class="w-[18px] h-[18px] shrink-0"></i>
+              <span class="flex-1">Pemotongan Seri &amp; Gelaran</span><span class="role-dot"></span>
+            </a>
+            <a href="#qc" id="nav-qc" data-tab="qc" class="nav-link">
+              <i data-lucide="shield-alert" class="w-[18px] h-[18px] shrink-0"></i>
+              <span class="flex-1">Quality Control &amp; Kerusakan</span><span class="role-dot"></span>
+            </a>
+            <a href="#laporan" id="nav-laporan" data-tab="laporan" class="nav-link">
+              <i data-lucide="file-bar-chart" class="w-[18px] h-[18px] shrink-0"></i>
+              <span class="flex-1">Laporan Eksekutif</span><span class="role-dot"></span>
+            </a>
+          </div>
+
+          <p class="nav-label mt-7">Sistem</p>
+          <button type="button" id="nav-pengaturan" data-nav="pengaturan" data-action="open-settings" class="nav-link">
+            <i data-lucide="settings" class="w-[18px] h-[18px] shrink-0"></i>
+            <span class="flex-1">Pengaturan Sistem</span><span class="role-dot"></span>
+          </button>
+
+          <div class="mt-6 mx-1 rounded-lg bg-slate-50 border border-slate-200/80 px-3 py-2.5">
+            <p class="text-[10px] font-semibold tracking-[0.1em] text-slate-400 uppercase">Akses Peran Aktif</p>
+            <p id="role-access-label" class="text-xs font-medium text-slate-700 mt-0.5">Admin · 4 layar</p>
+          </div>
+        </nav>
+      </div>
+
+      <!-- Sidebar footer -->
+      <div class="p-3 border-t border-slate-100 space-y-2">
+        <div class="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-emerald-50/60 border border-emerald-100">
+          <span class="pulse-dot w-2 h-2 rounded-full bg-emerald-500 text-emerald-500"></span>
+          <div class="leading-tight min-w-0">
+            <p class="text-[11px] font-semibold text-emerald-800">BongDB · LocalStorage</p>
+            <p id="db-status" class="text-[10.5px] text-emerald-700/80 font-mono truncate">14 tabel · memuat…</p>
+          </div>
+        </div>
+        <button type="button" id="btn-logout" data-action="logout" class="nav-link text-rose-600 hover:bg-rose-50 hover:text-rose-700 font-medium">
+          <i data-lucide="log-out" class="w-[18px] h-[18px] shrink-0"></i>
+          <span>Keluar Sistem</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ================================================================
+         MAIN COLUMN
+         ================================================================ -->
+    <div class="flex-1 flex flex-col min-w-0">
+      <!-- Top header -->
+      <header class="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between sticky top-0 z-20 shrink-0">
+        <!-- Global search -->
+        <div id="search-wrap" class="relative">
+          <label for="global-search" class="sr-only">Pencarian global</label>
+          <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          <input id="global-search" type="search" autocomplete="off"
+            placeholder="Cari id_pesanan, id_roll, atau pola..."
+            class="w-96 h-10 pl-9 pr-14 bg-slate-100/80 border-0 rounded-lg text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:bg-white transition" />
+          <kbd class="absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border border-slate-200 bg-white text-[10px] font-mono text-slate-400 pointer-events-none">Ctrl K</kbd>
+          <div id="search-results" class="dropdown hidden top-full left-0 mt-2 w-[30rem] max-h-[70vh] overflow-y-auto thin-scroll"></div>
+        </div>
+
+        <!-- Right controls -->
+        <div class="flex items-center gap-3">
+          <div class="hidden md:flex items-center gap-2 h-9 px-3 rounded-full border border-slate-200 bg-white text-xs font-medium text-slate-600">
+            <i data-lucide="calendar" class="w-3.5 h-3.5 text-indigo-600"></i>
+            <span id="today-label">Senin, 28 Okt 2026</span>
+          </div>
+
+          <div id="notif-wrap" class="relative">
+            <button type="button" id="btn-notif" data-action="toggle-notif" class="icon-btn" aria-label="Notifikasi">
+              <i data-lucide="bell" class="w-[18px] h-[18px]"></i>
+              <span id="notif-dot" class="absolute top-2 right-2.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white"></span>
+            </button>
+            <div id="notif-menu" class="dropdown hidden right-0 mt-2 w-96"></div>
+          </div>
+
+          <div class="w-px h-8 bg-slate-200"></div>
+
+          <div id="role-switcher" class="relative">
+            <button type="button" id="btn-role-menu" data-action="toggle-role-menu" class="flex items-center gap-3 pl-3 pr-2 py-1.5 rounded-lg border border-transparent hover:border-slate-200 hover:bg-slate-50 transition" aria-haspopup="true" aria-expanded="false">
+              <div class="text-right leading-tight">
+                <p class="text-sm font-semibold text-slate-900">Luis Febry</p>
+                <p class="text-xs text-slate-500"><span id="role-label">Admin</span></p>
+              </div>
+              <span id="role-avatar" class="w-9 h-9 rounded-full bg-indigo-600 text-white grid place-items-center ring-4 ring-indigo-50">
+                <i data-lucide="user-cog" class="w-4 h-4"></i>
+              </span>
+              <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400"></i>
+            </button>
+            <div id="role-menu" class="dropdown hidden right-0 mt-2 w-80 p-2">
+              <p class="px-2.5 pt-1.5 pb-2 text-[10.5px] font-semibold tracking-[0.1em] text-slate-400 uppercase">Ganti Peran Pengguna</p>
+              <div id="role-options" class="space-y-1"></div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- ================================================================
+           SCREENS
+           ================================================================ -->
+      <main id="main-content" class="flex-1 p-8 overflow-y-auto">
+
+        <!-- ============ SCREEN 1: DASHBOARD ============ -->
+        <section id="screen-dashboard" class="screen-section is-active" aria-labelledby="title-dashboard">
+          <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+            <div>
+              <div class="flex items-center gap-2 mb-1.5">
+                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold tracking-widest ring-1 ring-emerald-200">
+                  <span class="pulse-dot w-1.5 h-1.5 rounded-full bg-emerald-500 text-emerald-500"></span>LIVE
+                </span>
+                <span class="crumb">Dashboard <span class="text-slate-300">/</span> Ringkasan Operasional Shift</span>
+              </div>
+              <h2 id="title-dashboard" class="screen-title">Console Produksi &amp; Inventori</h2>
+              <p class="screen-sub">Pengawasan real-time pemotongan seri, pelacakan roll fisik, dan kontrol mutu CMT</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <button type="button" id="btn-export-shift" data-action="export-shift-log" class="btn btn-outline">
+                <i data-lucide="download" class="w-4 h-4"></i>Export Shift Log
+              </button>
+              <button type="button" id="btn-new-receipt" data-action="goto" data-target="penerimaan" class="btn btn-primary">
+                <i data-lucide="plus" class="w-4 h-4"></i>Penerimaan Roll Baru
+              </button>
+            </div>
+          </div>
+
+          <!-- Row 1: KPI -->
+          <div id="kpi-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-6"></div>
+
+          <!-- Row 2 -->
+          <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 mb-6">
+            <article class="card xl:col-span-7 flex flex-col overflow-hidden">
+              <header class="card-head items-center">
+                <span class="card-icon"><i data-lucide="list-checks" class="w-[18px] h-[18px]"></i></span>
+                <div class="flex-1 min-w-0">
+                  <h3 class="card-title">Status Progress Pesanan &amp; Sumber Inisiasi</h3>
+                  <p class="card-sub">Relasi <code class="font-mono">Pesanan</code> → <code class="font-mono">Pola</code> · <code class="font-mono">Sumber_Inisiasi</code></p>
+                </div>
+                <div id="order-filters" class="flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-100">
+                  <button type="button" class="chip is-active" data-action="filter-orders" data-filter="ALL">Semua <span class="font-mono text-[10px] text-slate-400" data-filter-count="ALL"></span></button>
+                  <button type="button" class="chip" data-action="filter-orders" data-filter="ANTREAN">Antrean <span class="font-mono text-[10px] text-slate-400" data-filter-count="ANTREAN"></span></button>
+                  <button type="button" class="chip" data-action="filter-orders" data-filter="PEMOTONGAN">Potong <span class="font-mono text-[10px] text-slate-400" data-filter-count="PEMOTONGAN"></span></button>
+                  <button type="button" class="chip" data-action="filter-orders" data-filter="DALAM QC">QC <span class="font-mono text-[10px] text-slate-400" data-filter-count="DALAM QC"></span></button>
+                </div>
+              </header>
+              <div class="overflow-x-auto flex-1">
+                <table class="w-full text-sm">
+                  <thead class="bg-slate-50/80 border-b border-slate-100">
+                    <tr>
+                      <th class="th pl-5">ID Pesanan</th>
+                      <th class="th">Nama Pola</th>
+                      <th class="th">Sumber Inisiasi</th>
+                      <th class="th">Mitra / Klien</th>
+                      <th class="th">Progress</th>
+                      <th class="th pr-5 text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbl-pesanan-body" class="divide-y divide-slate-100"></tbody>
+                </table>
+              </div>
+              <footer class="px-5 py-3.5 border-t border-slate-100 bg-slate-50/50 flex flex-wrap items-center justify-between gap-3">
+                <div id="sumber-dist" class="flex-1 min-w-[260px]"></div>
+                <button type="button" id="btn-toggle-orders" data-action="toggle-orders" class="btn btn-ghost btn-sm text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"></button>
+              </footer>
+            </article>
+
+            <article class="card xl:col-span-5 flex flex-col">
+              <header class="card-head items-center">
+                <span class="card-icon"><i data-lucide="cylinder" class="w-[18px] h-[18px]"></i></span>
+                <div class="flex-1 min-w-0">
+                  <h3 class="card-title">Status Gelaran &amp; Penggunaan Roll</h3>
+                  <p class="card-sub">Pelacakan fisik per <code class="font-mono">id_roll</code> · <code class="font-mono">Detail_Roll_Bahan</code></p>
+                </div>
+                <button type="button" data-action="goto" data-target="penerimaan" class="btn btn-ghost btn-sm text-indigo-600 hover:bg-indigo-50">Semua Roll<i data-lucide="arrow-right" class="w-3.5 h-3.5"></i></button>
+              </header>
+              <div id="roll-status-summary" class="px-6 pt-4 grid grid-cols-4 gap-2"></div>
+              <div id="roll-cards" class="p-6 pt-4 space-y-3 flex-1"></div>
+            </article>
+          </div>
+
+          <!-- Row 3 -->
+          <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+            <article class="card xl:col-span-7 flex flex-col">
+              <header class="card-head items-center">
+                <span class="card-icon"><i data-lucide="chart-column" class="w-[18px] h-[18px]"></i></span>
+                <div class="flex-1 min-w-0">
+                  <h3 class="card-title">Output Pemotongan Seri &amp; Lembar</h3>
+                  <p class="card-sub">Total lembar hasil 7 hari terakhir · <code class="font-mono">Pemotongan_Seri</code></p>
+                </div>
+                <span id="yield-avg" class="badge bg-indigo-50 text-indigo-700 ring-indigo-200 text-[11px] py-1"></span>
+              </header>
+              <div class="p-6 flex-1 flex flex-col">
+                <div id="yield-chart" class="flex-1"></div>
+                <div id="yield-summary" class="mt-5 pt-4 border-t border-slate-100 grid grid-cols-3 gap-4"></div>
+              </div>
+            </article>
+
+            <article class="card xl:col-span-5 flex flex-col">
+              <header class="card-head items-center">
+                <span class="card-icon bg-rose-50 text-rose-600 ring-rose-100"><i data-lucide="shield-alert" class="w-[18px] h-[18px]"></i></span>
+                <div class="flex-1 min-w-0">
+                  <h3 class="card-title">Aktivitas QC &amp; Temuan Cacat</h3>
+                  <p class="card-sub">Log terbaru tabel <code class="font-mono">Kerusakan</code></p>
+                </div>
+                <button type="button" data-action="goto" data-target="qc" class="btn btn-ghost btn-sm text-indigo-600 hover:bg-indigo-50">Inspeksi<i data-lucide="arrow-right" class="w-3.5 h-3.5"></i></button>
+              </header>
+              <div id="qc-feed" class="p-6 space-y-3 flex-1"></div>
+            </article>
+          </div>
+
+          <p class="mt-8 text-center text-[11px] text-slate-400">
+            Prototipe Skripsi · Luis Febry (825220088) · Sistem Informasi, Universitas Tarumanagara · 2026
+          </p>
+        </section>
+
+        <!-- ============ SCREEN 2: KELOLA PESANAN & POLA ============ -->
+        <section id="screen-pesanan" class="screen-section" aria-labelledby="title-pesanan">
+          <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+            <div>
+              <nav class="crumb mb-1.5" aria-label="Breadcrumb">
+                <button type="button" data-action="goto" data-target="pesanan">Kelola Pesanan &amp; Pola</button>
+                <span class="text-slate-300">/</span><span class="text-indigo-600">Input Pesanan Baru</span>
+                <span class="badge ml-2 bg-indigo-50 text-indigo-700 ring-indigo-200 font-mono">id_pesanan berikutnya: #<b id="next-pesanan-id">119</b></span>
+              </nav>
+              <h2 id="title-pesanan" class="screen-title">Input Pesanan Produksi Baru</h2>
+              <p class="screen-sub">Registrasi pesanan CMT beserta sumber inisiasi, master pola, dan parameter transaksi.</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <button type="button" data-action="goto" data-target="dashboard" class="btn btn-outline"><i data-lucide="arrow-left" class="w-4 h-4"></i>Batal / Kembali</button>
+              <button type="button" data-action="reset-pesanan-form" class="btn btn-outline"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Reset Form</button>
+              <button type="button" id="btn-save-pesanan" data-action="submit-pesanan" class="btn btn-primary"><i data-lucide="save" class="w-4 h-4"></i>Simpan &amp; Inisiasi Pesanan</button>
+            </div>
+          </div>
+
+          <div class="space-y-6 max-w-6xl">
+            <!-- Card 1: Sumber Inisiasi Pesanan -->
+            <article class="card">
+              <header class="card-head items-center justify-between">
+                <div class="flex items-start gap-3">
+                  <span class="card-icon"><i data-lucide="git-branch" class="w-[18px] h-[18px]"></i></span>
+                  <div>
+                    <h3 class="card-title">1. Sumber Inisiasi Pesanan</h3>
+                    <p class="card-sub">Pilih asal inisiasi produksi — menentukan kebutuhan data mitra &amp; deadline kontrak (<code class="font-mono">Sumber_Inisiasi</code>).</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span id="sumber-selected-pill" class="badge bg-indigo-50 text-indigo-700 ring-indigo-200 font-mono"># Selected ID: 1 (Request Mitra)</span>
+                  <span class="badge bg-rose-50 text-rose-600 ring-rose-200">WAJIB</span>
+                </div>
+              </header>
+              <div class="p-6">
+                <div id="sumber-tiles" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+                
+                <div id="sumber-mitra-fields" class="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl bg-indigo-50/40 border border-indigo-100">
+                  <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                      <label for="inp-nama-mitra" class="text-xs font-medium text-slate-700">Nama Mitra / Klien <span class="text-rose-500">*</span></label>
+                      <span class="text-[11px] text-slate-400">Pilih cepat:</span>
+                    </div>
+                    <input id="inp-nama-mitra" type="text" list="dl-mitra" class="field-input" placeholder="cth. PT Busana Indah" autocomplete="off" />
+                    <datalist id="dl-mitra"></datalist>
+                    <div id="mitra-quick-chips" class="mt-2 flex flex-wrap gap-1.5"></div>
+                  </div>
+                  <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                      <label for="inp-deadline-mitra" class="text-xs font-medium text-slate-700">Target Deadline Pengiriman <span class="text-rose-500">*</span></label>
+                      <span id="deadline-remaining-badge" class="badge bg-indigo-50 text-indigo-700 ring-indigo-200 font-mono">14 Hari Tersisa</span>
+                    </div>
+                    <input id="inp-deadline-mitra" type="date" class="field-input" />
+                    <p class="text-[11px] text-slate-400 mt-1.5">Deadline kontrak resmi untuk penjadwalan pemotongan EDF.</p>
+                  </div>
+                </div>
+                
+                <div id="sumber-internal-note" class="hidden mt-5 flex items-start gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                  <i data-lucide="info" class="w-4 h-4 text-slate-400 shrink-0 mt-0.5"></i>
+                  <div>
+                    <p id="sumber-internal-text" class="font-medium text-slate-700">Produksi internal — tidak memerlukan data mitra.</p>
+                    <p class="text-slate-500 mt-0.5">Nama mitra otomatis disimpan sebagai <code class="font-mono text-slate-700">null</code> sesuai Flowchart Gambar 2-25. Target deadline produksi dikelola mandiri pada parameter transaksi.</p>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <!-- Card 2: Master Pola Pakaian -->
+            <article class="card">
+              <header class="card-head items-center justify-between">
+                <div class="flex items-start gap-3">
+                  <span class="card-icon"><i data-lucide="shirt" class="w-[18px] h-[18px]"></i></span>
+                  <div>
+                    <h3 class="card-title">2. Master Pola Pakaian</h3>
+                    <p class="card-sub">Pilih master pola yang sudah ada atau daftarkan pola pakaian baru (<code class="font-mono">Pola</code> &amp; <code class="font-mono">Spesifikasi_Ukuran</code>).</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1 p-1 bg-slate-100 rounded-lg border border-slate-200/80">
+                  <button type="button" id="btn-pola-mode-existing" data-action="toggle-pola-mode" data-mode="existing" class="chip is-active">
+                    <i data-lucide="list" class="w-3.5 h-3.5"></i>Pilih Master Pola Ada
+                  </button>
+                  <button type="button" id="btn-pola-mode-new" data-action="toggle-pola-mode" data-mode="new" class="chip">
+                    <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>Daftarkan Pola Baru
+                  </button>
+                </div>
+              </header>
+              <div class="p-6">
+                <!-- Mode A: Existing Pola -->
+                <div id="pola-mode-existing-wrap" class="space-y-4">
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div class="md:col-span-2">
+                      <label for="sel-pola-existing" class="field-label">Pilih Master Pola Pakaian <span class="text-rose-500">*</span></label>
+                      <select id="sel-pola-existing" class="field-input"></select>
+                    </div>
+                    <div>
+                      <button type="button" id="btn-view-pola-detail" data-action="view-selected-pola" class="btn btn-outline w-full h-10">
+                        <i data-lucide="eye" class="w-4 h-4"></i>Buka Detail Ukuran Pola
+                      </button>
+                    </div>
+                  </div>
+                  <!-- Preview strip -->
+                  <div id="pola-preview-strip" class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs"></div>
+                </div>
+
+                <!-- Mode B: New Pola -->
+                <div id="pola-mode-new-wrap" class="hidden space-y-4">
+                  <div class="p-3.5 rounded-lg bg-indigo-50/50 border border-indigo-100 text-xs text-indigo-900 flex items-center justify-between">
+                    <span class="inline-flex items-center gap-2 font-medium">
+                      <i data-lucide="sparkles" class="w-4 h-4 text-indigo-600"></i>Pendaftaran Master Pola Baru &amp; 4 Spesifikasi Ukuran (S, M, L, XL)
+                    </span>
+                    <span class="font-mono text-slate-500">Auto id_pola: #<b id="next-pola-id">9</b></span>
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label for="sel-pola-kategori" class="field-label">Kategori Pola <span class="text-rose-500">*</span></label>
+                      <select id="sel-pola-kategori" class="field-input"></select>
+                    </div>
+                    <div>
+                      <label for="inp-kode-pola" class="field-label">Kode Pola Unik <span class="text-rose-500">*</span></label>
+                      <input id="inp-kode-pola" type="text" class="field-input font-mono uppercase" placeholder="cth. KMJ-NEW-09" />
+                    </div>
+                    <div>
+                      <label for="inp-nama-pola" class="field-label">Nama Master Pola <span class="text-rose-500">*</span></label>
+                      <input id="inp-nama-pola" type="text" class="field-input" placeholder="cth. Kemeja Linen Slim" />
+                    </div>
+                  </div>
+
+                  <!-- 4-row size specification grid -->
+                  <div class="mt-4">
+                    <div class="flex items-center justify-between mb-2">
+                      <p class="text-xs font-semibold text-slate-700">Spesifikasi Ukuran Master Pola (cm)</p>
+                      <span class="text-[11px] text-slate-400">Tabel <code class="font-mono">Spesifikasi_Ukuran</code> (S–XL)</span>
+                    </div>
+                    <div class="overflow-x-auto rounded-lg border border-slate-200">
+                      <table class="w-full text-xs">
+                        <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
+                          <tr>
+                            <th class="th w-20">Ukuran</th>
+                            <th class="th text-center">Lingkar Dada (cm)</th>
+                            <th class="th text-center">Panjang Badan (cm)</th>
+                            <th class="th text-center">Lebar Bahu / Pundak (cm)</th>
+                            <th class="th text-center">Panjang Lengan / Tangan (cm)</th>
+                            <th class="th text-center">Lingkar Pinggang (cm · Celana)</th>
+                          </tr>
+                        </thead>
+                        <tbody id="tbl-spec-new-body" class="divide-y divide-slate-100 bg-white"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <!-- Card 3: Detail Parameter Transaksi Pesanan -->
+            <article class="card">
+              <header class="card-head">
+                <span class="card-icon"><i data-lucide="receipt-text" class="w-[18px] h-[18px]"></i></span>
+                <div class="flex-1">
+                  <h3 class="card-title">3. Detail Parameter Transaksi Pesanan</h3>
+                  <p class="card-sub">Parameter transaksi, referensi bahan kain, dan admin penginput (<code class="font-mono">Pesanan</code>).</p>
+                </div>
+              </header>
+              <div class="p-6 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div class="md:col-span-2">
+                    <label for="inp-jenis-pesanan" class="field-label">Jenis Pesanan / Deskripsi Item <span class="text-rose-500">*</span></label>
+                    <input id="inp-jenis-pesanan" type="text" class="field-input" placeholder="cth. Kemeja Flanel Lengan Panjang - Seri Produksi 2026" />
+                  </div>
+                  <div>
+                    <label for="inp-tgl-order" class="field-label">Tanggal Order (Pencatatan) <span class="text-rose-500">*</span></label>
+                    <input id="inp-tgl-order" type="date" class="field-input" />
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label for="inp-deadline-order" class="field-label">Target Deadline Produksi (EDF) <span class="text-rose-500">*</span></label>
+                    <input id="inp-deadline-order" type="date" class="field-input" />
+                  </div>
+                  <div class="md:col-span-2">
+                    <label for="sel-penerimaan-order" class="field-label">Referensi Penerimaan Bahan</label>
+                    <select id="sel-penerimaan-order" class="field-input"></select>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+                  <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                    <div>
+                      <p class="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">Status Pesanan Initial</p>
+                      <p id="pesanan-initial-status-text" class="text-xs font-semibold text-slate-800 mt-0.5">ANTREAN · 0% Menunggu Bahan</p>
+                    </div>
+                    <span id="pesanan-initial-badge" class="badge bg-slate-100 text-slate-700 ring-slate-200">ANTREAN</span>
+                  </div>
+                  <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                    <div>
+                      <p class="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">Admin Penginput (Inisiator)</p>
+                      <p class="text-xs font-semibold text-slate-800 mt-0.5">Luis Febry (ID User: 1 | Admin)</p>
+                    </div>
+                    <span class="badge bg-emerald-50 text-emerald-700 ring-emerald-200">Sesi Aktif</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <!-- Bottom action buttons -->
+            <div class="flex justify-end gap-3 pt-2">
+              <button type="button" data-action="reset-pesanan-form" class="btn btn-outline"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Reset Form</button>
+              <button type="button" data-action="submit-pesanan" class="btn btn-primary"><i data-lucide="save" class="w-4 h-4"></i>Simpan &amp; Inisiasi Pesanan</button>
+            </div>
+
+            <!-- Recent Orders Mini-Table -->
+            <article class="card mt-8">
+              <header class="card-head items-center justify-between">
+                <div class="flex items-start gap-3">
+                  <span class="card-icon"><i data-lucide="table" class="w-[18px] h-[18px]"></i></span>
+                  <div>
+                    <h3 class="card-title">Daftar Pesanan Terdaftar (<code class="font-mono">BongDB.Pesanan</code>)</h3>
+                    <p class="card-sub">Menampilkan seluruh pesanan terurut dari ID terbaru. Klik baris untuk membuka detail.</p>
+                  </div>
+                </div>
+                <span id="total-pesanan-badge" class="badge bg-indigo-50 text-indigo-700 ring-indigo-200 font-mono">0 Pesanan</span>
+              </header>
+              <div class="overflow-x-auto max-h-[420px] overflow-y-auto thin-scroll">
+                <table class="w-full text-xs">
+                  <thead class="bg-slate-50/80 border-b border-slate-100 sticky top-0 z-10">
+                    <tr>
+                      <th class="th pl-5">ID Pesanan</th>
+                      <th class="th">Nama Pola</th>
+                      <th class="th">Sumber Inisiasi</th>
+                      <th class="th">Mitra / Klien</th>
+                      <th class="th">Tgl Order</th>
+                      <th class="th">Deadline</th>
+                      <th class="th">Progress</th>
+                      <th class="th pr-5 text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbl-pesanan-all-body" class="divide-y divide-slate-100 bg-white"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <!-- ============ SCREEN 3: PENERIMAAN & ROLL BAHAN ============ -->
+        <section id="screen-penerimaan" class="screen-section" aria-labelledby="title-penerimaan">
+          <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+            <div>
+              <nav class="crumb mb-1.5" aria-label="Breadcrumb">
+                <button type="button" data-action="goto" data-target="penerimaan">Penerimaan &amp; Roll Bahan</button>
+                <span class="text-slate-300">/</span><span class="text-indigo-600">Input Penerimaan Baru</span>
+                <span class="badge ml-2 bg-indigo-50 text-indigo-700 ring-indigo-200 font-mono">id_penerimaan berikutnya: #<b id="next-penerimaan-id">11</b></span>
+              </nav>
+              <h2 id="title-penerimaan" class="screen-title">Penerimaan Bahan &amp; Registrasi Roll Kain Fisik</h2>
+              <p class="screen-sub">Catat nota supplier, kelompok warna, lalu registrasikan setiap gulungan dengan <code class="font-mono text-indigo-600">id_roll</code> unik.</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <button type="button" data-action="goto" data-target="dashboard" class="btn btn-outline"><i data-lucide="arrow-left" class="w-4 h-4"></i>Batal / Kembali</button>
+              <button type="button" data-action="reset-penerimaan-form" class="btn btn-outline"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Reset Form</button>
+              <button type="button" id="btn-save-penerimaan" data-action="submit-penerimaan" class="btn btn-primary"><i data-lucide="save" class="w-4 h-4"></i>Simpan &amp; Inisiasi Penerimaan</button>
+            </div>
+          </div>
+
+          <div class="space-y-6 max-w-6xl">
+            <!-- Card 1: Informasi Master Penerimaan & Supplier -->
+            <article class="card">
+              <header class="card-head items-center justify-between">
+                <div class="flex items-start gap-3">
+                  <span class="card-icon"><i data-lucide="truck" class="w-[18px] h-[18px]"></i></span>
+                  <div>
+                    <h3 class="card-title">1. Informasi Master Penerimaan &amp; Supplier</h3>
+                    <p class="card-sub">Data surat jalan / nota, supplier kain, dan kendaraan pengiriman (<code class="font-mono">Penerimaan_Bahan</code> &amp; <code class="font-mono">Supplier</code>).</p>
+                  </div>
+                </div>
+                <button type="button" data-action="modal-add-supplier" class="btn btn-outline btn-sm">
+                  <i data-lucide="plus" class="w-3.5 h-3.5"></i>Tambah Supplier Baru
+                </button>
+              </header>
+              <div class="p-6 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div class="md:col-span-2">
+                    <label for="sel-supplier" class="field-label">Supplier Kain <span class="text-rose-500">*</span></label>
+                    <select id="sel-supplier" class="field-input"></select>
+                  </div>
+                  <div>
+                    <label for="inp-no-nota" class="field-label">Nomor Nota / Surat Jalan <span class="text-rose-500">*</span></label>
+                    <input id="inp-no-nota" type="text" class="field-input font-mono" placeholder="cth. 806" />
+                  </div>
+                  <div>
+                    <label for="inp-tgl-nota" class="field-label">Tanggal Nota <span class="text-rose-500">*</span></label>
+                    <input id="inp-tgl-nota" type="date" class="field-input" />
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div class="md:col-span-2">
+                    <label for="inp-nama-kain" class="field-label">Nama / Jenis Kain <span class="text-rose-500">*</span></label>
+                    <input id="inp-nama-kain" type="text" list="dl-kain" class="field-input" placeholder="cth. Cotton Combed 30s" />
+                    <datalist id="dl-kain">
+                      <option value="Cotton Combed 30s"></option>
+                      <option value="Flanel Yarn Dyed"></option>
+                      <option value="Canvas 12 oz"></option>
+                      <option value="Twill Drill"></option>
+                      <option value="Cotton Oxford"></option>
+                      <option value="Fleece Cotton"></option>
+                      <option value="Lacoste PE"></option>
+                    </datalist>
+                    <div id="kain-quick-chips" class="mt-2 flex flex-wrap gap-1.5"></div>
+                  </div>
+                  <div>
+                    <label for="inp-lebar-gramasi" class="field-label">Lebar &amp; Gramasi <span class="text-rose-500">*</span></label>
+                    <input id="inp-lebar-gramasi" type="text" class="field-input" placeholder="cth. 72&quot; · 180 gsm" />
+                  </div>
+                  <div>
+                    <label for="inp-no-kendaraan" class="field-label">No. Kendaraan Pengirim</label>
+                    <input id="inp-no-kendaraan" type="text" class="field-input uppercase" placeholder="cth. B 9821 TXA" />
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2 border-t border-slate-100">
+                  <div>
+                    <label for="inp-penerima" class="field-label">Petugas Penerima Gudang <span class="text-rose-500">*</span></label>
+                    <input id="inp-penerima" type="text" class="field-input" value="Dedi Kurniawan (Staf Gudang)" />
+                  </div>
+                  <div class="md:col-span-3">
+                    <p class="field-label">Kontak &amp; Alamat Supplier (Otomatis)</p>
+                    <div id="supplier-info-box" class="h-10 px-3.5 rounded-lg bg-slate-50 border border-slate-200/80 flex items-center text-xs text-slate-600 truncate">
+                      Pilih supplier di atas untuk melihat kontak &amp; alamat.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <!-- Card 2: Kelompok Variasi Warna Kain -->
+            <article class="card">
+              <header class="card-head items-center justify-between">
+                <div class="flex items-start gap-3">
+                  <span class="card-icon"><i data-lucide="palette" class="w-[18px] h-[18px]"></i></span>
+                  <div>
+                    <h3 class="card-title">2. Kelompok Variasi Warna Kain</h3>
+                    <p class="card-sub">Satu nota penerimaan dapat memuat satu atau lebih variasi warna (<code class="font-mono">Detail_Bahan_Warna</code>).</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-3">
+                  <div class="p-2 px-3.5 rounded-lg bg-indigo-50/70 border border-indigo-100 flex items-center gap-3">
+                    <span class="text-[10.5px] font-semibold tracking-wider uppercase text-indigo-700">RINGKASAN FISIK:</span>
+                    <span id="summary-rolls-count" class="font-mono text-xs font-bold text-slate-900">3 Roll Terdaftar</span>
+                    <span class="text-slate-300">·</span>
+                    <span id="summary-rolls-weight" class="font-mono text-xs font-bold text-indigo-700">Total: 74.50 kg</span>
+                  </div>
+                  <button type="button" data-action="add-color-group" class="btn btn-outline btn-sm">
+                    <i data-lucide="plus" class="w-3.5 h-3.5"></i>Tambah Kelompok Warna
+                  </button>
+                </div>
+              </header>
+              <div class="p-6">
+                <div id="color-groups-container" class="space-y-3"></div>
+              </div>
+            </article>
+
+            <!-- Card 3: Rincian Gulungan Kain Fisik -->
+            <article class="card">
+              <header class="card-head items-center justify-between">
+                <div class="flex items-start gap-3">
+                  <span class="card-icon"><i data-lucide="cylinder" class="w-[18px] h-[18px]"></i></span>
+                  <div>
+                    <h3 class="card-title">3. Rincian Gulungan Kain Fisik (Individual Roll Tracking)</h3>
+                    <p class="card-sub">Setiap baris mencatat 1 roll fisik dengan berat aktual &amp; alokasi rak (<code class="font-mono">Detail_Roll_Bahan</code>).</p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="badge bg-slate-100 text-slate-600 ring-slate-200 font-mono">id_roll pertama: <b id="next-roll-id" class="text-indigo-600">—</b></span>
+                  <button type="button" data-action="add-5-rolls" class="btn btn-outline btn-sm">
+                    <i data-lucide="copy-plus" class="w-3.5 h-3.5"></i>+ Tambah 5 Roll Sekaligus
+                  </button>
+                  <button type="button" data-action="add-roll-row" class="btn btn-primary btn-sm">
+                    <i data-lucide="plus" class="w-3.5 h-3.5"></i>+ Tambah Roll Baru
+                  </button>
+                </div>
+              </header>
+              <div class="p-6">
+                <div class="overflow-x-auto rounded-lg border border-slate-200">
+                  <table class="w-full text-xs">
+                    <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
+                      <tr>
+                        <th class="th pl-4 w-28">No. Roll Ke</th>
+                        <th class="th w-40">Integer PK (Auto)</th>
+                        <th class="th">Kelompok Warna</th>
+                        <th class="th w-44">Berat Roll (Kg) *</th>
+                        <th class="th w-36">Rak Alokasi</th>
+                        <th class="th w-28 text-center">Status Roll</th>
+                        <th class="th pr-4 w-16 text-center">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbl-draft-rolls-body" class="divide-y divide-slate-100 bg-white"></tbody>
+                  </table>
+                </div>
+
+                <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <button type="button" data-action="add-roll-row" class="w-full py-3 rounded-lg border-2 border-dashed border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30 text-xs font-semibold text-slate-600 hover:text-indigo-600 transition flex items-center justify-center gap-2">
+                    <i data-lucide="plus-circle" class="w-4 h-4"></i>+ Tambah Roll Kain Baru (Add Row)
+                  </button>
+                </div>
+              </div>
+            </article>
+
+            <!-- Bottom action buttons -->
+            <div class="flex justify-end gap-3 pt-2">
+              <button type="button" data-action="reset-penerimaan-form" class="btn btn-outline"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Reset Form</button>
+              <button type="button" data-action="submit-penerimaan" class="btn btn-primary"><i data-lucide="save" class="w-4 h-4"></i>Simpan &amp; Inisiasi Penerimaan</button>
+            </div>
+
+            <!-- Recent Roll Inventory & Receipts Table -->
+            <article class="card mt-8">
+              <header class="card-head items-center justify-between">
+                <div class="flex items-start gap-3">
+                  <span class="card-icon"><i data-lucide="warehouse" class="w-[18px] h-[18px]"></i></span>
+                  <div>
+                    <h3 class="card-title">Daftar Penerimaan &amp; Inventori Roll Fisik (<code class="font-mono">Detail_Roll_Bahan</code>)</h3>
+                    <p class="card-sub">Seluruh roll kain fisik individu terdaftar dalam database. Klik baris untuk detail roll.</p>
+                  </div>
+                </div>
+                <div id="penerimaan-roll-filters" class="flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-100">
+                  <button type="button" class="chip is-active" data-action="filter-rolls" data-filter="ALL">Semua <span class="font-mono text-[10px] text-slate-400" id="filter-count-roll-all"></span></button>
+                  <button type="button" class="chip" data-action="filter-rolls" data-filter="Tersedia">Tersedia <span class="font-mono text-[10px] text-slate-400" id="filter-count-roll-tersedia"></span></button>
+                  <button type="button" class="chip" data-action="filter-rolls" data-filter="Dipotong">Dipotong <span class="font-mono text-[10px] text-slate-400" id="filter-count-roll-dipotong"></span></button>
+                  <button type="button" class="chip" data-action="filter-rolls" data-filter="Habis">Habis <span class="font-mono text-[10px] text-slate-400" id="filter-count-roll-habis"></span></button>
+                  <button type="button" class="chip" data-action="filter-rolls" data-filter="Retur">Retur <span class="font-mono text-[10px] text-slate-400" id="filter-count-roll-retur"></span></button>
+                </div>
+              </header>
+              <div class="overflow-x-auto max-h-[420px] overflow-y-auto thin-scroll">
+                <table class="w-full text-xs">
+                  <thead class="bg-slate-50/80 border-b border-slate-100 sticky top-0 z-10">
+                    <tr>
+                      <th class="th pl-5">id_roll (PK)</th>
+                      <th class="th">Nama Kain &amp; Warna</th>
+                      <th class="th">Nota / Supplier</th>
+                      <th class="th">Berat (Kg)</th>
+                      <th class="th">Roll Ke</th>
+                      <th class="th">Rak Alokasi</th>
+                      <th class="th pr-5 text-right">Status Roll</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbl-inventory-rolls-body" class="divide-y divide-slate-100 bg-white"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <!-- ============ SCREEN 4: PEMOTONGAN SERI & GELARAN ============ -->
+        <section id="screen-pemotongan" class="screen-section" aria-labelledby="title-pemotongan">
+          <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+            <div>
+              <nav class="crumb mb-1.5" aria-label="Breadcrumb">
+                <button type="button" data-action="goto" data-target="pemotongan">PEMOTONGAN SERI &amp; GELARAN</button>
+                <span class="text-slate-300">/</span><span class="text-indigo-600">EKSEKUSI POTONG BARU</span>
+                <span class="badge ml-2 bg-indigo-50 text-indigo-700 ring-indigo-200 font-mono">id_potong berikutnya: #<b id="next-potong-id">303</b></span>
+              </nav>
+              <h2 id="title-pemotongan" class="screen-title">Eksekusi Pemotongan Seri &amp; Input Gelaran Roll Kain</h2>
+              <p class="screen-sub">Antrean pemotong berbasis <b class="text-slate-700">EDF (Earliest Deadline First)</b>, gelaran per roll, dan perolehan yield aktual.</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <button type="button" data-action="reset-pemotongan-form" class="btn btn-outline"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Reset Form</button>
+              <button type="button" data-action="goto" data-target="dashboard" class="btn btn-outline"><i data-lucide="arrow-left" class="w-4 h-4"></i>Batal / Kembali</button>
+              <button type="button" id="btn-save-pemotongan" data-action="submit-pemotongan" class="btn btn-primary"><i data-lucide="save" class="w-4 h-4"></i>Simpan &amp; Finalisasi Pemotongan</button>
+            </div>
+          </div>
+
+          <div class="space-y-6 max-w-6xl">
+            <!-- Card 1: Pemilihan Pesanan & Rincian Seri Potong -->
+            <article class="card">
+              <header class="card-head">
+                <span class="card-icon"><i data-lucide="list-ordered" class="w-[18px] h-[18px]"></i></span>
+                <div class="flex-1">
+                  <h3 class="card-title">1. Pemilihan Pesanan &amp; Rincian Seri Potong</h3>
+                  <p class="card-sub">Cutter Queue diurutkan otomatis berdasarkan deadline terdekat (EDF). Pilih pesanan untuk memuat rincian.</p>
+                </div>
+              </header>
+              <div class="p-6 grid grid-cols-1 lg:grid-cols-5 gap-6">
+                <!-- Left 2 cols: EDF Queue -->
+                <div class="lg:col-span-2">
+                  <div class="flex items-center justify-between mb-2.5">
+                    <p class="text-xs font-semibold text-slate-700 flex items-center gap-1.5"><i data-lucide="timer" class="w-3.5 h-3.5 text-indigo-600"></i>Cutter Queue · EDF</p>
+                    <span id="edf-count" class="text-[11px] font-mono text-slate-400"></span>
+                  </div>
+                  <div id="edf-queue" class="space-y-2 max-h-[360px] overflow-y-auto pr-1 thin-scroll"></div>
+                </div>
+
+                <!-- Right 3 cols: Form Header Pemotongan_Seri -->
+                <div class="lg:col-span-3">
+                  <div id="edf-selected" class="mb-4"></div>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label for="sel-potong-pesanan" class="field-label">Pesanan Target <span class="text-rose-500">*</span></label>
+                      <select id="sel-potong-pesanan" class="field-select font-mono text-xs"></select>
+                    </div>
+                    <div>
+                      <label for="inp-kode-seri" class="field-label">Kode Seri Potong <span class="text-rose-500">*</span></label>
+                      <input type="text" id="inp-kode-seri" class="field-input font-mono uppercase" placeholder="SR-101-01" />
+                    </div>
+                    <div>
+                      <label for="inp-jenis-variasi" class="field-label">Jenis Variasi Potong <span class="text-rose-500">*</span></label>
+                      <select id="inp-jenis-variasi" class="field-select">
+                        <option value="Badan Utama + Lengan">Badan Utama + Lengan</option>
+                        <option value="Warna Tunggal">Warna Tunggal</option>
+                        <option value="Kombinasi Multi-Panel">Kombinasi Multi-Panel</option>
+                        <option value="Full Set Pakaian">Full Set Pakaian</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label for="inp-tgl-potong" class="field-label">Tanggal Potong <span class="text-rose-500">*</span></label>
+                      <div class="relative">
+                        <input type="date" id="inp-tgl-potong" class="field-input pr-24 font-mono" value="2026-10-28" />
+                        <span class="absolute right-2 top-1/2 -translate-y-1/2 badge bg-indigo-50 text-indigo-700 ring-indigo-200 text-[10px]">Shift Pagi · WIB</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label for="sel-user-pemotong" class="field-label">User Operator Pemotong <span class="text-rose-500">*</span></label>
+                      <select id="sel-user-pemotong" class="field-select font-medium text-xs"></select>
+                    </div>
+                    <div>
+                      <label class="field-label">Status Alokasi Produksi</label>
+                      <div class="h-10 px-3.5 rounded-lg bg-indigo-50/70 border border-indigo-100 flex items-center justify-between">
+                        <span class="inline-flex items-center gap-2 text-xs font-medium text-indigo-900">
+                          <span class="w-2 h-2 rounded-full bg-indigo-600 pulse-dot"></span>
+                          Proses Gelar &amp; Potong
+                        </span>
+                        <span class="badge bg-indigo-600 text-white font-mono text-[10px]">TAHAP 2: CUTTING</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <!-- Card 2: Rincian Perencanaan Pemotongan Warna -->
+            <article class="card">
+              <header class="card-head">
+                <span class="card-icon"><i data-lucide="palette" class="w-[18px] h-[18px]"></i></span>
+                <div class="flex-1">
+                  <h3 class="card-title">2. Rincian Perencanaan Pemotongan Warna</h3>
+                  <p class="card-sub">Pilih kelompok warna kain dari nota penerimaan bahan dan tentukan target rencana lembar.</p>
+                </div>
+              </header>
+              <div class="p-6">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div class="sm:col-span-2 lg:col-span-1">
+                    <label for="sel-potong-warna" class="field-label">Detail Warna Bahan <span class="text-rose-500">*</span></label>
+                    <select id="sel-potong-warna" class="field-select font-mono text-xs"></select>
+                  </div>
+                  <div>
+                    <label for="inp-lembar-rencana" class="field-label">Total Lembar Direncanakan <span class="text-rose-500">*</span></label>
+                    <div class="relative">
+                      <input type="number" id="inp-lembar-rencana" class="field-input pr-16 font-mono font-semibold" value="120" min="1" />
+                      <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">Lembar</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label for="inp-berat-terpakai" class="field-label">Estimasi Berat Kain Terpakai <span class="text-rose-500">*</span></label>
+                    <div class="relative">
+                      <input type="number" id="inp-berat-terpakai" step="0.1" class="field-input pr-12 font-mono font-semibold" value="24.0" min="0.1" />
+                      <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">kg</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label for="inp-pcs-per-ply" class="field-label">Lembar Hasil per Tumpuk / Marker</label>
+                    <div class="relative">
+                      <input type="number" id="inp-pcs-per-ply" class="field-input pr-16 font-mono" value="2" min="1" />
+                      <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">Pcs/Ply</span>
+                    </div>
+                  </div>
+                </div>
+                <p class="mt-3 text-xs text-slate-500 flex items-center gap-1.5">
+                  <i data-lucide="info" class="w-3.5 h-3.5 text-indigo-500 shrink-0"></i>
+                  <span>Input <code class="font-mono text-slate-700">Pcs/Ply</code> berfungsi sebagai pengali otomatis untuk menghitung <code class="font-mono text-slate-700">Total Lembar Gelar = Jumlah Tumpuk × Pcs/Ply</code> pada tabel di bawah.</span>
+                </p>
+              </div>
+            </article>
+
+            <!-- Card 3: Pencatatan Gelaran Roll Kain Fisik & Yield Aktual -->
+            <article class="card">
+              <header class="card-head">
+                <span class="card-icon"><i data-lucide="layers" class="w-[18px] h-[18px]"></i></span>
+                <div class="flex-1">
+                  <h3 class="card-title">3. Pencatatan Gelaran Roll Kain Fisik &amp; Yield Aktual</h3>
+                  <p class="card-sub">Setiap baris gelaran merujuk ke satu <code class="font-mono">id_roll</code> fisik dari inventori kain.</p>
+                </div>
+                <button type="button" data-action="add-gelar-row" class="btn btn-outline text-xs h-8">
+                  <i data-lucide="plus" class="w-3.5 h-3.5"></i>Tambah Gelaran Roll
+                </button>
+              </header>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr class="bg-slate-50 text-[11px] font-semibold text-slate-600 border-b border-slate-200 uppercase tracking-wider">
+                      <th class="th pl-5 py-3 w-56">Roll Kain Fisik (id_roll) <span class="text-rose-500">*</span></th>
+                      <th class="th py-3 w-36">Panjang Gelar (m) <span class="text-rose-500">*</span></th>
+                      <th class="th py-3 w-36">Jumlah Tumpuk (Ply) <span class="text-rose-500">*</span></th>
+                      <th class="th py-3 w-40">Total Lembar Gelar (Pcs) <span class="text-rose-500">*</span></th>
+                      <th class="th py-3 w-48">Status Akhir Roll</th>
+                      <th class="th pr-5 py-3 w-16 text-center">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbl-draft-gelar-body" class="divide-y divide-slate-100 bg-white"></tbody>
+                </table>
+              </div>
+              <div class="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                <button type="button" data-action="add-gelar-row" class="btn btn-dashed text-xs">
+                  <i data-lucide="plus-circle" class="w-4 h-4 text-indigo-600"></i>+ Gelar Roll Tambahan (Add Roll)
+                </button>
+                <div class="flex items-center gap-4 text-xs font-mono text-slate-600">
+                  <span>Total Baris Gelaran: <b id="lbl-total-gelaran-rows" class="text-slate-900">1</b></span>
+                  <span>·</span>
+                  <span>Total Panjang Tergelar: <b id="lbl-total-panjang-m" class="text-slate-900">0.0</b> m</span>
+                </div>
+              </div>
+            </article>
+
+            <!-- Card 4: Perolehan Yield & Pembaruan Status Roll -->
+            <article class="card">
+              <header class="card-head">
+                <span class="card-icon"><i data-lucide="gauge" class="w-[18px] h-[18px]"></i></span>
+                <div class="flex-1">
+                  <h3 class="card-title">4. Perolehan Yield &amp; Pembaruan Status Roll</h3>
+                  <p class="card-sub">Rekapitulasi otomatis yield aktual dan pembaruan status inventori fisik per roll kain.</p>
+                </div>
+              </header>
+              <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Left Box: Yield Actual -->
+                <div class="p-5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                  <div>
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Lembar Hasil Potong Aktual</span>
+                      <span class="badge bg-indigo-100 text-indigo-800 font-mono text-[10px] font-bold">POTONG FINAL</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <input type="number" id="inp-total-lembar-hasil" class="w-36 h-12 px-3 text-2xl font-bold font-mono text-indigo-700 bg-white border border-indigo-200 rounded-lg shadow-sm" value="120" min="1" />
+                      <span class="text-sm font-semibold text-slate-600">Pcs Garmen</span>
+                    </div>
+                    <p id="yield-vs-planned" class="mt-2.5 text-xs text-slate-600 font-mono flex items-center gap-1.5">
+                      <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-600"></i>
+                      <span>100% dari rencana (120 Lembar) · Rata-rata 120 Pcs/Roll</span>
+                    </p>
+                  </div>
+                  <div class="mt-5 pt-4 border-t border-slate-200">
+                    <label class="flex items-start gap-2.5 cursor-pointer">
+                      <input type="checkbox" id="chk-advance-qc" class="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                      <span class="text-xs text-slate-700 leading-snug">
+                        <b class="font-semibold text-slate-900">Lanjutkan Status Pesanan ke Tahap DALAM QC (90%)</b>
+                        <span class="block text-[11px] text-slate-500 mt-0.5">Jika dicentang, pesanan langsung masuk inspeksi mutu; jika tidak dicentang, pesanan tetap di PEMOTONGAN (70%).</span>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Right Box: Roll Status Updater -->
+                <div class="p-5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                  <div>
+                    <div class="flex items-center justify-between mb-2.5">
+                      <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Pembaruan Status Roll Terpilih</span>
+                      <span class="text-[11px] font-mono text-slate-400">Inventori Fisik</span>
+                    </div>
+                    <div id="cutting-rolls-status-cards" class="space-y-2.5 max-h-48 overflow-y-auto pr-1 thin-scroll"></div>
+                  </div>
+                  <p class="mt-3 text-[11px] text-slate-400 leading-relaxed">
+                    Roll berstatus <b class="text-indigo-600">Dipotong</b> tetap berada di meja potong untuk seri berikutnya; roll <b class="text-slate-600">Habis</b> dicatat selesai terpakai penuh.
+                  </p>
+                </div>
+              </div>
+            </article>
+
+            <!-- Card 5: Recent Cutting Series History -->
+            <article class="card">
+              <header class="card-head">
+                <span class="card-icon"><i data-lucide="history" class="w-[18px] h-[18px]"></i></span>
+                <div class="flex-1">
+                  <h3 class="card-title">Riwayat Eksekusi Pemotongan Seri &amp; Gelaran (<code class="font-mono text-xs">Pemotongan_Seri</code> &amp; <code class="font-mono text-xs">Detail_Gelaran_Kain</code>)</h3>
+                  <p class="card-sub">Daftar seri pemotongan kain dan rincian gelaran roll fisik yang telah tercatat di sistem.</p>
+                </div>
+              </header>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr class="bg-slate-50 text-[11px] font-semibold text-slate-600 border-b border-slate-200 uppercase tracking-wider">
+                      <th class="th pl-5 py-3">ID Potong</th>
+                      <th class="th py-3">Kode Seri</th>
+                      <th class="th py-3">Pesanan Target</th>
+                      <th class="th py-3">Pemotong</th>
+                      <th class="th py-3">Roll Terpakai (id_roll)</th>
+                      <th class="th py-3 text-center">Gelaran</th>
+                      <th class="th py-3 text-right">Total Hasil</th>
+                      <th class="th pr-5 py-3 text-right">Tanggal Potong</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbl-cutting-history-body" class="divide-y divide-slate-100 bg-white"></tbody>
+                </table>
+              </div>
+            </article>
+
+            <div class="flex justify-end gap-3 pt-2">
+              <button type="button" data-action="reset-pemotongan-form" class="btn btn-outline"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Reset Form</button>
+              <button type="button" data-action="goto" data-target="dashboard" class="btn btn-outline">Batal</button>
+              <button type="button" data-action="submit-pemotongan" class="btn btn-primary"><i data-lucide="save" class="w-4 h-4"></i>Simpan &amp; Finalisasi Pemotongan</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ SCREEN 5: QUALITY CONTROL & KERUSAKAN ============ -->
+        <section id="screen-qc" class="screen-section" aria-labelledby="title-qc">
+          <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+            <div>
+              <nav class="crumb mb-1.5" aria-label="Breadcrumb">
+                <button type="button" data-action="goto" data-target="qc">QUALITY CONTROL &amp; KERUSAKAN</button>
+                <span class="text-slate-300">/</span><span class="text-indigo-600">INPUT INSPEKSI BARU</span>
+                <span class="badge ml-2 bg-rose-50 text-rose-700 ring-rose-200 font-mono">id_qc berikutnya: #<b id="next-qc-id">89</b></span>
+              </nav>
+              <h2 id="title-qc" class="screen-title">Form Inspeksi QC &amp; Pencatatan Temuan Cacat</h2>
+              <p class="screen-sub">Klasifikasi cacat (Potong / Jahit / Bahan) dan alokasi rework ke PIC terkait sesuai Flowchart Gambar 2-28.</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <button type="button" data-action="approve-qc-pass" class="btn bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-600/20">
+                <i data-lucide="check-check" class="w-4 h-4"></i>Lolos QC (Tanpa Cacat)
+              </button>
+              <button type="button" data-action="reset-qc-form" class="btn btn-outline"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Reset Form</button>
+              <button type="button" data-action="goto" data-target="dashboard" class="btn btn-outline"><i data-lucide="arrow-left" class="w-4 h-4"></i>Batal / Kembali</button>
+              <button type="button" id="btn-save-qc" data-action="submit-qc" class="btn btn-primary"><i data-lucide="save" class="w-4 h-4"></i>SIMPAN &amp; INISIASI REWORK</button>
+            </div>
+          </div>
+
+          <div class="space-y-6 max-w-6xl">
+            <!-- Card 1: Pemilihan Pesanan & Identitas Penguji QC -->
+            <article class="card">
+              <header class="card-head">
+                <span class="card-icon"><i data-lucide="user-check" class="w-[18px] h-[18px]"></i></span>
+                <div class="flex-1">
+                  <h3 class="card-title">1. Pemilihan Pesanan &amp; Identitas Penguji QC</h3>
+                  <p class="card-sub">Pilih pesanan yang sedang diinspeksi dan staf QC bertugas.</p>
+                </div>
+              </header>
+              <div class="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label for="sel-qc-pesanan" class="field-label">Pesanan Target Diinspeksi <span class="text-rose-500">*</span></label>
+                  <select id="sel-qc-pesanan" class="field-select font-mono text-xs"></select>
+                </div>
+                <div>
+                  <label for="inp-tgl-temuan" class="field-label">Tanggal &amp; Waktu Temuan <span class="text-rose-500">*</span></label>
+                  <input type="date" id="inp-tgl-temuan" class="field-input font-mono" value="2026-10-28" />
+                </div>
+                <div>
+                  <label for="sel-user-qc" class="field-label">Staf Penguji QC <span class="text-rose-500">*</span></label>
+                  <select id="sel-user-qc" class="field-select font-medium text-xs"></select>
+                </div>
+                <div>
+                  <label class="field-label">Status Pesanan Terpilih</label>
+                  <div id="qc-order-info-box" class="h-10 px-3.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                    <span class="text-slate-500">Memuat data pesanan...</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <!-- Card 2: Rincian Temuan Kerusakan & Cacat Produksi -->
+            <article class="card">
+              <header class="card-head">
+                <span class="card-icon bg-rose-50 text-rose-600 ring-rose-100"><i data-lucide="bug" class="w-[18px] h-[18px]"></i></span>
+                <div class="flex-1">
+                  <h3 class="card-title">2. Rincian Temuan Kerusakan &amp; Cacat Produksi</h3>
+                  <p class="card-sub">Klasifikasi: Cacat Potong (Stasiun Cutting) · Cacat Jahit (Penjahit CMT) · Cacat Bahan (Supplier Roll).</p>
+                </div>
+              </header>
+              <div class="p-6 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <!-- Category pickers -->
+                  <button type="button" data-action="pick-defect-cat" data-cat="Cacat Potong" class="defect-cat-btn p-3.5 rounded-xl border text-left transition flex items-start gap-3 border-rose-300 bg-rose-50/60 ring-2 ring-rose-500/20">
+                    <span class="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 grid place-items-center shrink-0"><i data-lucide="scissors" class="w-4 h-4"></i></span>
+                    <div>
+                      <p class="text-xs font-bold text-slate-900">Cacat Potong</p>
+                      <p class="text-[11px] text-slate-500 mt-0.5">Layering shift / miring, ukuran panel tidak presisi. Evaluasi stasiun Cutting.</p>
+                    </div>
+                  </button>
+                  <button type="button" data-action="pick-defect-cat" data-cat="Cacat Jahit" class="defect-cat-btn p-3.5 rounded-xl border text-left transition flex items-start gap-3 border-slate-200 hover:border-slate-300 hover:bg-slate-50">
+                    <span class="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 grid place-items-center shrink-0"><i data-lucide="shirt" class="w-4 h-4"></i></span>
+                    <div>
+                      <p class="text-xs font-bold text-slate-900">Cacat Jahit</p>
+                      <p class="text-[11px] text-slate-500 mt-0.5">Kerutan kerah, jahitan lepas/loncat. Evaluasi penjahit eksternal CMT.</p>
+                    </div>
+                  </button>
+                  <button type="button" data-action="pick-defect-cat" data-cat="Cacat Bahan" class="defect-cat-btn p-3.5 rounded-xl border text-left transition flex items-start gap-3 border-slate-200 hover:border-slate-300 hover:bg-slate-50">
+                    <span class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 grid place-items-center shrink-0"><i data-lucide="package" class="w-4 h-4"></i></span>
+                    <div>
+                      <p class="text-xs font-bold text-slate-900">Cacat Bahan</p>
+                      <p class="text-[11px] text-slate-500 mt-0.5">Shading belang, benang putus / BS. Evaluasi pabrik &amp; klaim retur supplier.</p>
+                    </div>
+                  </button>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+                  <div>
+                    <label for="sel-jenis-cacat" class="field-label">Jenis Cacat Terpilih <span class="text-rose-500">*</span></label>
+                    <select id="sel-jenis-cacat" class="field-select font-semibold">
+                      <option value="Cacat Potong">Cacat Potong (Evaluasi Stasiun Cutting)</option>
+                      <option value="Cacat Jahit">Cacat Jahit (Evaluasi Penjahit CMT)</option>
+                      <option value="Cacat Bahan">Cacat Bahan (Evaluasi Supplier Fabric)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="inp-jumlah-cacat" class="field-label">Jumlah Terkena Cacat <span class="text-rose-500">*</span></label>
+                    <div class="relative">
+                      <input type="number" id="inp-jumlah-cacat" class="field-input pr-16 font-mono font-bold text-rose-700" value="12" min="1" />
+                      <span id="qc-unit-label" class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 font-semibold font-mono">Pcs</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label for="sel-qc-roll" class="field-label">Referensi Roll Kain Fisik (<code class="font-mono">id_roll</code>)</label>
+                    <select id="sel-qc-roll" class="field-select font-mono text-xs"></select>
+                  </div>
+                </div>
+
+                <div>
+                  <div class="flex items-center justify-between mb-1">
+                    <label for="inp-catatan-qc" class="field-label mb-0">Catatan Detail Temuan &amp; Deskripsi Kerusakan <span class="text-rose-500">*</span></label>
+                    <div class="flex items-center gap-1.5 text-[11px]">
+                      <span class="text-slate-400">Template Cepat:</span>
+                      <button type="button" data-action="fill-qc-template" data-cat="potong" class="text-indigo-600 hover:underline">Shift Layer</button>
+                      <span class="text-slate-300">·</span>
+                      <button type="button" data-action="fill-qc-template" data-cat="jahit" class="text-indigo-600 hover:underline">Kerah Kerut</button>
+                      <span class="text-slate-300">·</span>
+                      <button type="button" data-action="fill-qc-template" data-cat="bahan" class="text-indigo-600 hover:underline">Shading BS</button>
+                    </div>
+                  </div>
+                  <textarea id="inp-catatan-qc" rows="3" class="field-textarea text-xs leading-relaxed" placeholder="Deskripsikan secara rinci bagian yang rusak, layer gelaran terkait, dan instruksi perbaikannya...">Terjadi pergeseran pola kain pada gelaran layer 4 saat mesin potong berjalan. Membutuhkan pemotongan ulang lembar kain komponen lengan.</textarea>
+                </div>
+              </div>
+            </article>
+
+            <!-- Card 3: Keputusan Tindak Lanjut & Perbaikan (Rework Allocation) -->
+            <article class="card">
+              <header class="card-head">
+                <span class="card-icon"><i data-lucide="wrench" class="w-[18px] h-[18px]"></i></span>
+                <div class="flex-1">
+                  <h3 class="card-title">3. Keputusan Tindak Lanjut &amp; Perbaikan (Rework Allocation)</h3>
+                  <p class="card-sub">Tentukan alokasi perbaikan apakah perlu rework, afkir (scrap), perbaikan langsung, atau retur supplier.</p>
+                </div>
+              </header>
+              <div class="p-6 space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <!-- Decision 1: Need Rework -->
+                  <button type="button" data-action="pick-qc-decision" data-decision="Need Rework" class="qc-decision-btn p-3.5 rounded-xl border text-left transition border-rose-400 bg-rose-50/70 ring-2 ring-rose-500/20">
+                    <span class="badge bg-rose-100 text-rose-800 text-[10px] mb-1.5">Need Rework</span>
+                    <p class="text-xs font-semibold text-slate-900">Perbaikan / Rework</p>
+                    <p class="text-[11px] text-slate-500 mt-1 leading-snug">Membutuhkan perbaikan / pemotongan ulang oleh tim pemotong atau penjahit.</p>
+                  </button>
+                  <!-- Decision 2: Scrapped -->
+                  <button type="button" data-action="pick-qc-decision" data-decision="Scrapped" class="qc-decision-btn p-3.5 rounded-xl border text-left transition border-slate-200 hover:border-slate-300 hover:bg-slate-50">
+                    <span class="badge bg-slate-200 text-slate-700 text-[10px] mb-1.5">Scrapped</span>
+                    <p class="text-xs font-semibold text-slate-900">Afkir / Rusak Total</p>
+                    <p class="text-[11px] text-slate-500 mt-1 leading-snug">Kerusakan permanen, tidak dapat diperbaiki (dicatat sebagai bahan afkir).</p>
+                  </button>
+                  <!-- Decision 3: Finished -->
+                  <button type="button" data-action="pick-qc-decision" data-decision="Finished" class="qc-decision-btn p-3.5 rounded-xl border text-left transition border-slate-200 hover:border-slate-300 hover:bg-slate-50">
+                    <span class="badge bg-emerald-100 text-emerald-800 text-[10px] mb-1.5">Finished / Lolos Langsung</span>
+                    <p class="text-xs font-semibold text-slate-900">Rework Selesai</p>
+                    <p class="text-[11px] text-slate-500 mt-1 leading-snug">Cacat minor yang telah diperbaiki langsung di meja inspeksi QC.</p>
+                  </button>
+                  <!-- Decision 4: Retur Supplier -->
+                  <button type="button" data-action="pick-qc-decision" data-decision="Retur Supplier" class="qc-decision-btn p-3.5 rounded-xl border text-left transition border-slate-200 hover:border-slate-300 hover:bg-slate-50">
+                    <span class="badge bg-amber-100 text-amber-800 text-[10px] mb-1.5">Retur Supplier</span>
+                    <p class="text-xs font-semibold text-slate-900">Klaim Retur Bahan</p>
+                    <p class="text-[11px] text-slate-500 mt-1 leading-snug">Ajukan klaim retur gulungan kain BS ke pabrik/supplier kain.</p>
+                  </button>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  <div>
+                    <label for="inp-tgl-selesai-qc" class="field-label">Target Tanggal Selesai Perbaikan</label>
+                    <input type="date" id="inp-tgl-selesai-qc" class="field-input font-mono" value="2026-10-29" />
+                  </div>
+                  <div>
+                    <label for="sel-pic-rework" class="field-label">Disposisi Alokasi PIC Rework <span class="text-rose-500">*</span></label>
+                    <select id="sel-pic-rework" class="field-select font-medium text-xs">
+                      <option value="Tim Potong A (Budi Santoso)">Tim Potong A (Budi Santoso)</option>
+                      <option value="Tim Potong B (Agus Pratama)">Tim Potong B (Agus Pratama)</option>
+                      <option value="Tim Jahit Eksternal A">Tim Jahit Eksternal A</option>
+                      <option value="Tim Jahit Eksternal B">Tim Jahit Eksternal B</option>
+                      <option value="Gudang · Retur Supplier">Gudang · Retur Supplier</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <!-- Card 4: Interactive QC Log Table -->
+            <article class="card">
+              <header class="card-head flex-wrap gap-3">
+                <span class="card-icon"><i data-lucide="clipboard-check" class="w-[18px] h-[18px]"></i></span>
+                <div class="flex-1">
+                  <h3 class="card-title">Buku Catatan Kerusakan &amp; Log Inspeksi QC (<code class="font-mono text-xs">BongDB.Kerusakan</code>)</h3>
+                  <p class="card-sub">Daftar inspeksi mutu, temuan cacat produksi, dan riwayat penyelesaian rework.</p>
+                </div>
+                <!-- Filter chips -->
+                <div class="flex items-center gap-1.5 text-xs">
+                  <button type="button" data-action="filter-qc-table" data-filter="ALL" class="qc-tbl-filter btn btn-outline h-7 px-2.5 text-xs font-mono bg-indigo-50 border-indigo-200 text-indigo-700">Semua</button>
+                  <button type="button" data-action="filter-qc-table" data-filter="Need Rework" class="qc-tbl-filter btn btn-outline h-7 px-2.5 text-xs font-mono">Need Rework</button>
+                  <button type="button" data-action="filter-qc-table" data-filter="Rework Selesai" class="qc-tbl-filter btn btn-outline h-7 px-2.5 text-xs font-mono">Selesai</button>
+                  <button type="button" data-action="filter-qc-table" data-filter="Retur / Scrapped" class="qc-tbl-filter btn btn-outline h-7 px-2.5 text-xs font-mono">Retur / Afkir</button>
+                </div>
+              </header>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr class="bg-slate-50 text-[11px] font-semibold text-slate-600 border-b border-slate-200 uppercase tracking-wider">
+                      <th class="th pl-5 py-3">ID QC &amp; Tgl</th>
+                      <th class="th py-3">Pesanan &amp; Pola</th>
+                      <th class="th py-3">Jenis Cacat</th>
+                      <th class="th py-3">Jumlah</th>
+                      <th class="th py-3">PIC Rework</th>
+                      <th class="th py-3">Status</th>
+                      <th class="th pr-5 py-3 text-right">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbl-qc-log-body" class="divide-y divide-slate-100 bg-white"></tbody>
+                </table>
+              </div>
+            </article>
+
+            <div class="flex justify-end gap-3 pt-2">
+              <button type="button" data-action="approve-qc-pass" class="btn bg-emerald-600 hover:bg-emerald-700 text-white"><i data-lucide="check-check" class="w-4 h-4"></i>Lolos QC (Tanpa Cacat)</button>
+              <button type="button" data-action="goto" data-target="dashboard" class="btn btn-outline">Batal</button>
+              <button type="button" data-action="submit-qc" class="btn btn-primary"><i data-lucide="save" class="w-4 h-4"></i>SIMPAN &amp; INISIASI REWORK</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ SCREEN 6: LAPORAN EKSEKUTIF ============ -->
+        <section id="screen-laporan" class="screen-section" aria-labelledby="title-laporan">
+          <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+            <div>
+              <nav class="crumb mb-1.5" aria-label="Breadcrumb">
+                <button type="button" data-action="goto" data-target="laporan">Laporan Eksekutif</button>
+                <span class="text-slate-300">/</span><span class="text-indigo-600">Konsolidasi Laporan Produksi &amp; Inventori</span>
+                <span class="badge ml-2 bg-emerald-50 text-emerald-700 ring-emerald-200">Konsolidasi Real-Time · 14 Tabel</span>
+              </nav>
+              <h2 id="title-laporan" class="screen-title">Pusat Laporan Eksekutif &amp; Analisis Operasional</h2>
+              <p class="screen-sub">Konsolidasi lintas 14 tabel untuk pengambilan keputusan pemilik usaha sesuai Flowchart Gambar 2-24.</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <button type="button" id="btn-print-report" data-action="print-report" class="btn btn-outline"><i data-lucide="printer" class="w-4 h-4"></i>Cetak Laporan (PDF)</button>
+              <button type="button" id="btn-export-excel" data-action="export-excel" class="btn btn-primary"><i data-lucide="file-spreadsheet" class="w-4 h-4"></i>Ekspor Data (Excel)</button>
+            </div>
+          </div>
+
+          <div class="space-y-6 max-w-6xl">
+            <!-- Card 1: Filter Parameter & Rentang Tanggal Laporan -->
+            <article class="card">
+              <header class="card-head">
+                <span class="card-icon"><i data-lucide="sliders-horizontal" class="w-[18px] h-[18px]"></i></span>
+                <div class="flex-1">
+                  <h3 class="card-title">1. Filter Parameter &amp; Rentang Tanggal Laporan</h3>
+                  <p class="card-sub">Tentukan cakupan data konsolidasi produksi, mutu QC, dan inventori roll kain.</p>
+                </div>
+                <button type="button" data-action="reset-laporan-filter" class="btn btn-outline text-xs h-8"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>Reset</button>
+              </header>
+              <div class="p-6">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                  <div>
+                    <label for="sel-lap-jenis" class="field-label">Jenis Laporan</label>
+                    <select id="sel-lap-jenis" class="field-select text-xs">
+                      <option value="ALL">Semua Modul (14 Tabel)</option>
+                      <option value="PRODUKSI">Produksi &amp; Efisiensi Yield</option>
+                      <option value="QC">Evaluasi Mutu QC &amp; CMT</option>
+                      <option value="STOK">Akurasi Stok Roll Kain Fisik</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="inp-lap-start" class="field-label">Tanggal Mulai</label>
+                    <input type="date" id="inp-lap-start" class="field-input font-mono text-xs" />
+                  </div>
+                  <div>
+                    <label for="inp-lap-end" class="field-label">Tanggal Selesai</label>
+                    <input type="date" id="inp-lap-end" class="field-input font-mono text-xs" />
+                  </div>
+                  <div>
+                    <label for="sel-lap-sumber" class="field-label">Sumber Inisiasi</label>
+                    <select id="sel-lap-sumber" class="field-select text-xs">
+                      <option value="ALL">Semua Sumber</option>
+                      <option value="1">Request Mitra</option>
+                      <option value="2">Produk Abadi</option>
+                      <option value="3">Inisiatif Tren Pasar</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="sel-lap-status" class="field-label">Status Pesanan</label>
+                    <div class="flex gap-2">
+                      <select id="sel-lap-status" class="field-select text-xs flex-1">
+                        <option value="ALL">Semua Status</option>
+                        <option value="ANTREAN">ANTREAN</option>
+                        <option value="PEMOTONGAN">PEMOTONGAN</option>
+                        <option value="DALAM QC">DALAM QC</option>
+                        <option value="SELESAI">SELESAI</option>
+                      </select>
+                      <button type="button" data-action="apply-laporan-filter" class="btn btn-primary px-3 text-xs shrink-0"><i data-lucide="filter" class="w-3.5 h-3.5"></i>Terapkan</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <!-- Card 2: Ringkasan Kinerja & Metrik Agregat -->
+            <article class="card">
+              <header class="card-head">
+                <span class="card-icon"><i data-lucide="activity" class="w-[18px] h-[18px]"></i></span>
+                <div class="flex-1">
+                  <h3 class="card-title">2. Ringkasan Kinerja &amp; Metrik Agregat</h3>
+                  <p class="card-sub">Metrik performa eksekutif yang dihitung dinamis dari parameter filter di atas.</p>
+                </div>
+              </header>
+              <div class="p-6">
+                <div id="laporan-kpis-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+              </div>
+            </article>
+
+            <!-- Card 3: Tabel Detail Konsolidasi Laporan Operasional -->
+            <article class="card">
+              <header class="card-head">
+                <span class="card-icon"><i data-lucide="table-2" class="w-[18px] h-[18px]"></i></span>
+                <div class="flex-1">
+                  <h3 class="card-title">3. Tabel Detail Konsolidasi Laporan Operasional</h3>
+                  <p class="card-sub">Penggabungan relasional lintas tabel <code class="font-mono text-xs">Pesanan</code>, <code class="font-mono text-xs">Pola</code>, <code class="font-mono text-xs">Detail_Gelaran_Kain</code>, <code class="font-mono text-xs">Detail_Roll_Bahan</code>, dan <code class="font-mono text-xs">Kerusakan</code>.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button type="button" data-action="print-report" class="btn btn-outline text-xs h-8"><i data-lucide="printer" class="w-3.5 h-3.5"></i>Pratinjau Cetak</button>
+                  <button type="button" data-action="export-excel" class="btn btn-outline text-xs h-8"><i data-lucide="download" class="w-3.5 h-3.5"></i>Unduh CSV</button>
+                </div>
+              </header>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr class="bg-slate-50 text-[11px] font-semibold text-slate-600 border-b border-slate-200 uppercase tracking-wider">
+                      <th class="th pl-5 py-3">ID Pesanan</th>
+                      <th class="th py-3">Nama Pola</th>
+                      <th class="th py-3">Sumber Inisiasi</th>
+                      <th class="th py-3">Roll Terpakai (id_roll)</th>
+                      <th class="th py-3 text-right">Total Yield (Pcs)</th>
+                      <th class="th py-3">Cacat QC (id_qc)</th>
+                      <th class="th pr-5 py-3 text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbl-laporan-body" class="divide-y divide-slate-100 bg-white"></tbody>
+                </table>
+              </div>
+            </article>
+
+            <!-- Executive Breakdown Row (2 columns) -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <!-- Left: Rekapitulasi Klasifikasi Cacat QC -->
+              <article class="card">
+                <header class="card-head">
+                  <span class="card-icon bg-rose-50 text-rose-600 ring-rose-100"><i data-lucide="pie-chart" class="w-[18px] h-[18px]"></i></span>
+                  <div class="flex-1">
+                    <h3 class="card-title">Rekapitulasi Klasifikasi Cacat QC</h3>
+                    <p class="card-sub">Evaluasi Stasiun Potong vs. Penjahit CMT Eksternal vs. Supplier Kain.</p>
+                  </div>
+                </header>
+                <div id="laporan-cacat-breakdown" class="p-6 space-y-3.5"></div>
+              </article>
+
+              <!-- Right: Ringkasan Stok Roll Kain per Kategori Status -->
+              <article class="card">
+                <header class="card-head">
+                  <span class="card-icon bg-indigo-50 text-indigo-600 ring-indigo-100"><i data-lucide="package" class="w-[18px] h-[18px]"></i></span>
+                  <div class="flex-1">
+                    <h3 class="card-title">Ringkasan Stok Roll Kain per Kategori Status</h3>
+                    <p class="card-sub">Distribusi fisik roll kain di gudang dan meja potong (<code class="font-mono text-xs">Detail_Roll_Bahan</code>).</p>
+                  </div>
+                </header>
+                <div id="laporan-stok-breakdown" class="p-6 space-y-3.5"></div>
+              </article>
+            </div>
+
+            <!-- Bottom Action Bar -->
+            <div class="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-slate-100/80 border border-slate-200">
+              <div class="flex items-center gap-2 text-xs text-slate-600">
+                <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
+                <span>Data dikonsolidasi langsung dari sistem relasional <b class="font-mono text-slate-800">BongDB</b>. Siap untuk sidang tugas akhir.</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <button type="button" data-action="print-report" class="btn btn-outline"><i data-lucide="printer" class="w-4 h-4"></i>Pratinjau Cetak (PDF)</button>
+                <button type="button" data-action="export-excel" class="btn btn-primary"><i data-lucide="file-spreadsheet" class="w-4 h-4"></i>Unduh Laporan Lengkap (Excel/CSV)</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- Toasts & Modals -->
+  <div id="toast-root" class="fixed bottom-6 right-6 z-[60] flex flex-col items-end gap-2 pointer-events-none" aria-live="polite"></div>
+  <div id="modal-root" class="hidden"></div>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- App -->
+  <script src="app.js"></script>
+</body>
+</html>
