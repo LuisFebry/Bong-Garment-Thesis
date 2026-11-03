@@ -1,4 +1,4 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('title', 'Gudang & Stok Barang Jadi — Bong Garment')
 

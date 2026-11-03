@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
@@ -298,6 +298,19 @@
           alert('Terjadi kesalahan saat memproses permintaan.');
         });
       };
+      // 4. Real-time global search across table rows and data cards
+      const searchInput = document.getElementById('global-search');
+      if (searchInput) {
+        searchInput.addEventListener('input', function () {
+          const query = this.value.toLowerCase().trim();
+          const rows = document.querySelectorAll('main table tbody tr');
+          rows.forEach(function (row) {
+            if (row.querySelector('td[colspan]')) return;
+            const text = row.textContent.toLowerCase();
+            row.style.display = (!query || text.includes(query)) ? '' : 'none';
+          });
+        });
+      }
     });
   </script>
   @stack('scripts')
