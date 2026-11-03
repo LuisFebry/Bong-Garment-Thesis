@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers;
 
@@ -22,11 +22,14 @@ class PemotonganSeriController extends Controller
             'detailPemotonganWarna.detailBahanWarna',
         ])->orderBy('tgl_potong', 'desc')->get();
 
+        $users = User::where('role', 'Pemotong')->get();
+        $orders = Pesanan::with('pola')->whereIn('status_pesanan', ['Antrean', 'Pemotongan'])->get();
+
         if ($request->wantsJson()) {
-            return response()->json(['success' => true, 'data' => $pemotongan]);
+            return response()->json(['success' => true, 'data' => compact('pemotongan', 'orders', 'users')]);
         }
 
-        return view('bong.pemotongan', compact('pemotongan'));
+        return view('bong.pemotongan', compact('pemotongan', 'orders', 'users'));
     }
 
     public function store(Request $request)

@@ -222,6 +222,8 @@
 
 @push('scripts')
 <script>
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
   // 1. Submit Add Aksesoris
   document.getElementById('form-add-aksesoris')?.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -240,7 +242,8 @@
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': csrfToken
       },
       body: JSON.stringify(payload)
     })
@@ -286,7 +289,8 @@
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': csrfToken
       },
       body: JSON.stringify(payload)
     })
@@ -314,7 +318,8 @@
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': csrfToken
       },
       body: JSON.stringify({ delta_stok: delta })
     })

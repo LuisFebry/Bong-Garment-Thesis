@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 
 @section('title', 'Pemotongan Seri & Gelaran — Bong Garment')
 
@@ -17,8 +17,25 @@
     <form id="form-pemotongan" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       @csrf
       <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">ID Pesanan Target</label>
-        <input type="number" name="id_pesanan" placeholder="Misal: 1" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Pesanan Target</label>
+        <select name="id_pesanan" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
+          <option value="" disabled selected>-- Pilih Pesanan Target --</option>
+          @foreach($orders ?? [] as $ord)
+            <option value="{{ $ord->id_pesanan }}">
+              Pesanan #{{ $ord->id_pesanan }} - {{ $ord->pola->nama_pola ?? $ord->jenis_pesanan }} [{{ $ord->status_pesanan }}]
+            </option>
+          @endforeach
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Operator Pemotong (Cutter)</label>
+        <select name="id_user_pemotong" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
+          <option value="" disabled selected>-- Pilih Operator Pemotong --</option>
+          @foreach($users ?? [] as $usr)
+            <option value="{{ $usr->id_user }}">{{ $usr->nama_user }} (@ {{ $usr->username }})</option>
+          @endforeach
+        </select>
       </div>
 
       <div>
@@ -96,13 +113,13 @@
 
     const payload = {
       id_pesanan: Number(formData.get('id_pesanan')),
+      id_user_pemotong: Number(formData.get('id_user_pemotong')),
       kode_seri: formData.get('kode_seri'),
       jenis_variasi: formData.get('jenis_variasi') || null,
-      total_lembar_hasil: Number(formData.get('total_lembar_hasil')),
-      id_user_pemotong: 1
+      total_lembar_hasil: Number(formData.get('total_lembar_hasil'))
     };
 
-    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
     fetch("{{ route('pemotongan.store') }}", {
       method: 'POST',
@@ -130,4 +147,3 @@
 </script>
 @endpush
 @endsection
-
