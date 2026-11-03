@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DashboardController;
@@ -75,3 +75,24 @@ Route::prefix('laporan')->group(function () {
     Route::get('/', [LaporanEksekutifController::class, 'index'])->middleware(RoleMiddleware::class . ':Admin,Pemilik')->name('laporan.index');
 });
 
+// Web-triggered database migration & seeding helper
+Route::get('/migrate-db', function () {
+    try {
+        \Illuminate\Support\Facades\Artisan::call('migrate:fresh', [
+            '--force' => true,
+            '--seed' => true,
+        ]);
+        $output = \Illuminate\Support\Facades\Artisan::output();
+        return response("<div style='font-family:sans-serif;padding:30px;background:#f8fafc;color:#1e293b;max-width:700px;margin:40px auto;border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 4px 6px -1px rgb(0 0 0 / 0.1);'>"
+            . "<h2 style='color:#16a34a;margin-top:0;'>&#10004; 17 Tables Migrated and Seeded Successfully</h2>"
+            . "<p>Your MySQL database has been provisioned with all canonical tables and demonstration records.</p>"
+            . "<pre style='background:#0f172a;color:#38bdf8;padding:16px;border-radius:8px;font-size:12px;overflow-x:auto;'>" . htmlspecialchars($output) . "</pre>"
+            . "<p style='margin-top:20px;'><a href='/' style='background:#4f46e5;color:white;padding:10px 20px;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;display:inline-block;'>Go to Dashboard &rarr;</a></p>"
+            . "</div>");
+    } catch (\Throwable $e) {
+        return response("<div style='font-family:sans-serif;padding:30px;background:#fff1f2;color:#9f1239;max-width:700px;margin:40px auto;border-radius:12px;border:1px solid #fecdd3;'>"
+            . "<h2 style='margin-top:0;'>&#10006; Migration Error</h2>"
+            . "<pre style='background:#881337;color:#ffe4e6;padding:16px;border-radius:8px;font-size:12px;overflow-x:auto;'>" . htmlspecialchars($e->getMessage()) . "</pre>"
+            . "</div>", 500);
+    }
+})->name('migrate.db');
