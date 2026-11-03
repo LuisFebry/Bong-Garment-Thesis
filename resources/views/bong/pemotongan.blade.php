@@ -121,7 +121,7 @@
 
     const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
-    fetch("{{ route('pemotongan.store') }}", {
+    fetch("{{ route('pemotongan.store', [], false) }}", {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

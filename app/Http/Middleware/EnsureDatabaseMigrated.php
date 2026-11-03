@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\URL;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureDatabaseMigrated
@@ -17,6 +18,10 @@ class EnsureDatabaseMigrated
      */
     public function handle(Request $request, Closure $next): Response
     {
+        if ($request->header('x-forwarded-proto') === 'https' || env('APP_ENV') === 'production') {
+            URL::forceScheme('https');
+        }
+
         if (!self::$checked) {
             try {
                 if (!Schema::hasTable('Pesanan')) {

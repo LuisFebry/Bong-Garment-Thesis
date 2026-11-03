@@ -159,7 +159,7 @@
 
     const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
-    fetch("{{ route('qc.store') }}", {
+    fetch("{{ route('qc.store', [], false) }}", {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

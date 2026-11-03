@@ -238,7 +238,7 @@
       id_supplier: Number(formData.get('id_supplier'))
     };
 
-    fetch("{{ route('aksesoris.store') }}", {
+    fetch("{{ route('aksesoris.store', [], false) }}", {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -285,7 +285,7 @@
       delta_pcs: delta
     };
 
-    fetch("{{ route('stok.adjust') }}", {
+    fetch("{{ route('stok.adjust', [], false) }}", {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

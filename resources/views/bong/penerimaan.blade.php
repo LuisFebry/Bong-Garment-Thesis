@@ -156,7 +156,7 @@
 
     const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
-    fetch("{{ route('penerimaan.store') }}", {
+    fetch("{{ route('penerimaan.store', [], false) }}", {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
