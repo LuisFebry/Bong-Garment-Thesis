@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
@@ -166,6 +166,33 @@
 
   <!-- Global Bridging JavaScript -->
   <script>
+    // Intercept native fetch to automatically append CSRF and active role headers
+    const originalFetch = window.fetch;
+    window.fetch = function (url, options = {}) {
+      options.headers = options.headers || {};
+      const role = localStorage.getItem('bong_garment_role') || 'Admin';
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+      if (options.headers instanceof Headers) {
+        if (!options.headers.has('X-User-Role')) options.headers.set('X-User-Role', role);
+        if (csrfToken && !options.headers.has('X-CSRF-TOKEN')) options.headers.set('X-CSRF-TOKEN', csrfToken);
+      } else {
+        options.headers['X-User-Role'] = options.headers['X-User-Role'] || role;
+        if (csrfToken) options.headers['X-CSRF-TOKEN'] = options.headers['X-CSRF-TOKEN'] || csrfToken;
+      }
+      return originalFetch(url, options);
+    };
+
+    // Global modal helpers
+    window.openModal = function (id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('hidden');
+    };
+    window.closeModal = function (id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('hidden');
+    };
+
     document.addEventListener('DOMContentLoaded', function () {
       // 1. Role synchronization & RBAC navigation filtering
       const roleSelect = document.getElementById('role-select');
