@@ -47,7 +47,7 @@ class QcController extends Controller
             'nama_warna' => 'nullable|string|max:50',
         ]);
 
-        return DB::transaction(function () use ($validated) {
+        return DB::transaction(function () use ($validated, $request) {
             $qc = Qc::create([
                 'id_pesanan' => $validated['id_pesanan'],
                 'id_user_qc' => $validated['id_user_qc'],
@@ -124,4 +124,3 @@ class QcController extends Controller
         ]);
     }
 }
-
