@@ -1,0 +1,49 @@
+{
+  "name": "Bong-Garment-Thesis",
+  "description": "Web-Based CMT Production & Inventory Management System (17-Table Schema)",
+  "keywords": ["laravel", "php", "cmt", "garment", "mysql", "innodb"],
+  "repository": "https://github.com/luisfebry/Bong-Garment-Thesis",
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/php"
+    }
+  ],
+  "addons": [
+    {
+      "plan": "jawsdb:kitefin",
+      "as": "JAWSDB"
+    }
+  ],
+  "scripts": {
+    "postdeploy": "php artisan migrate:fresh --seed --force"
+  },
+  "env": {
+    "APP_NAME": {
+      "value": "Bong Garment CMT"
+    },
+    "APP_ENV": {
+      "value": "production"
+    },
+    "APP_DEBUG": {
+      "value": "true"
+    },
+    "APP_KEY": {
+      "value": "base64:7VqM51Zc/j4gqYyPq9fQ2PzO9k4L3w8N1v5R6x8Y3m0="
+    },
+    "LOG_CHANNEL": {
+      "value": "errorlog"
+    },
+    "SESSION_DRIVER": {
+      "value": "cookie"
+    },
+    "DB_CONNECTION": {
+      "value": "mysql"
+    }
+  }
+}
