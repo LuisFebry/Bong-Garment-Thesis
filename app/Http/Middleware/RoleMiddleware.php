@@ -17,9 +17,20 @@ class RoleMiddleware
     {
         $user = $request->user();
 
-        // If running in demo mode or user not resolved through standard session, check header or request param
-        $userRole = $user ? $user->role : ($request->header('X-User-Role') ?? $request->input('active_role', 'Admin'));
+        // Check header, then raw cookie, then Laravel cookie, then request parameter, default to 'Admin'
+        $userRole = $user ? $user->role : (
+            $request->header('X-User-Role')
+            ?? ($_COOKIE['bong_garment_role'] ?? null)
+            ?? $request->cookie('bong_garment_role')
+            ?? $request->input('active_role', 'Admin')
+        );
 
+        $validRoles = ['Admin', 'Pemilik', 'Pemotong', 'QC', 'Gudang'];
+        if (!in_array($userRole, $validRoles)) {
+            $userRole = 'Admin';
+        }
+
+        // If specific roles are required and user is neither in allowed list nor Admin
         if (!empty($roles) && !in_array($userRole, $roles) && $userRole !== 'Admin') {
             if ($request->expectsJson() || $request->is('api/*')) {
                 return response()->json([
@@ -27,7 +38,11 @@ class RoleMiddleware
                     'message' => "Akses ditolak. Peran '{$userRole}' tidak memiliki hak akses untuk tindakan ini.",
                 ], 403);
             }
-            abort(403, "Akses ditolak untuk peran {$userRole}.");
+            return response()->view('errors.403_role', [
+                'userRole' => $userRole,
+                'allowedRoles' => $roles,
+                'requestedUrl' => $request->path(),
+            ], 403);
         }
 
         // Pemilik is strictly Read-Only: Reject mutating requests
@@ -38,10 +53,14 @@ class RoleMiddleware
                     'message' => "Peran Pemilik berada dalam Mode Audit (Read-Only). Mutasi data tidak diizinkan.",
                 ], 403);
             }
-            abort(403, "Mode Audit Pemilik: Perubahan data tidak diizinkan.");
+            return response()->view('errors.403_role', [
+                'userRole' => $userRole,
+                'allowedRoles' => ['Mode Audit (Read-Only)'],
+                'requestedUrl' => $request->path(),
+                'customMessage' => 'Peran Pemilik berada dalam Mode Audit (Read-Only). Perubahan atau penambahan data tidak diizinkan.'
+            ], 403);
         }
 
         return $next($request);
     }
 }
-

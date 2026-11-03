@@ -23,56 +23,56 @@ use App\Http\Middleware\RoleMiddleware;
 Route::get('/', [DashboardController::class, 'index'])->name('home');
 Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-// Pola & 11-Metric Specifications
-Route::prefix('pola')->group(function () {
+// Pola & 11-Metric Specifications: Admin
+Route::prefix('pola')->middleware(RoleMiddleware::class . ':Admin')->group(function () {
     Route::get('/', [PolaController::class, 'index'])->name('pola.index');
     Route::get('/{id}', [PolaController::class, 'show'])->name('pola.show');
-    Route::post('/', [PolaController::class, 'store'])->middleware(RoleMiddleware::class . ':Admin')->name('pola.store');
+    Route::post('/', [PolaController::class, 'store'])->name('pola.store');
 });
 
-// Aksesoris & Inventory
-Route::prefix('aksesoris')->group(function () {
-    Route::get('/', [AksesorisController::class, 'index'])->name('aksesoris.index');
-    Route::post('/', [AksesorisController::class, 'store'])->middleware(RoleMiddleware::class . ':Admin,Gudang')->name('aksesoris.store');
-    Route::post('/{id}/stock', [AksesorisController::class, 'updateStock'])->middleware(RoleMiddleware::class . ':Admin,Gudang')->name('aksesoris.stock');
-});
-
-// Pesanan & EDF Deadline Management
-Route::prefix('pesanan')->group(function () {
+// Pesanan & EDF Deadline Management: Admin
+Route::prefix('pesanan')->middleware(RoleMiddleware::class . ':Admin')->group(function () {
     Route::get('/', [PesananController::class, 'index'])->name('pesanan.index');
-    Route::post('/', [PesananController::class, 'store'])->middleware(RoleMiddleware::class . ':Admin')->name('pesanan.store');
-    Route::post('/{id}/revise-deadline', [PesananController::class, 'reviseDeadline'])->middleware(RoleMiddleware::class . ':Admin')->name('pesanan.revise_deadline');
-    Route::post('/{id}/status', [PesananController::class, 'updateStatus'])->middleware(RoleMiddleware::class . ':Admin')->name('pesanan.status');
+    Route::post('/', [PesananController::class, 'store'])->name('pesanan.store');
+    Route::post('/{id}/revise-deadline', [PesananController::class, 'reviseDeadline'])->name('pesanan.revise_deadline');
+    Route::post('/{id}/status', [PesananController::class, 'updateStatus'])->name('pesanan.status');
 });
 
-// Penerimaan Bahan & Multi-Unit Roll Registration
-Route::prefix('penerimaan')->group(function () {
+// Penerimaan Bahan: Admin, Gudang
+Route::prefix('penerimaan')->middleware(RoleMiddleware::class . ':Admin,Gudang')->group(function () {
     Route::get('/', [PenerimaanBahanController::class, 'index'])->name('penerimaan.index');
-    Route::post('/', [PenerimaanBahanController::class, 'store'])->middleware(RoleMiddleware::class . ':Admin,Gudang')->name('penerimaan.store');
+    Route::post('/', [PenerimaanBahanController::class, 'store'])->name('penerimaan.store');
 });
 
-// Pemotongan Seri & Fabric Spreading / Roll Deduction
-Route::prefix('pemotongan')->group(function () {
+// Pemotongan Seri: Admin, Pemotong
+Route::prefix('pemotongan')->middleware(RoleMiddleware::class . ':Admin,Pemotong')->group(function () {
     Route::get('/', [PemotonganSeriController::class, 'index'])->name('pemotongan.index');
-    Route::post('/', [PemotonganSeriController::class, 'store'])->middleware(RoleMiddleware::class . ':Admin,Pemotong')->name('pemotongan.store');
+    Route::post('/', [PemotonganSeriController::class, 'store'])->name('pemotongan.store');
 });
 
-// Multi-Stage Quality Control & Perpetual Stock Integration
-Route::prefix('qc')->group(function () {
+// Multi-Stage Quality Control: Admin, QC
+Route::prefix('qc')->middleware(RoleMiddleware::class . ':Admin,QC')->group(function () {
     Route::get('/', [QcController::class, 'index'])->name('qc.index');
-    Route::post('/', [QcController::class, 'store'])->middleware(RoleMiddleware::class . ':Admin,QC')->name('qc.store');
-    Route::post('/{id}/complete-rework', [QcController::class, 'completeRework'])->middleware(RoleMiddleware::class . ':Admin,QC')->name('qc.complete_rework');
+    Route::post('/', [QcController::class, 'store'])->name('qc.store');
+    Route::post('/{id}/complete-rework', [QcController::class, 'completeRework'])->name('qc.complete_rework');
 });
 
-// Stok Barang Jadi
-Route::prefix('stok')->group(function () {
+// Stok Barang Jadi: Admin, Gudang, Pemilik (Pemilik can view, POST mutations blocked by RoleMiddleware)
+Route::prefix('stok')->middleware(RoleMiddleware::class . ':Admin,Gudang,Pemilik')->group(function () {
     Route::get('/', [StokBarangJadiController::class, 'index'])->name('stok.index');
-    Route::post('/adjust', [StokBarangJadiController::class, 'adjustStock'])->middleware(RoleMiddleware::class . ':Admin,Gudang')->name('stok.adjust');
+    Route::post('/adjust', [StokBarangJadiController::class, 'adjustStock'])->name('stok.adjust');
 });
 
-// Laporan Eksekutif
-Route::prefix('laporan')->group(function () {
-    Route::get('/', [LaporanEksekutifController::class, 'index'])->middleware(RoleMiddleware::class . ':Admin,Pemilik')->name('laporan.index');
+// Aksesoris & Inventory: Admin, Gudang
+Route::prefix('aksesoris')->middleware(RoleMiddleware::class . ':Admin,Gudang')->group(function () {
+    Route::get('/', [AksesorisController::class, 'index'])->name('aksesoris.index');
+    Route::post('/', [AksesorisController::class, 'store'])->name('aksesoris.store');
+    Route::post('/{id}/stock', [AksesorisController::class, 'updateStock'])->name('aksesoris.stock');
+});
+
+// Laporan Eksekutif: Admin, Pemilik
+Route::prefix('laporan')->middleware(RoleMiddleware::class . ':Admin,Pemilik')->group(function () {
+    Route::get('/', [LaporanEksekutifController::class, 'index'])->name('laporan.index');
 });
 
 // Web-triggered database migration & seeding helper

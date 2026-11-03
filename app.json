@@ -1,7 +1,15 @@
 {
+  "stack": "heroku-26",
   "name": "Bong-Garment-Thesis",
   "description": "Web-Based CMT Production & Inventory Management System (17-Table Schema)",
-  "keywords": ["laravel", "php", "cmt", "garment", "mysql", "innodb"],
+  "keywords": [
+    "laravel",
+    "php",
+    "cmt",
+    "garment",
+    "mysql",
+    "innodb"
+  ],
   "repository": "https://github.com/luisfebry/Bong-Garment-Thesis",
   "formation": {
     "web": {

@@ -14,6 +14,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             \App\Http\Middleware\EnsureDatabaseMigrated::class,
         ]);
+        $middleware->encryptCookies(except: [
+            'bong_garment_role',
+        ]);
         $middleware->alias([
             'role' => \App\Http\Middleware\RoleMiddleware::class,
         ]);

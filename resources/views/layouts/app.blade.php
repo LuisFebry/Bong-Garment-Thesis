@@ -1,15 +1,39 @@
+@php
+  $currentRole = $_COOKIE['bong_garment_role'] ?? request()->cookie('bong_garment_role', 'Admin');
+  $validRoles = ['Admin', 'Pemilik', 'Pemotong', 'QC', 'Gudang'];
+  if (!in_array($currentRole, $validRoles)) {
+      $currentRole = 'Admin';
+  }
+
+  $showPesanan = in_array($currentRole, ['Admin']);
+  $showPenerimaan = in_array($currentRole, ['Admin', 'Gudang']);
+  $showPemotongan = in_array($currentRole, ['Admin', 'Pemotong']);
+  $showQc = in_array($currentRole, ['Admin', 'QC']);
+  $showStok = in_array($currentRole, ['Admin', 'Gudang', 'Pemilik']);
+  $showLaporan = in_array($currentRole, ['Admin', 'Pemilik']);
+@endphp
 <!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>@yield('title', 'Bong Garment — Sistem Produksi & Inventori CMT')</title>
+  <title>@yield('title', 'Bong Garment - Sistem Produksi & Inventori CMT')</title>
 
   <!-- Google Fonts: Inter & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Immediate Anti-FOUC Cookie & Role Sync Script -->
+  <script>
+    (function () {
+      var saved = localStorage.getItem('bong_garment_role');
+      if (saved) {
+        document.cookie = "bong_garment_role=" + encodeURIComponent(saved) + "; path=/; max-age=31536000; SameSite=Lax";
+      }
+    })();
+  </script>
 
   <!-- Tailwind CSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -73,117 +97,98 @@
           <span>Dashboard</span>
         </a>
 
-        <a href="{{ route('pesanan.index') }}" data-roles="Admin" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('pesanan.*') ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100' }}">
+        <a href="{{ route('pesanan.index') }}" data-roles="Admin" style="{{ $showPesanan ? '' : 'display: none !important;' }}" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('pesanan.*') ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100' }}">
           <i data-lucide="clipboard-list" class="w-4 h-4"></i>
           <span>Pesanan & Pola</span>
         </a>
 
-        <a href="{{ route('penerimaan.index') }}" data-roles="Admin,Gudang" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('penerimaan.*') ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100' }}">
+        <a href="{{ route('penerimaan.index') }}" data-roles="Admin,Gudang" style="{{ $showPenerimaan ? '' : 'display: none !important;' }}" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('penerimaan.*') ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100' }}">
           <i data-lucide="package-check" class="w-4 h-4"></i>
           <span>Penerimaan Bahan</span>
         </a>
 
-        <a href="{{ route('pemotongan.index') }}" data-roles="Admin,Pemotong" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('pemotongan.*') ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100' }}">
+        <a href="{{ route('pemotongan.index') }}" data-roles="Admin,Pemotong" style="{{ $showPemotongan ? '' : 'display: none !important;' }}" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('pemotongan.*') ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100' }}">
           <i data-lucide="scissors" class="w-4 h-4"></i>
           <span>Pemotongan Seri</span>
         </a>
 
-        <a href="{{ route('qc.index') }}" data-roles="Admin,QC" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('qc.*') ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100' }}">
+        <a href="{{ route('qc.index') }}" data-roles="Admin,QC" style="{{ $showQc ? '' : 'display: none !important;' }}" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('qc.*') ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100' }}">
           <i data-lucide="shield-alert" class="w-4 h-4"></i>
           <span>Quality Control</span>
         </a>
 
-        <a href="{{ route('stok.index') }}" data-roles="Admin,Gudang" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('stok.*') || request()->routeIs('aksesoris.*') ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100' }}">
+        <a href="{{ route('stok.index') }}" data-roles="Admin,Gudang,Pemilik" style="{{ $showStok ? '' : 'display: none !important;' }}" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('stok.*') ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100' }}">
           <i data-lucide="boxes" class="w-4 h-4"></i>
           <span>Gudang & Aksesoris</span>
         </a>
 
-        <a href="{{ route('laporan.index') }}" data-roles="Admin,Pemilik" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('laporan.*') ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100' }}">
-          <i data-lucide="file-bar-chart" class="w-4 h-4"></i>
+        <a href="{{ route('laporan.index') }}" data-roles="Admin,Pemilik" style="{{ $showLaporan ? '' : 'display: none !important;' }}" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('laporan.*') ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100' }}">
+          <i data-lucide="pie-chart" class="w-4 h-4"></i>
           <span>Laporan Eksekutif</span>
         </a>
       </nav>
     </div>
 
-    <!-- User & Role Footer -->
+    <!-- User / Thesis Badge Footer -->
     <div class="p-4 border-t border-slate-100">
-      <div class="flex items-center gap-3 p-2 bg-slate-50 rounded-lg">
-        <div class="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-700 text-xs">
+      <div class="flex items-center gap-3 p-2 bg-slate-50 rounded-xl border border-slate-100">
+        <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs">
           LF
         </div>
         <div class="overflow-hidden">
-          <p class="text-xs font-semibold text-slate-900 truncate">Luis Febry</p>
-          <p class="text-[10px] text-slate-500 font-mono">NIM: 825220088</p>
+          <p class="text-xs font-semibold text-slate-800 truncate">Luis Febry</p>
+          <p class="text-[10px] text-slate-400 font-mono">NIM: 825220088</p>
         </div>
       </div>
-      <p class="text-[10px] text-center text-slate-400 mt-2">Skripsi SI UNTAR &copy; 2026</p>
+      <p class="text-[10px] text-slate-400 text-center mt-2 font-medium">Skripsi SI UNTAR &copy; 2026</p>
     </div>
   </aside>
 
-  <!-- Main Container -->
+  <!-- Main Content Area -->
   <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
-    <!-- Top Bar -->
-    <header class="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between sticky top-0 z-20">
-      <!-- Search & Breadcrumb -->
-      <div class="flex items-center gap-4">
-        <div class="relative w-72">
-          <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
-          <input type="text" id="global-search" placeholder="Cari pesanan, nota, seri..." class="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all">
-        </div>
+    <!-- Top Navigation Header -->
+    <header class="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0 z-20">
+      <!-- Search Input -->
+      <div class="relative w-80">
+        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+        <input type="text" id="global-search" placeholder="Cari pesanan, nota, seri..." class="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all text-slate-700">
       </div>
 
-      <!-- Role Switcher & Status -->
+      <!-- Header Right: Role Switcher & Audit Mode Badge -->
       <div class="flex items-center gap-4">
-        <div class="flex items-center gap-2">
-          <span class="text-xs font-medium text-slate-500">Peran Aktif:</span>
-          <select id="role-select" class="text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            <option value="Admin">Admin (Penuh)</option>
-            <option value="Pemilik">Pemilik (Mode Audit)</option>
-            <option value="Pemotong">Pemotong (Cutting)</option>
-            <option value="QC">QC (Inspeksi)</option>
-            <option value="Gudang">Gudang (Bahan & Stok)</option>
-          </select>
-        </div>
-
-        <div id="audit-mode-badge" class="hidden px-2.5 py-1 bg-amber-100 text-amber-800 text-[11px] font-semibold rounded-full flex items-center gap-1.5">
+        <!-- Mode Audit Indicator (for Pemilik) -->
+        <div id="audit-mode-badge" class="{{ $currentRole === 'Pemilik' ? '' : 'hidden' }} flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium">
           <i data-lucide="eye" class="w-3.5 h-3.5"></i>
           <span>Mode Audit (Read-Only)</span>
+        </div>
+
+        <!-- Role Selector Dropdown -->
+        <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
+          <label for="role-select" class="text-xs text-slate-500 font-medium">Peran Aktif:</label>
+          <select id="role-select" class="text-xs font-semibold bg-transparent text-indigo-900 border-none focus:ring-0 cursor-pointer pr-6 py-1">
+            <option value="Admin" {{ $currentRole === 'Admin' ? 'selected' : '' }}>Admin (Penuh)</option>
+            <option value="Pemilik" {{ $currentRole === 'Pemilik' ? 'selected' : '' }}>Pemilik (Mode Audit)</option>
+            <option value="Pemotong" {{ $currentRole === 'Pemotong' ? 'selected' : '' }}>Pemotong (Cutting)</option>
+            <option value="QC" {{ $currentRole === 'QC' ? 'selected' : '' }}>QC (Inspeksi)</option>
+            <option value="Gudang" {{ $currentRole === 'Gudang' ? 'selected' : '' }}>Gudang (Bahan & Stok)</option>
+          </select>
         </div>
       </div>
     </header>
 
-    <!-- Main Content Area -->
+    <!-- Main Dynamic Content Container -->
     <main class="flex-1 overflow-y-auto p-8">
       @yield('content')
     </main>
   </div>
 
-  <!-- Lucide Script -->
+  <!-- Global Application Scripts -->
   <script>
-    lucide.createIcons();
-  </script>
-  <script src="{{ asset('js/app.js') }}"></script>
+    if (window.lucide) {
+      lucide.createIcons();
+    }
 
-  <!-- Global Bridging JavaScript -->
-  <script>
-    // Intercept native fetch to automatically append CSRF and active role headers
-    const originalFetch = window.fetch;
-    window.fetch = function (url, options = {}) {
-      options.headers = options.headers || {};
-      const role = localStorage.getItem('bong_garment_role') || 'Admin';
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-
-      if (options.headers instanceof Headers) {
-        if (!options.headers.has('X-User-Role')) options.headers.set('X-User-Role', role);
-        if (csrfToken && !options.headers.has('X-CSRF-TOKEN')) options.headers.set('X-CSRF-TOKEN', csrfToken);
-      } else {
-        options.headers['X-User-Role'] = options.headers['X-User-Role'] || role;
-        if (csrfToken) options.headers['X-CSRF-TOKEN'] = options.headers['X-CSRF-TOKEN'] || csrfToken;
-      }
-      return originalFetch(url, options);
-    };
-
-    // Global modal helpers
+    // Modal Helper functions
     window.openModal = function (id) {
       const el = document.getElementById(id);
       if (el) el.classList.remove('hidden');
@@ -193,24 +198,37 @@
       if (el) el.classList.add('hidden');
     };
 
+    // Global fetch interceptor to append current role and CSRF header
+    const originalFetch = window.fetch;
+    window.fetch = function (url, options) {
+      options = options || {};
+      options.headers = options.headers || {};
+      const role = localStorage.getItem('bong_garment_role') || 'Admin';
+
+      if (options.headers instanceof Headers) {
+        if (!options.headers.has('X-User-Role')) options.headers.set('X-User-Role', role);
+      } else {
+        options.headers['X-User-Role'] = options.headers['X-User-Role'] || role;
+      }
+      return originalFetch(url, options);
+    };
+
     document.addEventListener('DOMContentLoaded', function () {
-      // 1. Role synchronization & RBAC navigation filtering
       const roleSelect = document.getElementById('role-select');
       const auditBadge = document.getElementById('audit-mode-badge');
       const navItems = document.querySelectorAll('.nav-item[data-roles]');
 
       function applyRole(role) {
         localStorage.setItem('bong_garment_role', role);
+        document.cookie = "bong_garment_role=" + encodeURIComponent(role) + "; path=/; max-age=31536000; SameSite=Lax";
         if (roleSelect && roleSelect.value !== role) {
           roleSelect.value = role;
         }
 
-        // Toggle audit mode badge for Pemilik (Owner)
         if (auditBadge) {
           auditBadge.classList.toggle('hidden', role !== 'Pemilik');
         }
 
-        // Filter navigation items based on data-roles
         navItems.forEach(function (item) {
           const roles = (item.dataset.roles || '').split(',').map(function (r) { return r.trim(); });
           if (roles.includes('Admin') && role === 'Admin') {
@@ -223,12 +241,39 @@
         });
       }
 
-      const savedRole = localStorage.getItem('bong_garment_role') || 'Admin';
-      applyRole(savedRole);
+      // Sync role on load if localStorage differs from cookie
+      const savedRole = localStorage.getItem('bong_garment_role') || '{{ $currentRole }}';
+      if (savedRole !== '{{ $currentRole }}') {
+        applyRole(savedRole);
+      }
 
       if (roleSelect) {
         roleSelect.addEventListener('change', function () {
-          applyRole(this.value);
+          const newRole = this.value;
+          localStorage.setItem('bong_garment_role', newRole);
+          document.cookie = "bong_garment_role=" + encodeURIComponent(newRole) + "; path=/; max-age=31536000; SameSite=Lax";
+
+          // Route permission check on role change
+          const path = window.location.pathname;
+          const rolePermissions = {
+            'Admin': ['*'],
+            'Pemilik': ['/', '/dashboard', '/stok', '/laporan'],
+            'Pemotong': ['/', '/dashboard', '/pemotongan'],
+            'QC': ['/', '/dashboard', '/qc'],
+            'Gudang': ['/', '/dashboard', '/penerimaan', '/stok', '/aksesoris']
+          };
+
+          const allowed = rolePermissions[newRole] || ['/dashboard'];
+          const canStay = allowed.includes('*') || allowed.some(function (p) {
+            return path === p || path.startsWith(p + '/');
+          });
+
+          if (canStay) {
+            window.location.reload();
+          } else {
+            alert("Peran diubah menjadi '" + newRole + "'. Anda dialihkan ke Dashboard karena peran ini tidak memiliki akses ke halaman saat ini.");
+            window.location.href = '/dashboard';
+          }
         });
       }
 
@@ -236,7 +281,7 @@
       const csrfMeta = document.querySelector('meta[name="csrf-token"]');
       const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
 
-      // 2. Define window.openReviseDeadlineModal
+      // Window helper: Revise Deadline
       window.openReviseDeadlineModal = function (id, dlAwal, dlTerbaru) {
         const currentTarget = dlTerbaru || dlAwal || new Date().toISOString().split('T')[0];
         const newDeadline = prompt('Masukkan Deadline Terbaru (YYYY-MM-DD):', currentTarget);
@@ -272,7 +317,7 @@
         });
       };
 
-      // 3. Define window.completeRework
+      // Window helper: Complete QC Rework
       window.completeRework = function (id) {
         if (!confirm('Tandai inspeksi QC #' + id + ' sebagai Rework Selesai?')) return;
 
@@ -298,7 +343,8 @@
           alert('Terjadi kesalahan saat memproses permintaan.');
         });
       };
-      // 4. Real-time global search across table rows and data cards
+
+      // Real-time global search across tables
       const searchInput = document.getElementById('global-search');
       if (searchInput) {
         searchInput.addEventListener('input', function () {
@@ -316,4 +362,3 @@
   @stack('scripts')
 </body>
 </html>
-
