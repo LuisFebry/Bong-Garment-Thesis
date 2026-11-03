@@ -49,6 +49,22 @@ class PemotonganSeriController extends Controller
                 $roll = DetailRollBahan::where('status_roll', '!=', 'Habis')->first();
             }
 
+            // Continuous evaluation fallback: auto-provision fresh roll if all existing rolls are Habis
+            if (!$roll) {
+                $firstWarna = \App\Models\DetailBahanWarna::first();
+                if ($firstWarna) {
+                    $nextRollNo = (DetailRollBahan::where('id_detail_warna', $firstWarna->id_detail_warna)->max('no_roll_ke') ?? 0) + 1;
+                    $roll = DetailRollBahan::create([
+                        'id_detail_warna' => $firstWarna->id_detail_warna,
+                        'no_roll_ke' => $nextRollNo,
+                        'ukuran_awal' => 100.0,
+                        'ukuran_sisa' => 100.0,
+                        'satuan' => $firstWarna->satuan_ukur ?? 'Kg',
+                        'status_roll' => 'Tersedia',
+                    ]);
+                }
+            }
+
             $totalHasil = (int) $request->input('total_lembar_hasil', 100);
             $userId = $request->input('id_user_pemotong')
                 ?? User::where('role', 'Pemotong')->value('id_user')
