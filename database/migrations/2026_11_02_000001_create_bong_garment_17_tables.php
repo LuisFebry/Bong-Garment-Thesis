@@ -115,7 +115,7 @@ return new class extends Migration
             $table->string('nama_warna', 50);
             $table->string('kode_warna', 30)->nullable();
             $table->integer('total_roll')->default(0);
-            $table->decimal('total_ukuran', 8, 2)->default(0.00);
+            $table->decimal('total_ukuran', 10, 2)->default(0.00);
             $table->enum('satuan_ukur', ['Kg', 'Yard', 'Meter'])->default('Kg');
 
             $table->foreign('id_penerimaan')->references('id_penerimaan')->on('Penerimaan_Bahan')->onDelete('restrict')->onUpdate('cascade');
@@ -126,8 +126,8 @@ return new class extends Migration
             $table->id('id_roll');
             $table->unsignedBigInteger('id_detail_warna');
             $table->integer('no_roll_ke');
-            $table->decimal('ukuran_awal', 6, 2);
-            $table->decimal('ukuran_sisa', 6, 2);
+            $table->decimal('ukuran_awal', 10, 2);
+            $table->decimal('ukuran_sisa', 10, 2);
             $table->enum('satuan', ['Kg', 'Yard', 'Meter']);
             $table->enum('status_roll', ['Tersedia', 'Dipotong', 'Habis'])->default('Tersedia');
 
@@ -193,7 +193,7 @@ return new class extends Migration
             $table->unsignedBigInteger('id_potong');
             $table->unsignedBigInteger('id_detail_warna');
             $table->integer('total_lembar_direncanakan');
-            $table->decimal('kain_terpakai', 6, 2)->nullable()->comment('Kuantitas material yang dihabiskan');
+            $table->decimal('kain_terpakai', 10, 2)->nullable()->comment('Kuantitas material yang dihabiskan');
 
             $table->foreign('id_potong')->references('id_potong')->on('Pemotongan_Seri')->onDelete('restrict')->onUpdate('cascade');
             $table->foreign('id_detail_warna')->references('id_detail_warna')->on('Detail_Bahan_Warna')->onDelete('restrict')->onUpdate('cascade');
@@ -204,7 +204,7 @@ return new class extends Migration
             $table->id('id_gelar');
             $table->unsignedBigInteger('id_potong_warna');
             $table->unsignedBigInteger('id_roll');
-            $table->decimal('panjang_gelar', 5, 2);
+            $table->decimal('panjang_gelar', 8, 2);
             $table->integer('jumlah_tumpuk');
             $table->integer('total_lembar_gelar');
 

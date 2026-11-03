@@ -24,6 +24,14 @@ class EnsureDatabaseMigrated
 
         if (!self::$checked) {
             try {
+                // Auto-widen decimal columns for large-batch production data
+                try {
+                    \Illuminate\Support\Facades\DB::statement("ALTER TABLE Detail_Pemotongan_Warna MODIFY kain_terpakai DECIMAL(10,2) NULL");
+                    \Illuminate\Support\Facades\DB::statement("ALTER TABLE Detail_Roll_Bahan MODIFY ukuran_awal DECIMAL(10,2) NOT NULL");
+                    \Illuminate\Support\Facades\DB::statement("ALTER TABLE Detail_Roll_Bahan MODIFY ukuran_sisa DECIMAL(10,2) NOT NULL");
+                    \Illuminate\Support\Facades\DB::statement("ALTER TABLE Detail_Bahan_Warna MODIFY total_ukuran DECIMAL(10,2) NOT NULL DEFAULT 0.00");
+                } catch (\Throwable $e) {}
+
                 if (!Schema::hasTable('Pesanan')) {
                     Artisan::call('migrate:fresh', [
                         '--force' => true,

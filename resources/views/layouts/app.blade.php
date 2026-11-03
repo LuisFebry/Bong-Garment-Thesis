@@ -344,16 +344,23 @@
         });
       };
 
-      // Real-time global search across tables
+      // Real-time global search across tables and card items (Penerimaan, etc.)
       const searchInput = document.getElementById('global-search');
       if (searchInput) {
         searchInput.addEventListener('input', function () {
           const query = this.value.toLowerCase().trim();
+          // Filter table rows
           const rows = document.querySelectorAll('main table tbody tr');
           rows.forEach(function (row) {
             if (row.querySelector('td[colspan]')) return;
             const text = row.textContent.toLowerCase();
             row.style.display = (!query || text.includes(query)) ? '' : 'none';
+          });
+          // Filter searchable cards (such as in Penerimaan Bahan)
+          const cards = document.querySelectorAll('main .searchable-card');
+          cards.forEach(function (card) {
+            const text = card.textContent.toLowerCase();
+            card.style.display = (!query || text.includes(query)) ? '' : 'none';
           });
         });
       }

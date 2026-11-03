@@ -82,7 +82,7 @@
     <h3 class="font-bold text-slate-900 text-sm mb-4">Daftar Penerimaan Kain & Roll Bahan Fisik</h3>
     <div class="space-y-4">
       @forelse($penerimaan ?? [] as $pn)
-      <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
+      <div class="searchable-card p-4 bg-slate-50 rounded-xl border border-slate-200 transition-all">
         <div class="flex items-center justify-between">
           <div>
             <span class="font-mono font-bold text-sm text-indigo-600">{{ $pn->no_nota }}</span>

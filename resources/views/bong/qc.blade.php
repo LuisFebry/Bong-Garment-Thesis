@@ -139,6 +139,26 @@
 
 @push('scripts')
 <script>
+  // Real-time auto-calculation: Jumlah Lolos = Math.max(0, Diperiksa - Cacat)
+  const qcForm = document.getElementById('form-qc');
+  if (qcForm) {
+    const inDiperiksa = qcForm.querySelector('input[name="jumlah_diperiksa"]');
+    const inLolos = qcForm.querySelector('input[name="jumlah_lolos"]');
+    const inCacat = qcForm.querySelector('input[name="jumlah_cacat"]');
+
+    function autoCalc() {
+      const d = parseInt(inDiperiksa.value) || 0;
+      const c = parseInt(inCacat.value) || 0;
+      if (d >= c) {
+        inLolos.value = d - c;
+      }
+    }
+    if (inDiperiksa && inCacat && inLolos) {
+      inDiperiksa.addEventListener('input', autoCalc);
+      inCacat.addEventListener('input', autoCalc);
+    }
+  }
+
   document.getElementById('form-qc')?.addEventListener('submit', function (e) {
     e.preventDefault();
     const form = e.target;
@@ -156,6 +176,12 @@
       tgl_target_perbaikan: formData.get('tgl_target_perbaikan') || null,
       catatan_qc: formData.get('catatan_qc') || null
     };
+
+    // Mathematical QC validation: lolos + cacat must equal diperiksa
+    if ((payload.jumlah_lolos + payload.jumlah_cacat) !== payload.jumlah_diperiksa) {
+      alert("Validasi Mutu Gagal: Jumlah Lolos (" + payload.jumlah_lolos + ") + Jumlah Cacat (" + payload.jumlah_cacat + ") harus sama dengan Jumlah Diperiksa (" + payload.jumlah_diperiksa + ")!");
+      return;
+    }
 
     const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 

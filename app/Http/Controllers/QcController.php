@@ -47,6 +47,17 @@ class QcController extends Controller
             'nama_warna' => 'nullable|string|max:50',
         ]);
 
+                $diperiksa = (int) $validated['jumlah_diperiksa'];
+        $lolos = (int) $validated['jumlah_lolos'];
+        $cacat = (int) $validated['jumlah_cacat'];
+
+        if (($lolos + $cacat) !== $diperiksa) {
+            return response()->json([
+                'success' => false,
+                'message' => "Validasi Mutu Gagal: Jumlah Lolos ($lolos) + Jumlah Cacat ($cacat) harus sama dengan Jumlah Diperiksa ($diperiksa).",
+            ], 422);
+        }
+
         return DB::transaction(function () use ($validated, $request) {
             $qc = Qc::create([
                 'id_pesanan' => $validated['id_pesanan'],

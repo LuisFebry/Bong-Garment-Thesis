@@ -87,7 +87,7 @@ class PemotonganSeriController extends Controller
             'potong_warna' => 'required|array|min:1',
             'potong_warna.*.id_detail_warna' => 'required|integer|exists:Detail_Bahan_Warna,id_detail_warna',
             'potong_warna.*.total_lembar_direncanakan' => 'required|integer|min:1',
-            'potong_warna.*.kain_terpakai' => 'required|numeric|min:0.01',
+            'potong_warna.*.kain_terpakai' => 'required|numeric|min:0.01|max:99999999.99',
             'potong_warna.*.gelaran' => 'required|array|min:1',
             'potong_warna.*.gelaran.*.id_roll' => 'required|integer|exists:Detail_Roll_Bahan,id_roll',
             'potong_warna.*.gelaran.*.panjang_gelar' => 'required|numeric|min:0.1',
