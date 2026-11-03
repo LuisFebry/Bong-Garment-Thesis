@@ -86,5 +86,48 @@
     </div>
   </div>
 </div>
+
+@push('scripts')
+<script>
+  document.getElementById('form-pemotongan')?.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+
+    const payload = {
+      id_pesanan: Number(formData.get('id_pesanan')),
+      kode_seri: formData.get('kode_seri'),
+      jenis_variasi: formData.get('jenis_variasi') || null,
+      total_lembar_hasil: Number(formData.get('total_lembar_hasil')),
+      id_user_pemotong: 1
+    };
+
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+    fetch("{{ route('pemotongan.store') }}", {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': token
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (data.success) {
+        alert(data.message || 'Pemotongan seri berhasil disimpan!');
+        window.location.reload();
+      } else {
+        alert('Gagal menyimpan pemotongan: ' + (data.message || 'Validasi gagal'));
+      }
+    })
+    .catch(function (err) {
+      console.error(err);
+      alert('Terjadi kesalahan koneksi.');
+    });
+  });
+</script>
+@endpush
 @endsection
 

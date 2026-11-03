@@ -9,6 +9,7 @@ use App\Models\DetailPemotonganWarna;
 use App\Models\DetailGelaranKain;
 use App\Models\DetailRollBahan;
 use App\Models\Pesanan;
+use App\Models\User;
 
 class PemotonganSeriController extends Controller
 {
@@ -30,6 +31,50 @@ class PemotonganSeriController extends Controller
 
     public function store(Request $request)
     {
+        // 1. Flat-Form Fallback for standard HTML form submissions
+        if (!$request->has('potong_warna') && $request->filled('id_pesanan')) {
+            $order = Pesanan::find($request->input('id_pesanan'));
+            $roll = null;
+
+            if ($order && $order->id_penerimaan) {
+                $roll = DetailRollBahan::whereHas('detailBahanWarna', function ($q) use ($order) {
+                    $q->where('id_penerimaan', $order->id_penerimaan);
+                })->where('status_roll', '!=', 'Habis')->first();
+            }
+
+            if (!$roll) {
+                $roll = DetailRollBahan::where('status_roll', '!=', 'Habis')->first();
+            }
+
+            $totalHasil = (int) $request->input('total_lembar_hasil', 100);
+            $userId = $request->input('id_user_pemotong')
+                ?? User::where('role', 'Pemotong')->value('id_user')
+                ?? 1;
+
+            if ($roll) {
+                $potongWarna = [
+                    [
+                        'id_detail_warna' => $roll->id_detail_warna,
+                        'total_lembar_direncanakan' => $totalHasil,
+                        'kain_terpakai' => round($totalHasil * 0.15, 2),
+                        'gelaran' => [
+                            [
+                                'id_roll' => $roll->id_roll,
+                                'panjang_gelar' => 2.5,
+                                'jumlah_tumpuk' => max(1, (int) ceil($totalHasil / 2)),
+                                'total_lembar_gelar' => $totalHasil,
+                            ]
+                        ]
+                    ]
+                ];
+
+                $request->merge([
+                    'id_user_pemotong' => $userId,
+                    'potong_warna' => $potongWarna,
+                ]);
+            }
+        }
+
         $validated = $request->validate([
             'id_pesanan' => 'required|integer|exists:Pesanan,id_pesanan',
             'id_user_pemotong' => 'required|integer|exists:User,id_user',
@@ -47,7 +92,7 @@ class PemotonganSeriController extends Controller
             'potong_warna.*.gelaran.*.total_lembar_gelar' => 'required|integer|min:1',
         ]);
 
-        return DB::transaction(function () use ($validated) {
+        return DB::transaction(function () use ($validated, $request) {
             $potong = PemotonganSeri::create([
                 'id_pesanan' => $validated['id_pesanan'],
                 'id_user_pemotong' => $validated['id_user_pemotong'],
@@ -65,9 +110,6 @@ class PemotonganSeriController extends Controller
                     'kain_terpakai' => $pw['kain_terpakai'],
                 ]);
 
-                // Fabric roll deduction with row locking
-                $remainingFabricToDeduct = (float)$pw['kain_terpakai'];
-
                 foreach ($pw['gelaran'] as $g) {
                     DetailGelaranKain::create([
                         'id_potong_warna' => $detailPw->id_potong_warna,
@@ -77,13 +119,15 @@ class PemotonganSeriController extends Controller
                         'total_lembar_gelar' => $g['total_lembar_gelar'],
                     ]);
 
-                    // Lock and deduct roll stock
+                    // Roll deduction specifically per roll based on (panjang_gelar * jumlah_tumpuk * 0.15)
                     $roll = DetailRollBahan::where('id_roll', $g['id_roll'])->lockForUpdate()->first();
                     if ($roll) {
-                        $deduction = min((float)$roll->ukuran_sisa, $remainingFabricToDeduct);
-                        $newSisa = max(0.0, (float)$roll->ukuran_sisa - $deduction);
-                        $remainingFabricToDeduct = max(0.0, $remainingFabricToDeduct - $deduction);
+                        $rollDeduction = round((float)$g['panjang_gelar'] * (int)$g['jumlah_tumpuk'] * 0.15, 2);
+                        if ($rollDeduction <= 0) {
+                            $rollDeduction = min((float)$roll->ukuran_sisa, (float)$pw['kain_terpakai']);
+                        }
 
+                        $newSisa = max(0.0, (float)$roll->ukuran_sisa - $rollDeduction);
                         $roll->ukuran_sisa = $newSisa;
                         $roll->status_roll = ($newSisa <= 0.05) ? 'Habis' : 'Dipotong';
                         $roll->save();
@@ -91,9 +135,9 @@ class PemotonganSeriController extends Controller
                 }
             }
 
-            // Update order status to Pemotongan or Jahit
+            // Update order status to Pemotongan
             $order = Pesanan::find($validated['id_pesanan']);
-            if ($order && $order->status_pesanan === 'Antrean') {
+            if ($order && in_array(strtolower($order->status_pesanan), ['antrean', 'pending'])) {
                 $order->update(['status_pesanan' => 'Pemotongan']);
             }
 
@@ -103,11 +147,15 @@ class PemotonganSeriController extends Controller
                 'detailPemotonganWarna.detailGelaranKain.detailRollBahan',
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => "Pemotongan seri {$potong->kode_seri} berhasil diproses. Stok roll bahan otomatis dipotong.",
-                'data' => $potong,
-            ], 201);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => "Pemotongan seri {$potong->kode_seri} berhasil diproses. Stok roll bahan otomatis dipotong.",
+                    'data' => $potong,
+                ], 201);
+            }
+
+            return redirect()->route('pemotongan.index')->with('success', "Pemotongan seri {$potong->kode_seri} berhasil diproses.");
         });
     }
 }

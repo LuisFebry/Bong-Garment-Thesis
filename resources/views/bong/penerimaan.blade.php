@@ -49,6 +49,31 @@
         <label class="block text-xs font-semibold text-slate-700 mb-1">Nomor Kendaraan</label>
         <input type="text" name="no_kendaraan" placeholder="B 1234 XYZ" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
       </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Varian Warna Kain</label>
+        <input type="text" name="nama_warna" placeholder="Contoh: Hitam Reaktif" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Satuan Ukur</label>
+        <select name="satuan_ukur" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <option value="Kg">Kg (Kilogram)</option>
+          <option value="Yard">Yard</option>
+          <option value="Meter">Meter</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Ukuran / Berat Roll Awal</label>
+        <input type="number" step="0.01" name="ukuran_awal" placeholder="Contoh: 25.5" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+      </div>
+
+      <div class="col-span-full flex justify-end gap-2 pt-2">
+        <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-sm transition-colors">
+          Simpan Penerimaan & Registrasi Roll
+        </button>
+      </div>
     </form>
   </div>
 
@@ -100,5 +125,61 @@
     </div>
   </div>
 </div>
+
+@push('scripts')
+<script>
+  document.getElementById('form-penerimaan')?.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+
+    const payload = {
+      id_supplier: Number(formData.get('id_supplier')),
+      no_nota: formData.get('no_nota'),
+      tgl_nota: formData.get('tgl_nota'),
+      nama_kain: formData.get('nama_kain'),
+      lebar_gramasi: formData.get('lebar_gramasi') || null,
+      no_kendaraan: formData.get('no_kendaraan') || null,
+      warna: [
+        {
+          nama_warna: formData.get('nama_warna'),
+          kode_warna: null,
+          satuan_ukur: formData.get('satuan_ukur') || 'Kg',
+          rolls: [
+            {
+              ukuran_awal: parseFloat(formData.get('ukuran_awal')) || 25.0
+            }
+          ]
+        }
+      ]
+    };
+
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+    fetch("{{ route('penerimaan.store') }}", {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': token
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (data.success) {
+        alert(data.message || 'Penerimaan bahan berhasil disimpan!');
+        window.location.reload();
+      } else {
+        alert('Gagal menyimpan penerimaan: ' + (data.message || 'Validasi gagal'));
+      }
+    })
+    .catch(function (err) {
+      console.error(err);
+      alert('Terjadi kesalahan koneksi.');
+    });
+  });
+</script>
+@endpush
 @endsection
 

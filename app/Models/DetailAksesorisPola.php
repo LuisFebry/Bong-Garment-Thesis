@@ -2,15 +2,14 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class DetailAksesorisPola extends Model
+class DetailAksesorisPola extends Pivot
 {
     protected $table = 'Detail_Aksesoris_Pola';
     public $timestamps = false;
     public $incrementing = false;
-    protected $primaryKey = ['id_pola', 'id_aksesoris'];
 
     protected $fillable = [
         'id_pola',
@@ -28,4 +27,3 @@ class DetailAksesorisPola extends Model
         return $this->belongsTo(Aksesoris::class, 'id_aksesoris', 'id_aksesoris');
     }
 }
-

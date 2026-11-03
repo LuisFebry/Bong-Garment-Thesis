@@ -17,7 +17,7 @@ class AksesorisController extends Controller
             return response()->json(['success' => true, 'data' => $aksesoris]);
         }
 
-        return view('bong.aksesoris', compact('aksesoris', 'suppliers'));
+        return view('bong.gudang', compact('aksesoris', 'suppliers'));
     }
 
     public function store(Request $request)

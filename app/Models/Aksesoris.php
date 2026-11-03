@@ -34,6 +34,7 @@ class Aksesoris extends Model
     public function pola(): BelongsToMany
     {
         return $this->belongsToMany(Pola::class, 'Detail_Aksesoris_Pola', 'id_aksesoris', 'id_pola')
+                    ->using(DetailAksesorisPola::class)
                     ->withPivot('jumlah_digunakan');
     }
 }

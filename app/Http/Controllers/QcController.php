@@ -26,6 +26,10 @@ class QcController extends Controller
 
     public function store(Request $request)
     {
+        if (!$request->filled('id_user_qc')) {
+            $request->merge(['id_user_qc' => 1]);
+        }
+
         $validated = $request->validate([
             'id_pesanan' => 'required|integer|exists:Pesanan,id_pesanan',
             'id_user_qc' => 'required|integer|exists:User,id_user',
@@ -61,8 +65,8 @@ class QcController extends Controller
 
             // Perpetual Inventory Integration:
             // When Jahit Akhir has passed units (jumlah_lolos > 0), increment finished goods inventory
+            $order = Pesanan::find($validated['id_pesanan']);
             if ($validated['tahap_qc'] === 'Jahit Akhir' && $validated['jumlah_lolos'] > 0) {
-                $order = Pesanan::find($validated['id_pesanan']);
                 if ($order) {
                     $idPola = $order->id_pola;
                     $idSpec = $validated['id_spesifikasi'] ?? SpesifikasiUkuran::where('id_pola', $idPola)->value('id_spesifikasi');
@@ -82,13 +86,26 @@ class QcController extends Controller
                 }
             }
 
+            // Order Lifecycle State Transitions
+            if ($order) {
+                if ($validated['status_qc'] === 'Need Rework') {
+                    $order->update(['status_pesanan' => 'Dalam QC']);
+                } elseif ($validated['tahap_qc'] === 'Jahit Akhir' && $validated['status_qc'] === 'Lolos QC') {
+                    $order->update(['status_pesanan' => 'Selesai']);
+                }
+            }
+
             $qc->load(['pesanan.pola', 'userQc']);
 
-            return response()->json([
-                'success' => true,
-                'message' => "Inspeksi QC ({$qc->tahap_qc}) berhasil dicatat. Status: {$qc->status_qc}.",
-                'data' => $qc,
-            ], 201);
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => "Inspeksi QC ({$qc->tahap_qc}) berhasil dicatat. Status: {$qc->status_qc}.",
+                    'data' => $qc,
+                ], 201);
+            }
+
+            return redirect()->route('qc.index')->with('success', "Inspeksi QC ({$qc->tahap_qc}) berhasil dicatat. Status: {$qc->status_qc}.");
         });
     }
 

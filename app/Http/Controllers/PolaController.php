@@ -22,7 +22,7 @@ class PolaController extends Controller
             return response()->json(['success' => true, 'data' => $pola]);
         }
 
-        return view('bong.pola', compact('pola', 'kategori', 'aksesoris'));
+        return redirect()->route('pesanan.index');
     }
 
     public function store(Request $request)

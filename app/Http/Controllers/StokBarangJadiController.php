@@ -21,7 +21,7 @@ class StokBarangJadiController extends Controller
             return response()->json(['success' => true, 'data' => $stok]);
         }
 
-        return view('bong.stok', compact('stok', 'pola'));
+        return view('bong.gudang', compact('stok', 'pola'));
     }
 
     public function adjustStock(Request $request)

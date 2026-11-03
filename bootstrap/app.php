@@ -16,13 +16,13 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
         $middleware->validateCsrfTokens(except: [
             'api/*',
-            'pesanan/*',
-            'pola/*',
-            'penerimaan/*',
-            'pemotongan/*',
-            'qc/*',
-            'stok/*',
-            'aksesoris/*',
+            'pesanan*',
+            'pola*',
+            'penerimaan*',
+            'pemotongan*',
+            'qc*',
+            'stok*',
+            'aksesoris*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

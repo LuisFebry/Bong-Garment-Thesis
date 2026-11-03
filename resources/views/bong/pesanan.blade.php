@@ -123,5 +123,51 @@
     </div>
   </div>
 </div>
+
+@push('scripts')
+<script>
+  document.getElementById('form-pesanan')?.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+
+    const payload = {
+      id_sumber: Number(formData.get('id_sumber')),
+      nama_mitra: formData.get('nama_mitra') || null,
+      id_pola: Number(formData.get('id_pola')),
+      jenis_pesanan: formData.get('jenis_pesanan'),
+      id_penerimaan: formData.get('id_penerimaan') ? Number(formData.get('id_penerimaan')) : null,
+      id_user_admin: 1,
+      tgl_order: new Date().toISOString().split('T')[0],
+      deadline_awal: formData.get('deadline_awal') || null
+    };
+
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+    fetch("{{ route('pesanan.store') }}", {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': token
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (data.success) {
+        alert(data.message || 'Pesanan berhasil diinisiasi!');
+        window.location.reload();
+      } else {
+        alert('Gagal menginisiasi pesanan: ' + (data.message || 'Validasi gagal'));
+      }
+    })
+    .catch(function (err) {
+      console.error(err);
+      alert('Terjadi kesalahan koneksi.');
+    });
+  });
+</script>
+@endpush
 @endsection
 

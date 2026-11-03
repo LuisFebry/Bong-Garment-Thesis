@@ -25,6 +25,24 @@ class PenerimaanBahanController extends Controller
 
     public function store(Request $request)
     {
+        // Flat-Form Fallback for direct form submissions
+        if (!$request->has('warna') && $request->filled('nama_warna')) {
+            $satuan = $request->input('satuan_ukur', 'Kg');
+            $ukuranAwal = (float) $request->input('ukuran_awal', 25.0);
+            $request->merge([
+                'warna' => [
+                    [
+                        'nama_warna' => $request->input('nama_warna'),
+                        'kode_warna' => null,
+                        'satuan_ukur' => $satuan,
+                        'rolls' => [
+                            ['ukuran_awal' => $ukuranAwal]
+                        ]
+                    ]
+                ]
+            ]);
+        }
+
         $validated = $request->validate([
             'id_supplier' => 'required|integer|exists:Supplier,id_supplier',
             'no_nota' => 'required|string|max:50',

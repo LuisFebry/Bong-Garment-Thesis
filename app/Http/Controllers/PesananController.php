@@ -30,6 +30,13 @@ class PesananController extends Controller
 
     public function store(Request $request)
     {
+        if (!$request->filled('id_user_admin')) {
+            $request->merge(['id_user_admin' => 1]);
+        }
+        if (!$request->filled('tgl_order')) {
+            $request->merge(['tgl_order' => now()->toDateString()]);
+        }
+
         $validated = $request->validate([
             'id_pola' => 'required|integer|exists:Pola,id_pola',
             'id_sumber' => 'required|integer|exists:Sumber_Inisiasi,id_sumber',

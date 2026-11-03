@@ -163,6 +163,116 @@
     lucide.createIcons();
   </script>
   <script src="{{ asset('js/app.js') }}"></script>
+
+  <!-- Global Bridging JavaScript -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      // 1. Role synchronization & RBAC navigation filtering
+      const roleSelect = document.getElementById('role-select');
+      const auditBadge = document.getElementById('audit-mode-badge');
+      const navItems = document.querySelectorAll('.nav-item[data-roles]');
+
+      function applyRole(role) {
+        localStorage.setItem('bong_garment_role', role);
+        if (roleSelect && roleSelect.value !== role) {
+          roleSelect.value = role;
+        }
+
+        // Toggle audit mode badge for Pemilik (Owner)
+        if (auditBadge) {
+          auditBadge.classList.toggle('hidden', role !== 'Pemilik');
+        }
+
+        // Filter navigation items based on data-roles
+        navItems.forEach(function (item) {
+          const roles = (item.dataset.roles || '').split(',').map(function (r) { return r.trim(); });
+          if (roles.includes('Admin') && role === 'Admin') {
+            item.style.display = '';
+          } else if (roles.includes(role)) {
+            item.style.display = '';
+          } else {
+            item.style.display = 'none';
+          }
+        });
+      }
+
+      const savedRole = localStorage.getItem('bong_garment_role') || 'Admin';
+      applyRole(savedRole);
+
+      if (roleSelect) {
+        roleSelect.addEventListener('change', function () {
+          applyRole(this.value);
+        });
+      }
+
+      // CSRF token helper
+      const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+      const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+      // 2. Define window.openReviseDeadlineModal
+      window.openReviseDeadlineModal = function (id, dlAwal, dlTerbaru) {
+        const currentTarget = dlTerbaru || dlAwal || new Date().toISOString().split('T')[0];
+        const newDeadline = prompt('Masukkan Deadline Terbaru (YYYY-MM-DD):', currentTarget);
+        if (!newDeadline) return;
+
+        const reason = prompt('Alasan Revisi Deadline (Contoh: Permintaan percepatan mitra / antrean meja potong):', 'Penyesuaian Antrean Pemotongan');
+        if (!reason) return;
+
+        fetch('/pesanan/' + id + '/revise-deadline', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': csrfToken
+          },
+          body: JSON.stringify({
+            deadline_terbaru: newDeadline,
+            alasan_perubahan_deadline: reason
+          })
+        })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (data.success) {
+            alert(data.message || 'Deadline berhasil direvisi!');
+            window.location.reload();
+          } else {
+            alert('Gagal merevisi deadline: ' + (data.message || 'Terjadi kesalahan'));
+          }
+        })
+        .catch(function (err) {
+          console.error(err);
+          alert('Terjadi kesalahan saat memproses permintaan.');
+        });
+      };
+
+      // 3. Define window.completeRework
+      window.completeRework = function (id) {
+        if (!confirm('Tandai inspeksi QC #' + id + ' sebagai Rework Selesai?')) return;
+
+        fetch('/qc/' + id + '/complete-rework', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': csrfToken
+          }
+        })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (data.success) {
+            alert(data.message || 'Rework berhasil diselesaikan!');
+            window.location.reload();
+          } else {
+            alert('Gagal menyelesaikan rework: ' + (data.message || 'Terjadi kesalahan'));
+          }
+        })
+        .catch(function (err) {
+          console.error(err);
+          alert('Terjadi kesalahan saat memproses permintaan.');
+        });
+      };
+    });
+  </script>
   @stack('scripts')
 </body>
 </html>

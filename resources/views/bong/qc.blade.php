@@ -136,5 +136,53 @@
     </div>
   </div>
 </div>
+
+@push('scripts')
+<script>
+  document.getElementById('form-qc')?.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+
+    const payload = {
+      id_pesanan: Number(formData.get('id_pesanan')),
+      id_user_qc: 1,
+      tahap_qc: formData.get('tahap_qc'),
+      jumlah_diperiksa: Number(formData.get('jumlah_diperiksa')),
+      jumlah_lolos: Number(formData.get('jumlah_lolos')),
+      jumlah_cacat: Number(formData.get('jumlah_cacat') || 0),
+      jenis_cacat: formData.get('jenis_cacat'),
+      status_qc: formData.get('status_qc'),
+      tgl_target_perbaikan: formData.get('tgl_target_perbaikan') || null,
+      catatan_qc: formData.get('catatan_qc') || null
+    };
+
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+    fetch("{{ route('qc.store') }}", {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': token
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (data.success) {
+        alert(data.message || 'Inspeksi QC berhasil disimpan!');
+        window.location.reload();
+      } else {
+        alert('Gagal menyimpan QC: ' + (data.message || 'Validasi gagal'));
+      }
+    })
+    .catch(function (err) {
+      console.error(err);
+      alert('Terjadi kesalahan koneksi.');
+    });
+  });
+</script>
+@endpush
 @endsection
 
