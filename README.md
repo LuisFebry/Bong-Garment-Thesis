@@ -1,4 +1,4 @@
-# Bong-Garment-Thesis
+﻿# Bong-Garment-Thesis
 
 **WEB-BASED CUT, MAKE, TRIM (CMT) PRODUCTION & INVENTORY MANAGEMENT SYSTEM (BONG GARMENT)**  
 *Undergraduate Thesis — Department of Information Systems, Faculty of Information Technology, Universitas Tarumanagara (UNTAR 2026)*  
@@ -8,7 +8,7 @@
 
 ---
 
-## 📌 1. Executive Summary & Problem Context
+## 1. Executive Summary & Problem Context
 
 **Bong Garment** is an established garment manufacturing business in Indonesia operating under the **Cut, Make, Trim (CMT)** production paradigm. The enterprise handles customized orders from retail brand partners (*Request Mitra*), in-house evergreen staple lines (*Produk Abadi*), and trend-driven production batches (*Tren Pasar*).
 
@@ -21,7 +21,7 @@ This production management system resolves critical operational inefficiencies:
 
 ---
 
-## 🏗️ 2. Dual-Execution Architecture
+## 2. Dual-Execution Architecture
 
 The system delivers a dual-execution runtime model, offering both enterprise containerized backend capabilities and instant zero-build browser testing:
 
@@ -70,7 +70,7 @@ The system delivers a dual-execution runtime model, offering both enterprise con
 
 ---
 
-## 🗄️ 3. Complete 17-Table Relational Data Dictionary (MySQL 8.0+ InnoDB)
+## 3. Complete 17-Table Relational Data Dictionary (MySQL 8.0+ InnoDB)
 
 The authoritative database schema is defined in `database/sql/bong_garment_17_tables.sql` and mirrored in Laravel Migrations (`database/migrations/2026_11_02_000001_create_bong_garment_17_tables.php`) and `app.js`:
 
@@ -96,7 +96,7 @@ The authoritative database schema is defined in `database/sql/bong_garment_17_ta
 
 ---
 
-## 👥 4. Role-Based Access Control (RBAC) & Audit Mode
+## 4. Role-Based Access Control (RBAC) & Audit Mode
 
 The system enforces strict permission boundaries across 5 user roles:
 
@@ -110,7 +110,7 @@ The system enforces strict permission boundaries across 5 user roles:
 
 ---
 
-## 🖥️ 5. Operational Functional Screens
+## 5. Operational Functional Screens
 
 1. **Screen 1: Operational Dashboard (`#screen-dashboard`):** Real-time command center displaying 4 core executive KPIs (Active Orders, Available Rolls, QC Rework Queue, Daily Cutting Output), Earliest Deadline First (EDF) scheduler, and production trend charts.
 2. **Screen 2: Order & Pattern Management (`#screen-pesanan`):** Supports three initiation channels (Mitra Contract, Perpetual Product, Market Initiative) with full input forms for the 11-metric anatomical clothing dimensions.
@@ -122,7 +122,7 @@ The system enforces strict permission boundaries across 5 user roles:
 
 ---
 
-## 🚀 6. Execution & Deployment Guide
+## 6. Execution & Deployment Guide
 
 ### Option A: Standalone Browser Mode (Zero-Build Instant Evaluation)
 1. Open `index.html` directly in any modern web browser (Google Chrome, Microsoft Edge, Mozilla Firefox, Safari).
@@ -152,7 +152,7 @@ The system enforces strict permission boundaries across 5 user roles:
 
 ---
 
-## 📜 7. License & Academic Attribution
+## 7. License & Academic Attribution
 
 This prototype and codebase are developed as part of an undergraduate thesis project:
 * **Author:** Luis Febry (Student ID / NIM: 825220088)

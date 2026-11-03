@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers;
 
@@ -16,12 +16,14 @@ class StokBarangJadiController extends Controller
             ->get();
 
         $pola = Pola::with('spesifikasiUkuran')->get();
+        $aksesoris = \App\Models\Aksesoris::with('supplier')->get();
+        $suppliers = \App\Models\Supplier::all();
 
         if ($request->wantsJson()) {
-            return response()->json(['success' => true, 'data' => $stok]);
+            return response()->json(['success' => true, 'data' => compact('stok', 'aksesoris')]);
         }
 
-        return view('bong.gudang', compact('stok', 'pola'));
+        return view('bong.gudang', compact('stok', 'pola', 'aksesoris', 'suppliers'));
     }
 
     public function adjustStock(Request $request)
@@ -60,4 +62,3 @@ class StokBarangJadiController extends Controller
         ]);
     }
 }
-

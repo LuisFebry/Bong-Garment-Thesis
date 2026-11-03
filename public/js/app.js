@@ -1,4 +1,4 @@
-/* ============================================================================
+﻿/* ============================================================================
  * BONG GARMENT — CMT (Cut, Make, Trim) Production & Inventory Management System
  * Undergraduate Thesis · Luis Febry (NIM 825220088) · Information Systems UNTAR
  * ----------------------------------------------------------------------------
@@ -3819,18 +3819,18 @@
     'confirm-yes': () => { const fn = state.confirmFn; closeModal(); if (fn) fn(); },
     'reset-db': () => confirmDialog({
       title: 'Reset & seed ulang database?', danger: true, icon: 'rotate-ccw', confirmText: 'Ya, Reset Data',
-      message: `Seluruh data pada 14 tabel di <code class="font-mono">${DB_KEY}</code> akan dikembalikan ke kondisi demo awal. Tindakan ini tidak dapat dibatalkan.`,
+      message: `Seluruh data pada 17 tabel di <code class="font-mono">${DB_KEY}</code> akan dikembalikan ke kondisi demo awal. Tindakan ini tidak dapat dibatalkan.`,
       onConfirm: () => {
         state.selectedEdf = null; state.notifSeen = 0;
         state.pesanan.flashOrderId = null;
         state.penerimaan.flashRollId = null;
         BongDB.reset();
-        showToast(`Database dipulihkan · ${fmtNum(BongDB.totalRecords())} record di 14 tabel.`, { title: 'Reset berhasil' });
+        showToast(`Database dipulihkan · ${fmtNum(BongDB.totalRecords())} record di 17 tabel.`, { title: 'Reset berhasil' });
       },
     }),
     'export-json': () => {
       downloadFile(`bong_garment_db_backup_${APP_TODAY}.json`, BongDB.exportJSON(), 'application/json');
-      showToast('Backup seluruh 14 tabel berhasil diunduh.', { title: 'Backup JSON' });
+      showToast('Backup seluruh 17 tabel berhasil diunduh.', { title: 'Backup JSON' });
     },
     'export-shift-log': () => exportShiftLog(),
     'export-excel': () => exportExcel(),

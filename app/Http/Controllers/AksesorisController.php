@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers;
 
@@ -12,12 +12,14 @@ class AksesorisController extends Controller
     {
         $aksesoris = Aksesoris::with('supplier')->get();
         $suppliers = Supplier::all();
+        $stok = \App\Models\StokBarangJadi::with(['pola', 'spesifikasiUkuran'])->get();
+        $pola = \App\Models\Pola::with('spesifikasiUkuran')->get();
 
         if ($request->wantsJson()) {
-            return response()->json(['success' => true, 'data' => $aksesoris]);
+            return response()->json(['success' => true, 'data' => compact('aksesoris', 'stok')]);
         }
 
-        return view('bong.gudang', compact('aksesoris', 'suppliers'));
+        return view('bong.gudang', compact('aksesoris', 'suppliers', 'stok', 'pola'));
     }
 
     public function store(Request $request)
@@ -64,4 +66,3 @@ class AksesorisController extends Controller
         ]);
     }
 }
-
