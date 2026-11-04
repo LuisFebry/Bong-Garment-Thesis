@@ -145,9 +145,9 @@ return new class extends Migration
             $table->string('jenis_pesanan', 50);
             $table->string('nama_mitra', 100)->nullable();
             $table->date('tgl_order');
-            $table->date('deadline_awal')->nullable()->comment('Target asli awal');
-            $table->date('deadline_terbaru')->nullable()->comment('Target revisi terbaru untuk EDF');
-            $table->dateTime('tgl_perubahan_deadline')->nullable()->comment('Kapan deadline terakhir diubah');
+            $table->date('deadline_awal')->comment('Target batas waktu wajib untuk algoritma EDF');
+            $table->date('deadline_terbaru')->comment('Target revisi terbaru untuk prioritas antrean EDF');
+            $table->dateTime('tgl_perubahan_deadline')->nullable()->comment('Timestamp saat deadline diperbarui');
             $table->string('alasan_perubahan_deadline', 255)->nullable();
             $table->string('status_pesanan', 50)->default('Antrean');
 

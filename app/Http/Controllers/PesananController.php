@@ -45,7 +45,7 @@ class PesananController extends Controller
             'jenis_pesanan' => 'required|string|max:50',
             'nama_mitra' => 'nullable|string|max:100',
             'tgl_order' => 'required|date',
-            'deadline_awal' => 'nullable|date',
+            'deadline_awal' => 'required|date',
         ]);
 
         // If source is not Mitra (id_sumber != 1), nama_mitra is strictly null
@@ -53,8 +53,8 @@ class PesananController extends Controller
             $validated['nama_mitra'] = null;
         }
 
-        // Initialize deadline_terbaru equal to deadline_awal
-        $validated['deadline_terbaru'] = $validated['deadline_awal'] ?? null;
+        // Initialize deadline_terbaru equal to deadline_awal (EDF algorithm invariant)
+        $validated['deadline_terbaru'] = $validated['deadline_awal'];
         $validated['status_pesanan'] = 'Antrean';
 
         $order = Pesanan::create($validated);
@@ -65,6 +65,47 @@ class PesananController extends Controller
             'message' => "Pesanan #{$order->id_pesanan} berhasil diinisiasi.",
             'data' => $order,
         ], 201);
+    }
+
+    /**
+     * Update order details (including assigning or switching Nota Bahan / Penerimaan)
+     */
+    public function update(Request $request, $id)
+    {
+        $order = Pesanan::findOrFail($id);
+
+        $validated = $request->validate([
+            'id_pola' => 'required|integer|exists:Pola,id_pola',
+            'id_sumber' => 'required|integer|exists:Sumber_Inisiasi,id_sumber',
+            'id_penerimaan' => 'nullable|integer|exists:Penerimaan_Bahan,id_penerimaan',
+            'jenis_pesanan' => 'required|string|max:50',
+            'nama_mitra' => 'nullable|string|max:100',
+            'deadline_awal' => 'required|date',
+            'deadline_terbaru' => 'nullable|date',
+            'status_pesanan' => 'required|string|max:50',
+            'alasan_perubahan_deadline' => 'nullable|string|max:255',
+        ]);
+
+        if ((int)$validated['id_sumber'] !== 1) {
+            $validated['nama_mitra'] = null;
+        }
+
+        if (empty($validated['deadline_terbaru'])) {
+            $validated['deadline_terbaru'] = $order->deadline_terbaru ?? $validated['deadline_awal'];
+        }
+
+        if ($order->deadline_terbaru != $validated['deadline_terbaru']) {
+            $validated['tgl_perubahan_deadline'] = now();
+        }
+
+        $order->update($validated);
+        $order->load(['pola', 'sumberInisiasi', 'penerimaanBahan']);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Pesanan #{$order->id_pesanan} berhasil diperbarui.",
+            'data' => $order,
+        ]);
     }
 
     /**

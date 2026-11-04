@@ -34,6 +34,8 @@ Route::prefix('pola')->middleware(RoleMiddleware::class . ':Admin')->group(funct
 Route::prefix('pesanan')->middleware(RoleMiddleware::class . ':Admin')->group(function () {
     Route::get('/', [PesananController::class, 'index'])->name('pesanan.index');
     Route::post('/', [PesananController::class, 'store'])->name('pesanan.store');
+    Route::post('/{id}/update', [PesananController::class, 'update'])->name('pesanan.update');
+    Route::put('/{id}', [PesananController::class, 'update'])->name('pesanan.update_put');
     Route::post('/{id}/revise-deadline', [PesananController::class, 'reviseDeadline'])->name('pesanan.revise_deadline');
     Route::post('/{id}/status', [PesananController::class, 'updateStatus'])->name('pesanan.status');
 });
