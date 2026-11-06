@@ -374,19 +374,16 @@ web: vendor/bin/heroku-php-apache2 public/
 release: php artisan migrate --force
 ```
 
-#### Dynamic Port Architecture & Config Vars Configuration
-- **Heroku Dyno Bind Port (`$PORT`):** Heroku dyno containers are assigned a dynamic, unprivileged TCP port at container boot time via the `$PORT` environment variable. The `heroku-php-apache2` startup script automatically binds Apache 2.4 to listen on this assigned container port.
-- **Client Web & SSL Endpoints (Ports 80 & 443):** Public web traffic connects via standard internet ports **80 (HTTP)** and **443 (HTTPS)**. Heroku's edge routing layer terminates TLS/SSL certificates and forwards requests to the dyno container with the `x-forwarded-proto: https` request header.
-- **JawsDB MySQL Cloud Integration (Port 3306):** Cloud database persistence is provided by JawsDB MySQL. When provisioned, Heroku injects `JAWSDB_URL` (`mysql://username:password@hostname:3306/dbname`), which Laravel parses automatically in `config/database.php` into MySQL connection credentials pointing to canonical remote port **3306**.
-- **Heroku Dashboard Config Vars:** Environment variables are managed entirely through the cloud provider console (**Heroku Dashboard &rarr; Settings &rarr; Config Vars**):
-  - `APP_ENV`: `production`
-  - `APP_DEBUG`: `false` (or `true` during thesis evaluation)
-  - `APP_KEY`: Application encryption key
-  - `APP_NAME`: `Bong Garment CMT`
-  - `DB_CONNECTION`: `mysql`
-  - `JAWSDB_URL`: Automatically provisioned by the JawsDB MySQL add-on
-  - `LOG_CHANNEL`: `errorlog`
-  - `SESSION_DRIVER`: `cookie`
+#### Required Heroku Config Vars
+Environment variables are managed in the cloud provider console (**Heroku Dashboard &rarr; Settings &rarr; Config Vars**):
+- `APP_ENV`: `production`
+- `APP_DEBUG`: `false` (or `true` during thesis evaluation)
+- `APP_KEY`: Application encryption key generated via `php artisan key:generate`
+- `APP_NAME`: `Bong Garment CMT`
+- `DB_CONNECTION`: `mysql`
+- `JAWSDB_URL`: Provisioned automatically by attaching the JawsDB MySQL add-on
+- `LOG_CHANNEL`: `errorlog`
+- `SESSION_DRIVER`: `cookie`
 
 #### Automated Release Phase & Self-Healing Database
 - Heroku's **Release Phase** executes `php artisan migrate --force` immediately following container builds, applying schema updates without downtime or data destruction.
