@@ -26,12 +26,12 @@ class RoleMiddleware
         );
 
         $validRoles = ['Admin', 'Pemilik', 'Pemotong', 'QC', 'Gudang'];
-        if (!in_array($userRole, $validRoles)) {
+        if (!in_array($userRole, $validRoles, true)) {
             $userRole = 'Admin';
         }
 
         // If specific roles are required and user is neither in allowed list nor Admin
-        if (!empty($roles) && !in_array($userRole, $roles) && $userRole !== 'Admin') {
+        if (!empty($roles) && !in_array($userRole, $roles, true) && $userRole !== 'Admin') {
             if ($request->expectsJson() || $request->is('api/*')) {
                 return response()->json([
                     'success' => false,
@@ -46,7 +46,7 @@ class RoleMiddleware
         }
 
         // Pemilik is strictly Read-Only: Reject mutating requests
-        if ($userRole === 'Pemilik' && in_array($request->method(), ['POST', 'PUT', 'PATCH', 'DELETE'])) {
+        if ($userRole === 'Pemilik' && in_array($request->method(), ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
             if ($request->expectsJson() || $request->is('api/*')) {
                 return response()->json([
                     'success' => false,

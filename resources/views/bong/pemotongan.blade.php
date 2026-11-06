@@ -45,8 +45,9 @@
         <tbody class="divide-y divide-slate-100">
           @forelse($orders ?? [] as $idx => $ord)
           @php
-            $firstWarnaId = optional(optional($ord->penerimaanBahan)->detailBahanWarna->first())->id_detail_warna;
-            $firstRollId = optional(optional(optional($ord->penerimaanBahan)->detailBahanWarna->first())->detailRollBahan->where('status_roll', '!=', 'Habis')->first())->id_roll;
+            $firstWarnaModel = $ord->penerimaanBahan?->detailBahanWarna?->first();
+            $firstWarnaId = $firstWarnaModel?->id_detail_warna;
+            $firstRollId = $firstWarnaModel?->detailRollBahan?->where('status_roll', '!=', 'Habis')->first()?->id_roll;
           @endphp
           <tr class="hover:bg-indigo-50/40 transition-colors">
             <td class="py-3">
@@ -127,7 +128,7 @@
             <option value="" disabled selected>-- Pilih Pesanan Target --</option>
             @foreach($orders ?? [] as $idx => $ord)
               @php
-                $wId = optional(optional($ord->penerimaanBahan)->detailBahanWarna->first())->id_detail_warna;
+                $wId = $ord->penerimaanBahan?->detailBahanWarna?->first()?->id_detail_warna;
               @endphp
               <option value="{{ $ord->id_pesanan }}" data-penerimaan="{{ $ord->id_penerimaan }}" data-default-warna="{{ $wId }}">
                 [Prioritas #{{ $idx + 1 }}] Pesanan #{{ $ord->id_pesanan }} — {{ $ord->pola->nama_pola ?? $ord->jenis_pesanan }} ({{ $ord->nama_mitra ?? 'Internal' }})

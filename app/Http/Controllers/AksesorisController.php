@@ -118,7 +118,7 @@ class AksesorisController extends Controller
             'jumlah_digunakan' => 'required|integer|min:1',
         ]);
 
-        $mapping = DetailAksesorisPola::updateOrCreate(
+        DB::table('Detail_Aksesoris_Pola')->updateOrInsert(
             [
                 'id_pola' => $validated['id_pola'],
                 'id_aksesoris' => $validated['id_aksesoris'],
@@ -131,7 +131,7 @@ class AksesorisController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Kebutuhan aksesoris per pola berhasil disimpan ke Detail_Aksesoris_Pola.',
-            'data' => $mapping,
+            'data' => $validated,
         ]);
     }
 

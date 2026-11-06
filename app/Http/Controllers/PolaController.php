@@ -78,11 +78,15 @@ class PolaController extends Controller
             // Save accessory mappings
             if (!empty($validated['aksesoris'])) {
                 foreach ($validated['aksesoris'] as $acc) {
-                    DetailAksesorisPola::create([
-                        'id_pola' => $pola->id_pola,
-                        'id_aksesoris' => $acc['id_aksesoris'],
-                        'jumlah_digunakan' => $acc['jumlah_digunakan'],
-                    ]);
+                    DB::table('Detail_Aksesoris_Pola')->updateOrInsert(
+                        [
+                            'id_pola' => $pola->id_pola,
+                            'id_aksesoris' => (int) $acc['id_aksesoris'],
+                        ],
+                        [
+                            'jumlah_digunakan' => (int) $acc['jumlah_digunakan'],
+                        ]
+                    );
                 }
             }
 

@@ -34,7 +34,7 @@
             <option value="" disabled selected>-- Pilih Pesanan Produksi --</option>
             @foreach($orders ?? [] as $ord)
               @php
-                $defaultWarna = optional(optional($ord->penerimaanBahan)->detailBahanWarna->first())->nama_warna ?? 'Hitam Reaktif';
+                $defaultWarna = $ord->penerimaanBahan?->detailBahanWarna?->first()?->nama_warna ?? 'Hitam Reaktif';
               @endphp
               <option value="{{ $ord->id_pesanan }}" data-pola-id="{{ $ord->id_pola }}" data-pola-nama="{{ $ord->pola->nama_pola ?? '-' }}" data-warna="{{ $defaultWarna }}">
                 Pesanan #{{ $ord->id_pesanan }} — {{ $ord->pola->nama_pola ?? $ord->jenis_pesanan }} ({{ $ord->nama_mitra ?? 'Internal Produk Abadi' }} · Status: {{ $ord->status_pesanan }})
@@ -303,7 +303,7 @@
   foreach (($orders ?? []) as $o) {
     $ordersSpecsMap[$o->id_pesanan] = [
       'nama_pola' => $o->pola->nama_pola ?? '-',
-      'warna' => optional(optional($o->penerimaanBahan)->detailBahanWarna->first())->nama_warna ?? 'Hitam Reaktif',
+      'warna' => $o->penerimaanBahan?->detailBahanWarna?->first()?->nama_warna ?? 'Hitam Reaktif',
       'specs' => ($o->pola->spesifikasiUkuran ?? collect())->map(function($s) {
         return [
           'id_spesifikasi' => $s->id_spesifikasi,

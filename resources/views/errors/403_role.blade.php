@@ -45,7 +45,7 @@
         <span>Kembali ke Dashboard</span>
       </a>
       <button type="button" onclick="resetToAdmin()" class="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors">
-        Beralih ke Peran Admin (Penuh)
+        Beralih ke Peran Admin (Akses Penuh)
       </button>
     </div>
   </div>
@@ -57,6 +57,7 @@
     function resetToAdmin() {
       localStorage.setItem('bong_garment_role', 'Admin');
       document.cookie = "bong_garment_role=Admin; path=/; max-age=31536000; SameSite=Lax";
+      document.cookie = "bong_garment_user_id=1; path=/; max-age=31536000; SameSite=Lax";
       window.location.reload();
     }
   </script>

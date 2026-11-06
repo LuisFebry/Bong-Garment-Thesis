@@ -80,7 +80,7 @@ class PesananController extends Controller
                 $accs = $newPolaData['aksesoris'] ?? [];
                 foreach ($accs as $acc) {
                     if (empty($acc['id_aksesoris']) || empty($acc['jumlah_digunakan'])) continue;
-                    DetailAksesorisPola::updateOrCreate(
+                    DB::table('Detail_Aksesoris_Pola')->updateOrInsert(
                         [
                             'id_pola' => $createdPola->id_pola,
                             'id_aksesoris' => (int) $acc['id_aksesoris'],

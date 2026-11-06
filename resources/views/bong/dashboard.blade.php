@@ -104,11 +104,15 @@
               </td>
               <td class="py-3 text-slate-600">{{ $q->pola->nama_pola ?? '-' }}</td>
               <td class="py-3 font-mono">
-                @if($q->deadline_terbaru)
-                  <span class="text-amber-600 font-semibold">{{ $q->deadline_terbaru }}</span>
-                  <span class="text-[10px] text-slate-400 block">(Revisi)</span>
+                @php
+                  $dAwal = $q->deadline_awal ? (is_string($q->deadline_awal) ? substr($q->deadline_awal, 0, 10) : $q->deadline_awal->format('Y-m-d')) : '-';
+                  $dBaru = $q->deadline_terbaru ? (is_string($q->deadline_terbaru) ? substr($q->deadline_terbaru, 0, 10) : $q->deadline_terbaru->format('Y-m-d')) : $dAwal;
+                @endphp
+                @if($dBaru !== $dAwal)
+                  <span class="text-amber-600 font-semibold">{{ $dBaru }}</span>
+                  <span class="text-[10px] text-slate-400 block">(Revisi dari {{ $dAwal }})</span>
                 @else
-                  <span class="text-slate-600">{{ $q->deadline_awal ?? '-' }}</span>
+                  <span class="text-slate-600">{{ $dBaru }}</span>
                 @endif
               </td>
               <td class="py-3">

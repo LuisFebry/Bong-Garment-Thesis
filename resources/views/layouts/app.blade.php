@@ -189,7 +189,7 @@
           <i data-lucide="shield" class="w-3.5 h-3.5 text-indigo-600"></i>
           <label for="role-select" class="text-xs text-slate-500 font-medium">Peran Aktif:</label>
           <select id="role-select" class="text-xs font-semibold bg-transparent text-indigo-900 border-none focus:ring-0 cursor-pointer pr-6 py-1">
-            <option value="Admin" {{ $currentRole === 'Admin' ? 'selected' : '' }}>Admin (Penuh)</option>
+            <option value="Admin" {{ $currentRole === 'Admin' ? 'selected' : '' }}>Admin (Akses Penuh)</option>
             <option value="Pemilik" {{ $currentRole === 'Pemilik' ? 'selected' : '' }}>Pemilik (Mode Audit)</option>
             <option value="Pemotong" {{ $currentRole === 'Pemotong' ? 'selected' : '' }}>Pemotong (Cutting)</option>
             <option value="QC" {{ $currentRole === 'QC' ? 'selected' : '' }}>QC (Inspeksi)</option>
