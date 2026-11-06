@@ -1,16 +1,28 @@
 @php
-  $currentRole = $_COOKIE['bong_garment_role'] ?? request()->cookie('bong_garment_role', 'Admin');
   $validRoles = ['Admin', 'Pemilik', 'Pemotong', 'QC', 'Gudang'];
-  if (!in_array($currentRole, $validRoles)) {
+  $authRole = $_COOKIE['bong_garment_auth_role'] ?? request()->cookie('bong_garment_auth_role');
+  $cookieRole = $_COOKIE['bong_garment_role'] ?? request()->cookie('bong_garment_role');
+
+  if ($authRole && in_array($authRole, $validRoles, true)) {
+      if ($authRole === 'Admin' && $cookieRole && in_array($cookieRole, $validRoles, true)) {
+          $currentRole = $cookieRole;
+      } else {
+          $currentRole = $authRole;
+      }
+  } elseif ($cookieRole && in_array($cookieRole, $validRoles, true)) {
+      $currentRole = $cookieRole;
+  } else {
       $currentRole = 'Admin';
   }
 
+  $isAdminAccount = ($authRole === 'Admin');
+
   $roleUsers = [
-      'Admin' => ['id' => 1, 'name' => 'Luis Febry (Admin Produksi)', 'username' => '@admin', 'initials' => 'LF'],
-      'Pemilik' => ['id' => 2, 'name' => 'Bong (Pemilik CMT)', 'username' => '@pemilik', 'initials' => 'BG'],
-      'Pemotong' => ['id' => 3, 'name' => 'Budi Santoso (Head Cutter)', 'username' => '@pemotong', 'initials' => 'BS'],
-      'QC' => ['id' => 4, 'name' => 'Siti Rahma (Lead QC)', 'username' => '@qc', 'initials' => 'SR'],
-      'Gudang' => ['id' => 5, 'name' => 'Agus Hermawan (Kepala Gudang)', 'username' => '@gudang', 'initials' => 'AH'],
+      'Admin' => ['id' => 1, 'name' => 'Luis Febry (Admin Produksi)', 'username' => '@admin', 'initials' => 'LF', 'label' => 'Admin (Akses Penuh)'],
+      'Pemilik' => ['id' => 2, 'name' => 'Bong (Pemilik CMT)', 'username' => '@pemilik', 'initials' => 'BG', 'label' => 'Pemilik (Mode Audit)'],
+      'Pemotong' => ['id' => 3, 'name' => 'Budi Santoso (Head Cutter)', 'username' => '@pemotong', 'initials' => 'BS', 'label' => 'Pemotong (Cutting)'],
+      'QC' => ['id' => 4, 'name' => 'Siti Rahma (Lead QC)', 'username' => '@qc', 'initials' => 'SR', 'label' => 'QC (Inspeksi)'],
+      'Gudang' => ['id' => 5, 'name' => 'Agus Hermawan (Kepala Gudang)', 'username' => '@gudang', 'initials' => 'AH', 'label' => 'Gudang (Bahan & Stok)'],
   ];
   $activeUser = $roleUsers[$currentRole] ?? $roleUsers['Admin'];
 
@@ -33,16 +45,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-  <!-- Immediate Anti-FOUC Cookie & Role Sync Script -->
-  <script>
-    (function () {
-      var saved = localStorage.getItem('bong_garment_role');
-      if (saved) {
-        document.cookie = "bong_garment_role=" + encodeURIComponent(saved) + "; path=/; max-age=31536000; SameSite=Lax";
-      }
-    })();
-  </script>
 
   <!-- Tailwind CSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -153,7 +155,7 @@
             <p class="text-[10px] text-slate-400 font-mono">Luis Febry &bull; 825220088</p>
           </div>
         </div>
-        <a href="{{ route('login', [], false) }}" title="Ganti Akun / Login" class="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors shrink-0">
+        <a href="{{ route('logout', [], false) }}" onclick="window.clearAuthStorage()" title="Keluar (Logout)" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0">
           <i data-lucide="log-out" class="w-4 h-4"></i>
         </a>
       </div>
@@ -176,7 +178,7 @@
         </span>
       </div>
 
-      <!-- Header Right: Active Account, Role Switcher & Logout -->
+      <!-- Header Right: Active Account, Role Switcher (Admin Only) & Logout -->
       <div class="flex items-center gap-3">
         <!-- Mode Audit Indicator (for Pemilik) -->
         <div id="audit-mode-badge" class="{{ $currentRole === 'Pemilik' ? '' : 'hidden' }} flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium">
@@ -184,7 +186,8 @@
           <span>Mode Audit (Read-Only)</span>
         </div>
 
-        <!-- Role Selector Dropdown -->
+        @if($isAdminAccount)
+        <!-- Role Selector Dropdown (Visible ONLY when logged in with Admin Full Access credentials) -->
         <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
           <i data-lucide="shield" class="w-3.5 h-3.5 text-indigo-600"></i>
           <label for="role-select" class="text-xs text-slate-500 font-medium">Peran Aktif:</label>
@@ -196,11 +199,19 @@
             <option value="Gudang" {{ $currentRole === 'Gudang' ? 'selected' : '' }}>Gudang (Bahan & Stok)</option>
           </select>
         </div>
+        @else
+        <!-- Static Division Badge for non-Admin users -->
+        <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+          <i data-lucide="user-check" class="w-3.5 h-3.5 text-indigo-600"></i>
+          <span class="text-xs text-slate-500 font-medium">Divisi:</span>
+          <span class="text-xs font-bold text-indigo-900">{{ $activeUser['label'] }}</span>
+        </div>
+        @endif
 
-        <!-- Login / Switch User Page Link -->
-        <a href="{{ route('login', [], false) }}" class="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-indigo-600 text-xs font-semibold flex items-center gap-1.5 transition-colors">
-          <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
-          <span class="hidden md:inline">Halaman Login</span>
+        <!-- Logout Button -->
+        <a href="{{ route('logout', [], false) }}" onclick="window.clearAuthStorage()" class="px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50/50 hover:bg-rose-100 text-rose-700 text-xs font-semibold flex items-center gap-1.5 transition-colors">
+          <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+          <span class="hidden md:inline">Keluar</span>
         </a>
       </div>
     </header>
@@ -216,6 +227,13 @@
     if (window.lucide) {
       lucide.createIcons();
     }
+
+    window.clearAuthStorage = function () {
+      localStorage.removeItem('bong_garment_auth_role');
+      localStorage.removeItem('bong_garment_role');
+      localStorage.removeItem('bong_garment_user_id');
+      localStorage.removeItem('bong_garment_user_name');
+    };
 
     // Modal Helper functions
     window.openModal = function (id) {
@@ -233,7 +251,7 @@
     window.fetch = function (url, options) {
       options = options || {};
       options.headers = options.headers || {};
-      const role = localStorage.getItem('bong_garment_role') || '{{ $currentRole }}';
+      const role = '{{ $currentRole }}';
 
       if (options.headers instanceof Headers) {
         if (!options.headers.has('X-User-Role')) options.headers.set('X-User-Role', role);
@@ -245,51 +263,6 @@
 
     document.addEventListener('DOMContentLoaded', function () {
       const roleSelect = document.getElementById('role-select');
-      const auditBadge = document.getElementById('audit-mode-badge');
-      const navItems = document.querySelectorAll('.nav-item[data-roles]');
-
-      const roleDirectory = {
-        'Admin': { id: 1, name: 'Luis Febry (Admin Produksi)', initials: 'LF' },
-        'Pemilik': { id: 2, name: 'Bong (Pemilik CMT)', initials: 'BG' },
-        'Pemotong': { id: 3, name: 'Budi Santoso (Head Cutter)', initials: 'BS' },
-        'QC': { id: 4, name: 'Siti Rahma (Lead QC)', initials: 'SR' },
-        'Gudang': { id: 5, name: 'Agus Hermawan (Kepala Gudang)', initials: 'AH' }
-      };
-
-      function applyRole(role) {
-        localStorage.setItem('bong_garment_role', role);
-        document.cookie = "bong_garment_role=" + encodeURIComponent(role) + "; path=/; max-age=31536000; SameSite=Lax";
-        if (roleSelect && roleSelect.value !== role) {
-          roleSelect.value = role;
-        }
-
-        const profile = roleDirectory[role] || roleDirectory['Admin'];
-        const nameEl = document.getElementById('sidebar-user-name');
-        const initEl = document.getElementById('sidebar-user-initials');
-        if (nameEl) nameEl.textContent = profile.name;
-        if (initEl) initEl.textContent = profile.initials;
-
-        if (auditBadge) {
-          auditBadge.classList.toggle('hidden', role !== 'Pemilik');
-        }
-
-        navItems.forEach(function (item) {
-          const roles = (item.dataset.roles || '').split(',').map(function (r) { return r.trim(); });
-          if (roles.includes('Admin') && role === 'Admin') {
-            item.style.display = '';
-          } else if (roles.includes(role)) {
-            item.style.display = '';
-          } else {
-            item.style.display = 'none';
-          }
-        });
-      }
-
-      // Sync role on load if localStorage differs from cookie
-      const savedRole = localStorage.getItem('bong_garment_role') || '{{ $currentRole }}';
-      if (savedRole !== '{{ $currentRole }}') {
-        applyRole(savedRole);
-      }
 
       if (roleSelect) {
         roleSelect.addEventListener('change', function () {
@@ -314,7 +287,7 @@
           if (canStay) {
             window.location.reload();
           } else {
-            alert("Peran diubah menjadi '" + newRole + "'. Anda dialihkan ke Dashboard karena peran ini tidak memiliki akses ke halaman saat ini.");
+            alert("Peran aktif diubah menjadi '" + newRole + "'. Anda dialihkan ke Dashboard karena peran ini tidak memiliki akses ke halaman saat ini.");
             window.location.href = '/dashboard';
           }
         });

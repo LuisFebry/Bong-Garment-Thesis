@@ -171,4 +171,90 @@ class QcController extends Controller
             'data' => $qc,
         ]);
     }
+
+    public function update(Request $request, $id)
+    {
+        $qc = Qc::findOrFail($id);
+
+        $validated = $request->validate([
+            'id_pesanan' => 'required|integer|exists:Pesanan,id_pesanan',
+            'id_user_qc' => 'required|integer|exists:User,id_user',
+            'tahap_qc' => 'required|in:Prototipe,Potong,Jahit Akhir',
+            'tgl_pemeriksaan' => 'required|date',
+            'jumlah_diperiksa' => 'required|integer|min:1',
+            'jumlah_lolos' => 'required|integer|min:0',
+            'jumlah_cacat' => 'required|integer|min:0',
+            'jenis_cacat' => 'required|in:Tidak Ada,Cacat Potong,Cacat Jahit,Cacat Bahan',
+            'catatan_qc' => 'nullable|string',
+            'status_qc' => 'required|in:Lolos QC,Need Rework,Rework Selesai,Scrapped',
+            'tgl_target_perbaikan' => 'nullable|date',
+            'tgl_selesai_perbaikan' => 'nullable|date',
+        ]);
+
+        $diperiksa = (int) $validated['jumlah_diperiksa'];
+        $lolos = (int) $validated['jumlah_lolos'];
+        $cacat = (int) $validated['jumlah_cacat'];
+
+        if (($lolos + $cacat) !== $diperiksa) {
+            return response()->json([
+                'success' => false,
+                'message' => "Validasi Mutu Gagal: Jumlah Lolos ($lolos) + Jumlah Cacat ($cacat) harus sama dengan Jumlah Diperiksa ($diperiksa).",
+            ], 422);
+        }
+
+        return DB::transaction(function () use ($qc, $validated) {
+            $oldLolosInStok = ($qc->tahap_qc === 'Jahit Akhir') ? (int) $qc->jumlah_lolos : 0;
+            $newLolosInStok = ($validated['tahap_qc'] === 'Jahit Akhir') ? (int) $validated['jumlah_lolos'] : 0;
+            $deltaStok = $newLolosInStok - $oldLolosInStok;
+
+            $tglPemeriksaan = date('Y-m-d H:i:s', strtotime($validated['tgl_pemeriksaan']));
+            $tglSelesai = !empty($validated['tgl_selesai_perbaikan'])
+                ? date('Y-m-d H:i:s', strtotime($validated['tgl_selesai_perbaikan']))
+                : null;
+
+            $qc->update([
+                'id_pesanan' => $validated['id_pesanan'],
+                'id_user_qc' => $validated['id_user_qc'],
+                'tahap_qc' => $validated['tahap_qc'],
+                'tgl_pemeriksaan' => $tglPemeriksaan,
+                'jumlah_diperiksa' => $diperiksa,
+                'jumlah_lolos' => $lolos,
+                'jumlah_cacat' => $cacat,
+                'jenis_cacat' => $validated['jenis_cacat'],
+                'catatan_qc' => $validated['catatan_qc'] ?: null,
+                'status_qc' => $validated['status_qc'],
+                'tgl_target_perbaikan' => $validated['tgl_target_perbaikan'] ?: null,
+                'tgl_selesai_perbaikan' => $tglSelesai,
+            ]);
+
+            if ($deltaStok !== 0) {
+                $order = Pesanan::find($validated['id_pesanan']);
+                if ($order) {
+                    $stock = StokBarangJadi::where('id_pola', $order->id_pola)->first();
+                    if ($stock) {
+                        $stock->jumlah_stok_pcs = max(0, (int) $stock->jumlah_stok_pcs + $deltaStok);
+                        $stock->tgl_update_terakhir = now();
+                        $stock->save();
+                    } elseif ($deltaStok > 0) {
+                        $idSpec = SpesifikasiUkuran::where('id_pola', $order->id_pola)->value('id_spesifikasi');
+                        if ($idSpec) {
+                            StokBarangJadi::create([
+                                'id_pola' => $order->id_pola,
+                                'id_spesifikasi' => $idSpec,
+                                'nama_warna' => 'Hitam Reaktif',
+                                'jumlah_stok_pcs' => $deltaStok,
+                                'tgl_update_terakhir' => now(),
+                            ]);
+                        }
+                    }
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Catatan QC #{$qc->id_qc} berhasil diperbarui.",
+                'data' => $qc->fresh(['pesanan.pola', 'userQc']),
+            ]);
+        });
+    }
 }

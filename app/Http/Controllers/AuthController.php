@@ -10,8 +10,7 @@ class AuthController extends Controller
 {
     public function showLogin()
     {
-        $users = User::all(['id_user', 'username', 'nama_user', 'role']);
-        return view('bong.login', compact('users'));
+        return view('bong.login');
     }
 
     public function login(Request $request)
@@ -58,6 +57,7 @@ class AuthController extends Controller
             : redirect($redirectTo);
 
         return $response
+            ->cookie('bong_garment_auth_role', $user->role, $minutes, '/', null, false, false)
             ->cookie('bong_garment_role', $user->role, $minutes, '/', null, false, false)
             ->cookie('bong_garment_user_id', (string) $user->id_user, $minutes, '/', null, false, false)
             ->cookie('bong_garment_user_name', $user->nama_user, $minutes, '/', null, false, false);
@@ -70,9 +70,9 @@ class AuthController extends Controller
             : redirect('/login');
 
         return $response
+            ->withoutCookie('bong_garment_auth_role', '/')
             ->withoutCookie('bong_garment_role', '/')
             ->withoutCookie('bong_garment_user_id', '/')
             ->withoutCookie('bong_garment_user_name', '/');
     }
 }
-

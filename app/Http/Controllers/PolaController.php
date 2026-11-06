@@ -105,5 +105,61 @@ class PolaController extends Controller
         $pola = Pola::with(['kategori', 'spesifikasiUkuran', 'aksesoris', 'detailAksesorisPola.aksesoris'])->findOrFail($id);
         return response()->json(['success' => true, 'data' => $pola]);
     }
+
+    public function update(Request $request, $id)
+    {
+        $pola = Pola::findOrFail($id);
+
+        $validated = $request->validate([
+            'id_kategori' => 'required|integer|exists:Kategori_Pola,id_kategori',
+            'kode_pola' => 'required|string|max:20|unique:Pola,kode_pola,' . $pola->id_pola . ',id_pola',
+            'nama_pola' => 'required|string|max:100',
+            'nama_ukuran' => 'nullable|string|max:20',
+            'lingkar_dada' => 'nullable|numeric',
+            'panjang_baju_celana' => 'nullable|numeric',
+            'panjang_pundak' => 'nullable|numeric',
+            'panjang_tangan' => 'nullable|numeric',
+        ]);
+
+        return DB::transaction(function () use ($pola, $validated) {
+            $pola->update([
+                'id_kategori' => $validated['id_kategori'],
+                'kode_pola' => $validated['kode_pola'],
+                'nama_pola' => $validated['nama_pola'],
+            ]);
+
+            if (!empty($validated['nama_ukuran'])) {
+                $spec = SpesifikasiUkuran::where('id_pola', $pola->id_pola)
+                    ->where('nama_ukuran', $validated['nama_ukuran'])
+                    ->first()
+                    ?? SpesifikasiUkuran::where('id_pola', $pola->id_pola)->first();
+
+                if ($spec) {
+                    $spec->update([
+                        'nama_ukuran' => $validated['nama_ukuran'],
+                        'lingkar_dada' => $validated['lingkar_dada'] ?? $spec->lingkar_dada,
+                        'panjang_baju_celana' => $validated['panjang_baju_celana'] ?? $spec->panjang_baju_celana,
+                        'panjang_pundak' => $validated['panjang_pundak'] ?? $spec->panjang_pundak,
+                        'panjang_tangan' => $validated['panjang_tangan'] ?? $spec->panjang_tangan,
+                    ]);
+                } else {
+                    SpesifikasiUkuran::create([
+                        'id_pola' => $pola->id_pola,
+                        'nama_ukuran' => $validated['nama_ukuran'],
+                        'lingkar_dada' => $validated['lingkar_dada'] ?? null,
+                        'panjang_baju_celana' => $validated['panjang_baju_celana'] ?? null,
+                        'panjang_pundak' => $validated['panjang_pundak'] ?? null,
+                        'panjang_tangan' => $validated['panjang_tangan'] ?? null,
+                    ]);
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Master Pola {$pola->kode_pola} ({$pola->nama_pola}) berhasil diperbarui.",
+                'data' => $pola->fresh(['kategori', 'spesifikasiUkuran']),
+            ]);
+        });
+    }
 }
 

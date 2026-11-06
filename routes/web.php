@@ -27,14 +27,17 @@ Route::post('/login', [AuthController::class, 'login'])->name('login.post');
 Route::get('/logout', [AuthController::class, 'logout'])->name('logout');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout.post');
 
-Route::get('/', [DashboardController::class, 'index'])->name('home');
-Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+Route::middleware(RoleMiddleware::class . ':Admin,Pemilik,Pemotong,QC,Gudang')->group(function () {
+    Route::get('/', [DashboardController::class, 'index'])->name('home');
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+});
 
 // Pola & 11-Metric Specifications: Admin
 Route::prefix('pola')->middleware(RoleMiddleware::class . ':Admin')->group(function () {
     Route::get('/', [PolaController::class, 'index'])->name('pola.index');
     Route::get('/{id}', [PolaController::class, 'show'])->name('pola.show');
     Route::post('/', [PolaController::class, 'store'])->name('pola.store');
+    Route::post('/{id}/update', [PolaController::class, 'update'])->name('pola.update');
 });
 
 // Pesanan & EDF Deadline Management: Admin
@@ -51,6 +54,10 @@ Route::prefix('pesanan')->middleware(RoleMiddleware::class . ':Admin')->group(fu
 Route::prefix('penerimaan')->middleware(RoleMiddleware::class . ':Admin,Gudang')->group(function () {
     Route::get('/', [PenerimaanBahanController::class, 'index'])->name('penerimaan.index');
     Route::post('/', [PenerimaanBahanController::class, 'store'])->name('penerimaan.store');
+    Route::post('/{id}/update', [PenerimaanBahanController::class, 'update'])->name('penerimaan.update');
+    Route::post('/warna/{id}/update', [PenerimaanBahanController::class, 'updateWarna'])->name('penerimaan.warna.update');
+    Route::post('/warna/{id}/add-roll', [PenerimaanBahanController::class, 'addRollToWarna'])->name('penerimaan.warna.add_roll');
+    Route::post('/roll/{id}/update', [PenerimaanBahanController::class, 'updateRoll'])->name('penerimaan.roll.update');
 });
 
 Route::post('/supplier', [PenerimaanBahanController::class, 'storeSupplier'])
@@ -61,12 +68,14 @@ Route::post('/supplier', [PenerimaanBahanController::class, 'storeSupplier'])
 Route::prefix('pemotongan')->middleware(RoleMiddleware::class . ':Admin,Pemotong')->group(function () {
     Route::get('/', [PemotonganSeriController::class, 'index'])->name('pemotongan.index');
     Route::post('/', [PemotonganSeriController::class, 'store'])->name('pemotongan.store');
+    Route::post('/{id}/update', [PemotonganSeriController::class, 'update'])->name('pemotongan.update');
 });
 
 // Multi-Stage Quality Control: Admin, QC
 Route::prefix('qc')->middleware(RoleMiddleware::class . ':Admin,QC')->group(function () {
     Route::get('/', [QcController::class, 'index'])->name('qc.index');
     Route::post('/', [QcController::class, 'store'])->name('qc.store');
+    Route::post('/{id}/update', [QcController::class, 'update'])->name('qc.update');
     Route::post('/{id}/complete-rework', [QcController::class, 'completeRework'])->name('qc.complete_rework');
 });
 
@@ -74,6 +83,7 @@ Route::prefix('qc')->middleware(RoleMiddleware::class . ':Admin,QC')->group(func
 Route::prefix('stok')->middleware(RoleMiddleware::class . ':Admin,Gudang,Pemilik')->group(function () {
     Route::get('/', [StokBarangJadiController::class, 'index'])->name('stok.index');
     Route::post('/adjust', [StokBarangJadiController::class, 'adjustStock'])->name('stok.adjust');
+    Route::post('/{id}/update', [StokBarangJadiController::class, 'update'])->name('stok.update');
 });
 
 // Aksesoris & Inventory: Admin, Gudang

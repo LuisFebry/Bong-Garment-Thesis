@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\EnsureDatabaseMigrated::class,
         ]);
         $middleware->encryptCookies(except: [
+            'bong_garment_auth_role',
             'bong_garment_role',
             'bong_garment_user_id',
             'bong_garment_user_name',

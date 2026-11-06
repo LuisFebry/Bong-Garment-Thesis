@@ -269,10 +269,15 @@
             <th class="pb-2">Waktu Potong</th>
             <th class="pb-2">Warna & Kain Terpakai</th>
             <th class="pb-2">Detail Gelaran & Roll (<code class="font-mono">Detail_Gelaran_Kain</code>)</th>
+            <th class="pb-2 text-right">Aksi</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
           @forelse($pemotongan ?? [] as $pm)
+          @php
+            $firstPw = $pm->detailPemotonganWarna->first();
+            $firstGk = $firstPw?->detailGelaranKain?->first();
+          @endphp
           <tr class="hover:bg-slate-50">
             <td class="py-3 font-mono font-bold text-indigo-600">
               {{ $pm->kode_seri }}
@@ -319,15 +324,136 @@
                 @endforeach
               @endforeach
             </td>
+            <td class="py-3 text-right">
+              <button type="button"
+                onclick="openEditPemotonganModal({{ json_encode([
+                  'id_potong' => $pm->id_potong,
+                  'id_pesanan' => $pm->id_pesanan,
+                  'id_user_pemotong' => $pm->id_user_pemotong,
+                  'kode_seri' => $pm->kode_seri,
+                  'jenis_variasi' => $pm->jenis_variasi,
+                  'tgl_potong' => $pm->tgl_potong ? \Carbon\Carbon::parse($pm->tgl_potong)->format('Y-m-d\TH:i') : '',
+                  'total_lembar_hasil' => $pm->total_lembar_hasil,
+                  'id_detail_warna' => $firstPw?->id_detail_warna,
+                  'total_lembar_direncanakan' => $firstPw?->total_lembar_direncanakan ?? $pm->total_lembar_hasil,
+                  'kain_terpakai' => $firstPw?->kain_terpakai ?? 0,
+                  'id_roll' => $firstGk?->id_roll,
+                  'panjang_gelar' => $firstGk?->panjang_gelar ?? 2.5,
+                  'jumlah_tumpuk' => $firstGk?->jumlah_tumpuk ?? 50,
+                  'total_lembar_gelar' => $firstGk?->total_lembar_gelar ?? $pm->total_lembar_hasil,
+                  'status_roll' => $firstGk?->detailRollBahan?->status_roll ?? 'Dipotong'
+                ]) }})"
+                class="px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1 transition-colors">
+                <i data-lucide="edit-3" class="w-3 h-3"></i> Edit
+              </button>
+            </td>
           </tr>
           @empty
           <tr>
-            <td colspan="7" class="py-6 text-center text-slate-400">Belum ada catatan pemotongan seri.</td>
+            <td colspan="8" class="py-6 text-center text-slate-400">Belum ada catatan pemotongan seri.</td>
           </tr>
           @endforelse
         </tbody>
       </table>
     </div>
+  </div>
+</div>
+
+<!-- Modal Edit Pemotongan Seri -->
+<div id="modal-edit-pemotongan" class="fixed inset-0 bg-slate-900/50 hidden items-center justify-center z-50 p-4 overflow-y-auto">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-2xl w-full p-6 my-8">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+      <div>
+        <h3 class="font-bold text-slate-900 text-base">Edit Data Pemotongan Seri & Gelaran</h3>
+        <p class="text-xs text-slate-500">Revisi seri potong, parameter gelaran, atau pemakaian kain (<code class="font-mono text-indigo-600">Pemotongan_Seri</code>)</p>
+      </div>
+      <button type="button" onclick="closeEditPemotonganModal()" class="text-slate-400 hover:text-slate-600">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <form id="form-edit-pemotongan" class="space-y-4">
+      <input type="hidden" id="edit-pm-id">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Pesanan Target <span class="text-rose-500">*</span></label>
+          <select id="edit-pm-pesanan" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white">
+            @foreach($orders ?? [] as $ord)
+              <option value="{{ $ord->id_pesanan }}">Pesanan #{{ $ord->id_pesanan }} — {{ $ord->pola->nama_pola ?? $ord->jenis_pesanan }} ({{ $ord->nama_mitra ?? 'Internal' }})</option>
+            @endforeach
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Operator Pemotong <span class="text-rose-500">*</span></label>
+          <select id="edit-pm-cutter" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white">
+            @foreach($users ?? [] as $usr)
+              <option value="{{ $usr->id_user }}">{{ $usr->nama_user }} ({{ $usr->role }})</option>
+            @endforeach
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Seri Potong <span class="text-rose-500">*</span></label>
+          <input type="text" id="edit-pm-kode" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Jenis Variasi Potongan</label>
+          <input type="text" id="edit-pm-variasi" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Waktu Potong (<code class="font-mono">tgl_potong</code>) <span class="text-rose-500">*</span></label>
+          <input type="datetime-local" id="edit-pm-tgl" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Warna Bahan Kain (<code class="font-mono">id_detail_warna</code>)</label>
+          <select id="edit-pm-warna" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white">
+            @foreach($warnaList ?? [] as $w)
+              <option value="{{ $w->id_detail_warna }}">#{{ $w->id_detail_warna }} — {{ $w->nama_warna }} ({{ $w->penerimaanBahan->no_nota ?? 'Nota' }} · {{ $w->satuan_ukur }})</option>
+            @endforeach
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Target Lembar Direncanakan <span class="text-rose-500">*</span></label>
+          <input type="number" min="1" id="edit-pm-rencana" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Total Lembar Hasil Aktual <span class="text-rose-500">*</span></label>
+          <input type="number" min="1" id="edit-pm-hasil" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono font-bold text-indigo-700">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Kuantitas Kain Terpakai (<code class="font-mono">kain_terpakai</code>) <span class="text-rose-500">*</span></label>
+          <input type="number" step="0.01" min="0.01" id="edit-pm-kain" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Roll Fisik Utama (<code class="font-mono">id_roll</code>)</label>
+          <select id="edit-pm-roll" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white font-mono">
+            @foreach(($allRolls ?? $rolls ?? []) as $r)
+              <option value="{{ $r->id_roll }}">#id_roll: {{ $r->id_roll }} — Roll #{{ $r->no_roll_ke }} ({{ $r->detailBahanWarna->nama_warna ?? '-' }} · Sisa: {{ $r->ukuran_sisa }} {{ $r->satuan }})</option>
+            @endforeach
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Panjang Gelaran (m/yd)</label>
+          <input type="number" step="0.01" min="0.1" id="edit-pm-panjang" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Jumlah Tumpukan / Ply</label>
+          <input type="number" min="1" id="edit-pm-tumpuk" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        </div>
+        <div class="col-span-full">
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Status Roll Fisik Setelah Revisi</label>
+          <select id="edit-pm-status-roll" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white font-semibold">
+            <option value="Dipotong">Dipotong (Masih Ada Sisa)</option>
+            <option value="Habis">Habis (Tuntas 0.00)</option>
+            <option value="Tersedia">Tersedia (Utuh)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+        <button type="button" onclick="closeEditPemotonganModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>
+        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm">Simpan Perubahan Pemotongan</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -645,6 +771,77 @@
     .catch(function (err) {
       console.error(err);
       alert('Terjadi kesalahan koneksi.');
+    });
+  });
+
+  function openEditPemotonganModal(pm) {
+    document.getElementById('edit-pm-id').value = pm.id_potong;
+    document.getElementById('edit-pm-pesanan').value = pm.id_pesanan;
+    document.getElementById('edit-pm-cutter').value = pm.id_user_pemotong;
+    document.getElementById('edit-pm-kode').value = pm.kode_seri || '';
+    document.getElementById('edit-pm-variasi').value = pm.jenis_variasi || '';
+    document.getElementById('edit-pm-tgl').value = pm.tgl_potong || '';
+    if (pm.id_detail_warna) document.getElementById('edit-pm-warna').value = pm.id_detail_warna;
+    document.getElementById('edit-pm-rencana').value = pm.total_lembar_direncanakan || pm.total_lembar_hasil || 100;
+    document.getElementById('edit-pm-hasil').value = pm.total_lembar_hasil || 100;
+    document.getElementById('edit-pm-kain').value = Number(pm.kain_terpakai || 0).toFixed(2);
+    if (pm.id_roll) document.getElementById('edit-pm-roll').value = pm.id_roll;
+    document.getElementById('edit-pm-panjang').value = Number(pm.panjang_gelar || 2.5).toFixed(2);
+    document.getElementById('edit-pm-tumpuk').value = pm.jumlah_tumpuk || 50;
+    document.getElementById('edit-pm-status-roll').value = pm.status_roll || 'Dipotong';
+    const m = document.getElementById('modal-edit-pemotongan');
+    m.classList.remove('hidden');
+    m.classList.add('flex');
+  }
+
+  function closeEditPemotonganModal() {
+    const m = document.getElementById('modal-edit-pemotongan');
+    m.classList.add('hidden');
+    m.classList.remove('flex');
+  }
+
+  document.getElementById('form-edit-pemotongan')?.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const id = document.getElementById('edit-pm-id').value;
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const payload = {
+      id_pesanan: Number(document.getElementById('edit-pm-pesanan').value),
+      id_user_pemotong: Number(document.getElementById('edit-pm-cutter').value),
+      kode_seri: document.getElementById('edit-pm-kode').value,
+      jenis_variasi: document.getElementById('edit-pm-variasi').value || null,
+      tgl_potong: document.getElementById('edit-pm-tgl').value,
+      id_detail_warna: Number(document.getElementById('edit-pm-warna').value) || null,
+      total_lembar_direncanakan: Number(document.getElementById('edit-pm-rencana').value),
+      total_lembar_hasil: Number(document.getElementById('edit-pm-hasil').value),
+      kain_terpakai: parseFloat(document.getElementById('edit-pm-kain').value),
+      id_roll: Number(document.getElementById('edit-pm-roll').value) || null,
+      panjang_gelar: parseFloat(document.getElementById('edit-pm-panjang').value) || 2.5,
+      jumlah_tumpuk: Number(document.getElementById('edit-pm-tumpuk').value) || 50,
+      total_lembar_gelar: Number(document.getElementById('edit-pm-hasil').value),
+      status_roll_baru: document.getElementById('edit-pm-status-roll').value
+    };
+
+    fetch(`/pemotongan/${id}/update`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': token
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        alert(data.message || 'Data pemotongan seri berhasil diperbarui.');
+        window.location.reload();
+      } else {
+        alert('Gagal memperbarui pemotongan: ' + (data.message || 'Validasi gagal'));
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Terjadi kesalahan saat menyimpan perubahan pemotongan seri.');
     });
   });
 </script>

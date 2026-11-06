@@ -188,36 +188,97 @@
 
     <div class="space-y-4">
       @forelse($penerimaan ?? [] as $pn)
+      @php
+        $tglNotaFormatted = $pn->tgl_nota ? (is_string($pn->tgl_nota) ? substr($pn->tgl_nota, 0, 10) : $pn->tgl_nota->format('Y-m-d')) : '';
+      @endphp
       <div class="searchable-card p-4 bg-slate-50 rounded-xl border border-slate-200 transition-all">
-        <div class="flex items-center justify-between">
+        <div class="flex flex-wrap items-center justify-between gap-2">
           <div>
             <span class="font-mono font-bold text-sm text-indigo-600">{{ $pn->no_nota }}</span>
             <span class="text-xs font-semibold text-slate-700 ml-2">{{ $pn->nama_kain }}</span>
-            <span class="text-[11px] text-slate-400 block">{{ $pn->supplier->nama_supplier ?? '-' }} &bull; {{ $pn->tgl_nota }}</span>
+            @if($pn->lebar_gramasi)
+              <span class="text-[11px] text-slate-500 ml-1">({{ $pn->lebar_gramasi }})</span>
+            @endif
+            <span class="text-[11px] text-slate-400 block">
+              {{ $pn->supplier->nama_supplier ?? '-' }} &bull; {{ $tglNotaFormatted }}
+              @if($pn->penerima) &bull; Penerima: {{ $pn->penerima }} @endif
+            </span>
           </div>
-          <span class="text-xs font-mono bg-white px-2.5 py-1 rounded-md border border-slate-200 text-slate-600">
-            Kendaraan: {{ $pn->no_kendaraan ?? '-' }}
-          </span>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-mono bg-white px-2.5 py-1 rounded-md border border-slate-200 text-slate-600">
+              Kendaraan: {{ $pn->no_kendaraan ?? '-' }}
+            </span>
+            <button type="button"
+              onclick="openEditNotaModal({
+                id_penerimaan: {{ $pn->id_penerimaan }},
+                id_supplier: {{ $pn->id_supplier }},
+                no_nota: '{{ addslashes($pn->no_nota) }}',
+                tgl_nota: '{{ $tglNotaFormatted }}',
+                nama_kain: '{{ addslashes($pn->nama_kain) }}',
+                lebar_gramasi: '{{ addslashes($pn->lebar_gramasi ?? '') }}',
+                no_kendaraan: '{{ addslashes($pn->no_kendaraan ?? '') }}',
+                penerima: '{{ addslashes($pn->penerima ?? '') }}'
+              })"
+              class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-md text-xs font-semibold inline-flex items-center gap-1 transition-colors">
+              <i data-lucide="edit-3" class="w-3.5 h-3.5"></i> Edit Nota
+            </button>
+          </div>
         </div>
 
         <div class="mt-3 pt-3 border-t border-slate-200 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           @foreach($pn->detailBahanWarna ?? [] as $bw)
           <div class="bg-white p-3 rounded-lg border border-slate-200 text-xs">
-            <div class="flex items-center justify-between">
-              <span class="font-semibold text-slate-800">{{ $bw->nama_warna }}</span>
-              <span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">{{ $bw->satuan_ukur }}</span>
+            <div class="flex items-center justify-between gap-1">
+              <div>
+                <span class="font-semibold text-slate-800">{{ $bw->nama_warna }}</span>
+                @if($bw->kode_warna)
+                  <span class="text-[10px] font-mono text-slate-400 ml-1">({{ $bw->kode_warna }})</span>
+                @endif
+              </div>
+              <div class="flex items-center gap-1">
+                <span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">{{ $bw->satuan_ukur }}</span>
+                <button type="button"
+                  onclick="openEditWarnaModal({
+                    id_detail_warna: {{ $bw->id_detail_warna }},
+                    nama_warna: '{{ addslashes($bw->nama_warna) }}',
+                    kode_warna: '{{ addslashes($bw->kode_warna ?? '') }}',
+                    satuan_ukur: '{{ $bw->satuan_ukur }}'
+                  })"
+                  class="px-1.5 py-0.5 bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 rounded text-[10px] font-semibold" title="Edit kelompok warna">
+                  Edit Warna
+                </button>
+                <button type="button"
+                  onclick="openAddRollExistingModal({{ $bw->id_detail_warna }}, '{{ addslashes($bw->nama_warna) }}', '{{ $bw->satuan_ukur }}')"
+                  class="px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[10px] font-semibold" title="Tambah roll ke warna ini">
+                  + Roll
+                </button>
+              </div>
             </div>
-            <div class="mt-2 text-[11px] text-slate-500">
+            <div class="mt-1.5 text-[11px] text-slate-500">
               Total: {{ $bw->total_roll }} roll &bull; {{ $bw->total_ukuran }} {{ $bw->satuan_ukur }}
             </div>
             <div class="mt-2 space-y-1">
               @foreach($bw->detailRollBahan ?? [] as $roll)
-              <div class="flex items-center justify-between text-[10px] font-mono bg-slate-50 p-1 rounded">
+              <div class="flex items-center justify-between text-[10px] font-mono bg-slate-50 p-1.5 rounded border border-slate-100">
                 <span>Roll #{{ $roll->no_roll_ke }} (#{{ $roll->id_roll }})</span>
                 <span>Sisa: <b>{{ $roll->ukuran_sisa }}</b> / {{ $roll->ukuran_awal }} {{ $roll->satuan }}</span>
-                <span class="px-1.5 py-0.5 rounded font-semibold {{ $roll->status_roll === 'Tersedia' ? 'bg-emerald-100 text-emerald-800' : ($roll->status_roll === 'Dipotong' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800') }}">
-                  {{ $roll->status_roll }}
-                </span>
+                <div class="flex items-center gap-1">
+                  <span class="px-1.5 py-0.5 rounded font-semibold {{ $roll->status_roll === 'Tersedia' ? 'bg-emerald-100 text-emerald-800' : ($roll->status_roll === 'Dipotong' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800') }}">
+                    {{ $roll->status_roll }}
+                  </span>
+                  <button type="button"
+                    onclick="openEditRollModal({
+                      id_roll: {{ $roll->id_roll }},
+                      no_roll_ke: {{ $roll->no_roll_ke }},
+                      ukuran_awal: {{ $roll->ukuran_awal }},
+                      ukuran_sisa: {{ $roll->ukuran_sisa }},
+                      satuan: '{{ $roll->satuan }}',
+                      status_roll: '{{ $roll->status_roll }}'
+                    })"
+                    class="px-1.5 py-0.5 bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-slate-200 rounded font-sans font-semibold" title="Edit Roll #{{ $roll->no_roll_ke }}">
+                    Edit
+                  </button>
+                </div>
               </div>
               @endforeach
             </div>
@@ -229,6 +290,182 @@
       <p class="text-center text-slate-400 text-xs py-8">Belum ada nota penerimaan bahan terdaftar.</p>
       @endforelse
     </div>
+  </div>
+</div>
+
+<!-- Modal Edit Nota Penerimaan -->
+<div id="modal-edit-nota" class="fixed inset-0 bg-slate-900/50 hidden items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full p-6">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+      <div>
+        <h3 class="font-bold text-slate-900 text-base">Edit Nota Penerimaan Bahan</h3>
+        <p class="text-xs text-slate-500">Revisi informasi surat jalan, supplier, atau jenis kain (<code class="font-mono text-indigo-600">Penerimaan_Bahan</code>)</p>
+      </div>
+      <button type="button" onclick="closeModal('modal-edit-nota')" class="text-slate-400 hover:text-slate-600">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <form id="form-edit-nota" class="space-y-4">
+      <input type="hidden" id="edit-nota-id">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Supplier Kain <span class="text-rose-500">*</span></label>
+          <select id="edit-nota-supplier" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white">
+            @foreach($suppliers ?? [] as $sp)
+              <option value="{{ $sp->id_supplier }}">{{ $sp->nama_supplier }}</option>
+            @endforeach
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Nomor Nota / Surat Jalan <span class="text-rose-500">*</span></label>
+          <input type="text" id="edit-nota-no" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Tanggal Nota <span class="text-rose-500">*</span></label>
+          <input type="date" id="edit-nota-tgl" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Nama / Jenis Kain <span class="text-rose-500">*</span></label>
+          <input type="text" id="edit-nota-kain" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Lebar / Gramasi</label>
+          <input type="text" id="edit-nota-gramasi" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Nomor Kendaraan</label>
+          <input type="text" id="edit-nota-kendaraan" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        </div>
+        <div class="col-span-full">
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Petugas Penerima Gudang</label>
+          <input type="text" id="edit-nota-penerima" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+        </div>
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+        <button type="button" onclick="closeModal('modal-edit-nota')" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>
+        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm">Simpan Perubahan Nota</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Edit Kelompok Warna (Detail_Bahan_Warna) -->
+<div id="modal-edit-warna" class="fixed inset-0 bg-slate-900/50 hidden items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+      <div>
+        <h3 class="font-bold text-slate-900 text-base">Edit Kelompok Warna Kain</h3>
+        <p class="text-xs text-slate-500">Tabel <code class="font-mono text-indigo-600">Detail_Bahan_Warna</code></p>
+      </div>
+      <button type="button" onclick="closeModal('modal-edit-warna')" class="text-slate-400 hover:text-slate-600">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <form id="form-edit-warna" class="space-y-4">
+      <input type="hidden" id="edit-warna-id">
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Warna Kain <span class="text-rose-500">*</span></label>
+        <input type="text" id="edit-warna-nama" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Lab / Lot Warna</label>
+        <input type="text" id="edit-warna-kode" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono uppercase">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Satuan Ukur <span class="text-rose-500">*</span></label>
+        <select id="edit-warna-satuan" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white">
+          <option value="Kg">Kg (Kilogram)</option>
+          <option value="Yard">Yard</option>
+          <option value="Meter">Meter</option>
+        </select>
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+        <button type="button" onclick="closeModal('modal-edit-warna')" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>
+        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm">Simpan Warna</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Edit Roll Fisik (Detail_Roll_Bahan) -->
+<div id="modal-edit-roll" class="fixed inset-0 bg-slate-900/50 hidden items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+      <div>
+        <h3 class="font-bold text-slate-900 text-base">Edit Data Roll Kain Fisik</h3>
+        <p class="text-xs text-slate-500">Revisi ukuran awal, ukuran sisa, satuan, atau status roll (<code class="font-mono text-indigo-600">Detail_Roll_Bahan</code>)</p>
+      </div>
+      <button type="button" onclick="closeModal('modal-edit-roll')" class="text-slate-400 hover:text-slate-600">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <form id="form-edit-roll" class="space-y-4">
+      <input type="hidden" id="edit-roll-id">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Nomor Urut Roll <span class="text-rose-500">*</span></label>
+          <input type="number" id="edit-roll-no" min="1" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Satuan Ukur <span class="text-rose-500">*</span></label>
+          <select id="edit-roll-satuan" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white font-mono">
+            <option value="Kg">Kg</option>
+            <option value="Yard">Yard</option>
+            <option value="Meter">Meter</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Ukuran Awal <span class="text-rose-500">*</span></label>
+          <input type="number" step="0.01" min="0.1" id="edit-roll-awal" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Ukuran Sisa Aktual <span class="text-rose-500">*</span></label>
+          <input type="number" step="0.01" min="0" id="edit-roll-sisa" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono font-bold text-indigo-700">
+        </div>
+        <div class="col-span-full">
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Status Roll <span class="text-rose-500">*</span></label>
+          <select id="edit-roll-status" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white font-semibold">
+            <option value="Tersedia">Tersedia (Utuh)</option>
+            <option value="Dipotong">Dipotong (Masih Ada Sisa)</option>
+            <option value="Habis">Habis (0.00)</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+        <button type="button" onclick="closeModal('modal-edit-roll')" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>
+        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm">Simpan Perubahan Roll</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Tambah Roll ke Warna yang Sudah Ada -->
+<div id="modal-add-roll-existing" class="fixed inset-0 bg-slate-900/50 hidden items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+      <div>
+        <h3 class="font-bold text-slate-900 text-base">Tambah Roll Baru ke Kelompok Warna</h3>
+        <p id="add-roll-existing-subtitle" class="text-xs text-slate-500">Tambahkan gulungan fisik baru ke nota ini</p>
+      </div>
+      <button type="button" onclick="closeModal('modal-add-roll-existing')" class="text-slate-400 hover:text-slate-600">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <form id="form-add-roll-existing" class="space-y-4">
+      <input type="hidden" id="add-roll-warna-id">
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Ukuran Awal Roll Baru <span class="text-rose-500">*</span></label>
+        <input type="number" step="0.01" min="0.1" id="add-roll-ukuran-awal" value="25.00" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+        <button type="button" onclick="closeModal('modal-add-roll-existing')" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>
+        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm">Tambahkan Roll</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -279,6 +516,178 @@
     m.classList.add('hidden');
     m.classList.remove('flex');
   }
+
+  function closeModal(modalId) {
+    const m = document.getElementById(modalId);
+    if (m) {
+      m.classList.add('hidden');
+      m.classList.remove('flex');
+    }
+  }
+
+  function openEditNotaModal(nota) {
+    document.getElementById('edit-nota-id').value = nota.id_penerimaan;
+    document.getElementById('edit-nota-supplier').value = nota.id_supplier;
+    document.getElementById('edit-nota-no').value = nota.no_nota || '';
+    document.getElementById('edit-nota-tgl').value = nota.tgl_nota ? String(nota.tgl_nota).split('T')[0].split(' ')[0] : '';
+    document.getElementById('edit-nota-kain').value = nota.nama_kain || '';
+    document.getElementById('edit-nota-gramasi').value = nota.lebar_gramasi || '';
+    document.getElementById('edit-nota-kendaraan').value = nota.no_kendaraan || '';
+    document.getElementById('edit-nota-penerima').value = nota.penerima || '';
+    const m = document.getElementById('modal-edit-nota');
+    m.classList.remove('hidden');
+    m.classList.add('flex');
+  }
+
+  function openEditWarnaModal(warna) {
+    document.getElementById('edit-warna-id').value = warna.id_detail_warna;
+    document.getElementById('edit-warna-nama').value = warna.nama_warna || '';
+    document.getElementById('edit-warna-kode').value = warna.kode_warna || '';
+    document.getElementById('edit-warna-satuan').value = warna.satuan || 'Kg';
+    const m = document.getElementById('modal-edit-warna');
+    m.classList.remove('hidden');
+    m.classList.add('flex');
+  }
+
+  function openEditRollModal(roll) {
+    document.getElementById('edit-roll-id').value = roll.id_roll;
+    document.getElementById('edit-roll-no').value = roll.no_roll_ke;
+    document.getElementById('edit-roll-satuan').value = roll.satuan || 'Kg';
+    document.getElementById('edit-roll-awal').value = Number(roll.ukuran_awal || 0).toFixed(2);
+    document.getElementById('edit-roll-sisa').value = Number(roll.ukuran_sisa || 0).toFixed(2);
+    document.getElementById('edit-roll-status').value = roll.status_roll || 'Tersedia';
+    const m = document.getElementById('modal-edit-roll');
+    m.classList.remove('hidden');
+    m.classList.add('flex');
+  }
+
+  function openAddRollExistingModal(idWarna, namaWarna, satuan) {
+    document.getElementById('add-roll-warna-id').value = idWarna;
+    document.getElementById('add-roll-existing-subtitle').textContent = 'Warna: ' + namaWarna + ' (' + (satuan || 'Kg') + ')';
+    const m = document.getElementById('modal-add-roll-existing');
+    m.classList.remove('hidden');
+    m.classList.add('flex');
+  }
+
+  document.getElementById('form-edit-nota')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const id = document.getElementById('edit-nota-id').value;
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    const payload = {
+      id_supplier: Number(document.getElementById('edit-nota-supplier').value),
+      no_nota: document.getElementById('edit-nota-no').value,
+      tgl_nota: document.getElementById('edit-nota-tgl').value,
+      nama_kain: document.getElementById('edit-nota-kain').value,
+      lebar_gramasi: document.getElementById('edit-nota-gramasi').value || null,
+      no_kendaraan: document.getElementById('edit-nota-kendaraan').value || null,
+      penerima: document.getElementById('edit-nota-penerima').value || null
+    };
+    fetch(`/penerimaan/${id}/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
+      body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        alert(data.message || 'Nota penerimaan berhasil diperbarui.');
+        window.location.reload();
+      } else {
+        alert('Gagal memperbarui nota: ' + (data.message || 'Validasi gagal'));
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Terjadi kesalahan saat menyimpan perubahan nota.');
+    });
+  });
+
+  document.getElementById('form-edit-warna')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const id = document.getElementById('edit-warna-id').value;
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    const payload = {
+      nama_warna: document.getElementById('edit-warna-nama').value,
+      kode_warna: document.getElementById('edit-warna-kode').value || null,
+      satuan_ukur: document.getElementById('edit-warna-satuan').value
+    };
+    fetch(`/penerimaan/warna/${id}/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
+      body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        alert(data.message || 'Kelompok warna berhasil diperbarui.');
+        window.location.reload();
+      } else {
+        alert('Gagal memperbarui warna: ' + (data.message || 'Validasi gagal'));
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Terjadi kesalahan saat menyimpan perubahan kelompok warna.');
+    });
+  });
+
+  document.getElementById('form-edit-roll')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const id = document.getElementById('edit-roll-id').value;
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    const payload = {
+      no_roll_ke: Number(document.getElementById('edit-roll-no').value),
+      satuan: document.getElementById('edit-roll-satuan').value,
+      ukuran_awal: parseFloat(document.getElementById('edit-roll-awal').value),
+      ukuran_sisa: parseFloat(document.getElementById('edit-roll-sisa').value),
+      status_roll: document.getElementById('edit-roll-status').value
+    };
+    fetch(`/penerimaan/roll/${id}/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
+      body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        alert(data.message || 'Data roll berhasil diperbarui.');
+        window.location.reload();
+      } else {
+        alert('Gagal memperbarui roll: ' + (data.message || 'Validasi gagal'));
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Terjadi kesalahan saat menyimpan perubahan roll.');
+    });
+  });
+
+  document.getElementById('form-add-roll-existing')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const idWarna = document.getElementById('add-roll-warna-id').value;
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    const payload = {
+      ukuran_awal: parseFloat(document.getElementById('add-roll-ukuran-awal').value)
+    };
+    fetch(`/penerimaan/warna/${idWarna}/add-roll`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
+      body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        alert(data.message || 'Roll baru berhasil ditambahkan.');
+        window.location.reload();
+      } else {
+        alert('Gagal menambah roll: ' + (data.message || 'Validasi gagal'));
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Terjadi kesalahan saat menambahkan roll baru.');
+    });
+  });
 
   document.getElementById('form-add-supplier')?.addEventListener('submit', function(e) {
     e.preventDefault();

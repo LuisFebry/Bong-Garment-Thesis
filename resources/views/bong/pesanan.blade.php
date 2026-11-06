@@ -322,15 +322,35 @@
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       @foreach($pola ?? [] as $p)
+      @php
+        $firstSpec = $p->spesifikasiUkuran->first();
+      @endphp
       <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
-        <div class="flex items-start justify-between">
+        <div class="flex items-start justify-between gap-2">
           <div>
             <span class="font-mono text-xs font-bold text-indigo-600">{{ $p->kode_pola }}</span>
             <h4 class="font-bold text-slate-900 text-sm">{{ $p->nama_pola }}</h4>
           </div>
-          <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-white border border-slate-200 text-slate-600">
-            {{ $p->kategori->nama_kategori ?? 'Umum' }}
-          </span>
+          <div class="flex items-center gap-1.5">
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-white border border-slate-200 text-slate-600">
+              {{ $p->kategori->nama_kategori ?? 'Umum' }}
+            </span>
+            <button type="button"
+              onclick="openEditPolaModal({{ json_encode([
+                'id_pola' => $p->id_pola,
+                'id_kategori' => $p->id_kategori,
+                'kode_pola' => $p->kode_pola,
+                'nama_pola' => $p->nama_pola,
+                'nama_ukuran' => $firstSpec?->nama_ukuran ?? 'L',
+                'lingkar_dada' => $firstSpec?->lingkar_dada,
+                'panjang_baju_celana' => $firstSpec?->panjang_baju_celana,
+                'panjang_pundak' => $firstSpec?->panjang_pundak,
+                'panjang_tangan' => $firstSpec?->panjang_tangan,
+              ]) }})"
+              class="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 inline-flex items-center gap-1 transition-colors">
+              <i data-lucide="edit-3" class="w-3 h-3"></i> Edit Pola
+            </button>
+          </div>
         </div>
 
         <!-- Tabel ringkas ukuran -->
@@ -486,6 +506,62 @@
         <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-sm transition-colors">
           Simpan Perubahan
         </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Edit Master Pola -->
+<div id="modal-edit-pola" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-6">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+      <div>
+        <h3 class="font-bold text-slate-900 text-base">Edit Master Pola Pakaian</h3>
+        <p class="text-xs text-slate-500">Revisi identitas pola & parameter ukuran (<code class="font-mono text-indigo-600">Pola</code> & <code class="font-mono text-indigo-600">Spesifikasi_Ukuran</code>)</p>
+      </div>
+      <button type="button" onclick="closeEditPolaModal()" class="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center text-lg leading-none">&times;</button>
+    </div>
+
+    <form id="form-edit-pola" class="space-y-4">
+      <input type="hidden" id="edit-pola-id">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Kategori Pola <span class="text-rose-500">*</span></label>
+          <select id="edit-pola-kategori" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white">
+            @foreach($kategori ?? [] as $kat)
+              <option value="{{ $kat->id_kategori }}">{{ $kat->nama_kategori }}</option>
+            @endforeach
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Pola Unik <span class="text-rose-500">*</span></label>
+          <input type="text" id="edit-pola-kode" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono uppercase">
+        </div>
+        <div class="col-span-full">
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Master Pola Pakaian <span class="text-rose-500">*</span></label>
+          <input type="text" id="edit-pola-nama" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Ukuran Utama (S/M/L/XL)</label>
+          <input type="text" id="edit-pola-ukuran" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono font-bold text-indigo-700">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Lingkar Dada (cm)</label>
+          <input type="number" step="0.1" id="edit-pola-dada" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Panjang Baju / Celana (cm)</label>
+          <input type="number" step="0.1" id="edit-pola-panjang" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Panjang Pundak (cm)</label>
+          <input type="number" step="0.1" id="edit-pola-pundak" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+        <button type="button" onclick="closeEditPolaModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-lg">Batal</button>
+        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-sm">Simpan Perubahan Pola</button>
       </div>
     </form>
   </div>
@@ -869,6 +945,60 @@
     .catch(function (err) {
       console.error(err);
       alert('Terjadi kesalahan koneksi.');
+    });
+  });
+
+  window.openEditPolaModal = function (pola) {
+    document.getElementById('edit-pola-id').value = pola.id_pola;
+    document.getElementById('edit-pola-kategori').value = pola.id_kategori;
+    document.getElementById('edit-pola-kode').value = pola.kode_pola || '';
+    document.getElementById('edit-pola-nama').value = pola.nama_pola || '';
+    document.getElementById('edit-pola-ukuran').value = pola.nama_ukuran || 'L';
+    document.getElementById('edit-pola-dada').value = pola.lingkar_dada ?? '';
+    document.getElementById('edit-pola-panjang').value = pola.panjang_baju_celana ?? '';
+    document.getElementById('edit-pola-pundak').value = pola.panjang_pundak ?? '';
+    document.getElementById('modal-edit-pola').classList.remove('hidden');
+  };
+
+  window.closeEditPolaModal = function () {
+    document.getElementById('modal-edit-pola').classList.add('hidden');
+  };
+
+  document.getElementById('form-edit-pola')?.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const id = document.getElementById('edit-pola-id').value;
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    const payload = {
+      id_kategori: Number(document.getElementById('edit-pola-kategori').value),
+      kode_pola: document.getElementById('edit-pola-kode').value.trim(),
+      nama_pola: document.getElementById('edit-pola-nama').value.trim(),
+      nama_ukuran: document.getElementById('edit-pola-ukuran').value.trim() || 'L',
+      lingkar_dada: document.getElementById('edit-pola-dada').value !== '' ? parseFloat(document.getElementById('edit-pola-dada').value) : null,
+      panjang_baju_celana: document.getElementById('edit-pola-panjang').value !== '' ? parseFloat(document.getElementById('edit-pola-panjang').value) : null,
+      panjang_pundak: document.getElementById('edit-pola-pundak').value !== '' ? parseFloat(document.getElementById('edit-pola-pundak').value) : null
+    };
+
+    fetch('/pola/' + id + '/update', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': token
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        alert(data.message || 'Master Pola berhasil diperbarui.');
+        window.location.reload();
+      } else {
+        alert('Gagal memperbarui pola: ' + (data.message || 'Validasi gagal'));
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Terjadi kesalahan saat menyimpan perubahan master pola.');
     });
   });
 </script>

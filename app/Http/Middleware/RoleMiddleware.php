@@ -8,6 +8,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class RoleMiddleware
 {
+    private const VALID_ROLES = ['Admin', 'Pemilik', 'Pemotong', 'QC', 'Gudang'];
+
     /**
      * Handle an incoming request.
      *
@@ -17,17 +19,37 @@ class RoleMiddleware
     {
         $user = $request->user();
 
-        // Check header, then raw cookie, then Laravel cookie, then request parameter, default to 'Admin'
-        $userRole = $user ? $user->role : (
-            $request->header('X-User-Role')
-            ?? ($_COOKIE['bong_garment_role'] ?? null)
-            ?? $request->cookie('bong_garment_role')
-            ?? $request->input('active_role', 'Admin')
-        );
+        $authRole = ($_COOKIE['bong_garment_auth_role'] ?? null)
+            ?? $request->cookie('bong_garment_auth_role');
 
-        $validRoles = ['Admin', 'Pemilik', 'Pemotong', 'QC', 'Gudang'];
-        if (!in_array($userRole, $validRoles, true)) {
-            $userRole = 'Admin';
+        $activeRole = ($_COOKIE['bong_garment_role'] ?? null)
+            ?? $request->cookie('bong_garment_role')
+            ?? $request->header('X-User-Role');
+
+        if ($user) {
+            $userRole = $user->role;
+        } elseif ($authRole && in_array($authRole, self::VALID_ROLES, true)) {
+            // Only an authenticated Admin is permitted to switch active role via the Peran Aktif selector
+            if ($authRole === 'Admin' && $activeRole && in_array($activeRole, self::VALID_ROLES, true)) {
+                $userRole = $activeRole;
+            } else {
+                $userRole = $authRole;
+            }
+        } elseif ($activeRole && in_array($activeRole, self::VALID_ROLES, true)) {
+            $userRole = $activeRole;
+        } else {
+            $userRole = null;
+        }
+
+        // Unauthenticated visitors must log in with valid credentials first
+        if (!$userRole) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Sesi tidak ditemukan. Silakan login terlebih dahulu.',
+                ], 401);
+            }
+            return redirect('/login');
         }
 
         // If specific roles are required and user is neither in allowed list nor Admin

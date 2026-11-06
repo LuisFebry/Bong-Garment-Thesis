@@ -251,13 +251,32 @@
               @endif
             </td>
             <td class="py-3 text-right">
-              @if($qc->status_qc === 'Need Rework')
-                <button type="button" onclick="openReworkModal({{ $qc->id_qc }})" class="px-2.5 py-1.5 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold shadow-sm transition-colors">
-                  Selesaikan Rework
+              <div class="inline-flex items-center justify-end gap-1.5">
+                @if($qc->status_qc === 'Need Rework')
+                  <button type="button" onclick="openReworkModal({{ $qc->id_qc }})" class="px-2.5 py-1.5 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold shadow-sm transition-colors">
+                    Selesaikan Rework
+                  </button>
+                @endif
+                <button type="button"
+                  onclick="openEditQcModal({{ json_encode([
+                    'id_qc' => $qc->id_qc,
+                    'id_pesanan' => $qc->id_pesanan,
+                    'id_user_qc' => $qc->id_user_qc,
+                    'tahap_qc' => $qc->tahap_qc,
+                    'tgl_pemeriksaan' => $qc->tgl_pemeriksaan ? \Carbon\Carbon::parse($qc->tgl_pemeriksaan)->format('Y-m-d\TH:i') : '',
+                    'jumlah_diperiksa' => $qc->jumlah_diperiksa,
+                    'jumlah_lolos' => $qc->jumlah_lolos,
+                    'jumlah_cacat' => $qc->jumlah_cacat,
+                    'jenis_cacat' => $qc->jenis_cacat,
+                    'status_qc' => $qc->status_qc,
+                    'catatan_qc' => $qc->catatan_qc,
+                    'tgl_target_perbaikan' => $qc->tgl_target_perbaikan ? \Carbon\Carbon::parse($qc->tgl_target_perbaikan)->format('Y-m-d') : '',
+                    'tgl_selesai_perbaikan' => $qc->tgl_selesai_perbaikan ? \Carbon\Carbon::parse($qc->tgl_selesai_perbaikan)->format('Y-m-d\TH:i') : '',
+                  ]) }})"
+                  class="px-2.5 py-1.5 text-[11px] bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg font-semibold inline-flex items-center gap-1 transition-colors">
+                  <i data-lucide="edit-3" class="w-3 h-3"></i> Edit
                 </button>
-              @else
-                <span class="text-[10px] text-slate-400">—</span>
-              @endif
+              </div>
             </td>
           </tr>
           @empty
@@ -268,6 +287,104 @@
         </tbody>
       </table>
     </div>
+  </div>
+</div>
+
+<!-- Modal Edit QC -->
+<div id="modal-edit-qc" class="fixed inset-0 bg-slate-900/50 hidden items-center justify-center z-50 p-4 overflow-y-auto">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-2xl w-full p-6 my-8">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+      <div>
+        <h3 class="font-bold text-slate-900 text-base">Edit Data Inspeksi Quality Control</h3>
+        <p class="text-xs text-slate-500">Revisi kuantitas pemeriksaan, jenis cacat, status QC, atau waktu perbaikan (<code class="font-mono text-indigo-600">QC</code>)</p>
+      </div>
+      <button type="button" onclick="closeEditQcModal()" class="text-slate-400 hover:text-slate-600">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <form id="form-edit-qc" class="space-y-4">
+      <input type="hidden" id="edit-qc-id">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Pesanan Target <span class="text-rose-500">*</span></label>
+          <select id="edit-qc-pesanan" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white">
+            @foreach($orders ?? [] as $ord)
+              <option value="{{ $ord->id_pesanan }}">Pesanan #{{ $ord->id_pesanan }} — {{ $ord->pola->nama_pola ?? $ord->jenis_pesanan }}</option>
+            @endforeach
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Petugas / Penguji QC <span class="text-rose-500">*</span></label>
+          <select id="edit-qc-user" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white">
+            @foreach($qcUsers ?? [] as $usr)
+              <option value="{{ $usr->id_user }}">{{ $usr->nama_user }} ({{ $usr->role }})</option>
+            @endforeach
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Tahap QC <span class="text-rose-500">*</span></label>
+          <select id="edit-qc-tahap" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white font-semibold">
+            <option value="Prototipe">Prototipe</option>
+            <option value="Potong">Potong</option>
+            <option value="Jahit Akhir">Jahit Akhir (+ Stok Jadi)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Waktu Pemeriksaan (<code class="font-mono">tgl_pemeriksaan</code>) <span class="text-rose-500">*</span></label>
+          <input type="datetime-local" id="edit-qc-tgl" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Jumlah Diperiksa (Pcs) <span class="text-rose-500">*</span></label>
+          <input type="number" min="1" id="edit-qc-diperiksa" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Lolos (Pcs) <span class="text-rose-500">*</span></label>
+            <input type="number" min="0" id="edit-qc-lolos" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono font-bold text-emerald-700">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Cacat (Pcs) <span class="text-rose-500">*</span></label>
+            <input type="number" min="0" id="edit-qc-cacat" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono font-bold text-rose-600">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Jenis Cacat <span class="text-rose-500">*</span></label>
+          <select id="edit-qc-jenis" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white">
+            <option value="Tidak Ada">Tidak Ada</option>
+            <option value="Cacat Potong">Cacat Potong</option>
+            <option value="Cacat Jahit">Cacat Jahit</option>
+            <option value="Cacat Bahan">Cacat Bahan</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Status Keputusan QC <span class="text-rose-500">*</span></label>
+          <select id="edit-qc-status" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white font-semibold">
+            <option value="Lolos QC">Lolos QC</option>
+            <option value="Need Rework">Need Rework</option>
+            <option value="Rework Selesai">Rework Selesai</option>
+            <option value="Scrapped">Scrapped</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Target Tenggat Perbaikan</label>
+          <input type="date" id="edit-qc-target" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Tanggal Selesai Perbaikan (<code class="font-mono">tgl_selesai_perbaikan</code>)</label>
+          <input type="datetime-local" id="edit-qc-selesai" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        </div>
+        <div class="col-span-full">
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Catatan / Disposisi PIC (<code class="font-mono">catatan_qc</code>)</label>
+          <input type="text" id="edit-qc-catatan" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+        <button type="button" onclick="closeEditQcModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>
+        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm">Simpan Perubahan QC</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -511,6 +628,93 @@
     .catch(function (err) {
       console.error(err);
       alert('Terjadi kesalahan koneksi.');
+    });
+  });
+
+  function openEditQcModal(qc) {
+    document.getElementById('edit-qc-id').value = qc.id_qc;
+    document.getElementById('edit-qc-pesanan').value = qc.id_pesanan;
+    document.getElementById('edit-qc-user').value = qc.id_user_qc;
+    document.getElementById('edit-qc-tahap').value = qc.tahap_qc;
+    document.getElementById('edit-qc-tgl').value = qc.tgl_pemeriksaan || nowLocalISO();
+    document.getElementById('edit-qc-diperiksa').value = qc.jumlah_diperiksa;
+    document.getElementById('edit-qc-lolos').value = qc.jumlah_lolos;
+    document.getElementById('edit-qc-cacat').value = qc.jumlah_cacat;
+    document.getElementById('edit-qc-jenis').value = qc.jenis_cacat || 'Tidak Ada';
+    document.getElementById('edit-qc-status').value = qc.status_qc || 'Lolos QC';
+    document.getElementById('edit-qc-target').value = qc.tgl_target_perbaikan || '';
+    document.getElementById('edit-qc-selesai').value = qc.tgl_selesai_perbaikan || '';
+    document.getElementById('edit-qc-catatan').value = qc.catatan_qc || '';
+    const m = document.getElementById('modal-edit-qc');
+    m.classList.remove('hidden');
+    m.classList.add('flex');
+  }
+
+  function closeEditQcModal() {
+    const m = document.getElementById('modal-edit-qc');
+    m.classList.add('hidden');
+    m.classList.remove('flex');
+  }
+
+  ['edit-qc-diperiksa', 'edit-qc-cacat'].forEach(function(id) {
+    document.getElementById(id)?.addEventListener('input', function() {
+      const d = parseInt(document.getElementById('edit-qc-diperiksa').value, 10) || 0;
+      const c = parseInt(document.getElementById('edit-qc-cacat').value, 10) || 0;
+      if (d >= c) {
+        document.getElementById('edit-qc-lolos').value = d - c;
+      }
+    });
+  });
+
+  document.getElementById('form-edit-qc')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const id = document.getElementById('edit-qc-id').value;
+    const diperiksa = Number(document.getElementById('edit-qc-diperiksa').value);
+    const lolos = Number(document.getElementById('edit-qc-lolos').value);
+    const cacat = Number(document.getElementById('edit-qc-cacat').value);
+
+    if ((lolos + cacat) !== diperiksa) {
+      alert(`Validasi Mutu Gagal: Jumlah Lolos (${lolos}) + Jumlah Cacat (${cacat}) harus sama dengan Jumlah Diperiksa (${diperiksa})!`);
+      return;
+    }
+
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    const payload = {
+      id_pesanan: Number(document.getElementById('edit-qc-pesanan').value),
+      id_user_qc: Number(document.getElementById('edit-qc-user').value),
+      tahap_qc: document.getElementById('edit-qc-tahap').value,
+      tgl_pemeriksaan: document.getElementById('edit-qc-tgl').value,
+      jumlah_diperiksa: diperiksa,
+      jumlah_lolos: lolos,
+      jumlah_cacat: cacat,
+      jenis_cacat: document.getElementById('edit-qc-jenis').value,
+      status_qc: document.getElementById('edit-qc-status').value,
+      tgl_target_perbaikan: document.getElementById('edit-qc-target').value || null,
+      tgl_selesai_perbaikan: document.getElementById('edit-qc-selesai').value || null,
+      catatan_qc: document.getElementById('edit-qc-catatan').value || null
+    };
+
+    fetch(`/qc/${id}/update`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': token
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        alert(data.message || 'Catatan QC berhasil diperbarui.');
+        window.location.reload();
+      } else {
+        alert('Gagal memperbarui QC: ' + (data.message || 'Validasi gagal'));
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Terjadi kesalahan saat menyimpan perubahan QC.');
     });
   });
 </script>

@@ -37,15 +37,18 @@ class PemotonganSeriController extends Controller
             ->where('status_roll', '!=', 'Habis')
             ->orderBy('id_roll', 'asc')
             ->get();
+        $allRolls = DetailRollBahan::with('detailBahanWarna.penerimaanBahan')
+            ->orderBy('id_roll', 'asc')
+            ->get();
 
         if ($request->wantsJson()) {
             return response()->json([
                 'success' => true,
-                'data' => compact('pemotongan', 'orders', 'users', 'warnaList', 'rolls'),
+                'data' => compact('pemotongan', 'orders', 'users', 'warnaList', 'rolls', 'allRolls'),
             ]);
         }
 
-        return view('bong.pemotongan', compact('pemotongan', 'orders', 'users', 'warnaList', 'rolls'));
+        return view('bong.pemotongan', compact('pemotongan', 'orders', 'users', 'warnaList', 'rolls', 'allRolls'));
     }
 
     public function store(Request $request)
@@ -214,6 +217,132 @@ class PemotonganSeriController extends Controller
             }
 
             return redirect()->route('pemotongan.index')->with('success', "Pemotongan seri {$potong->kode_seri} berhasil diproses.");
+        });
+    }
+
+    public function update(Request $request, $id)
+    {
+        $potong = PemotonganSeri::with('detailPemotonganWarna.detailGelaranKain')->findOrFail($id);
+
+        $validated = $request->validate([
+            'id_pesanan' => 'required|integer|exists:Pesanan,id_pesanan',
+            'id_user_pemotong' => 'required|integer|exists:User,id_user',
+            'kode_seri' => 'required|string|max:50',
+            'jenis_variasi' => 'nullable|string|max:50',
+            'tgl_potong' => 'required|date',
+            'total_lembar_hasil' => 'required|integer|min:1',
+            'id_detail_warna' => 'nullable|integer|exists:Detail_Bahan_Warna,id_detail_warna',
+            'total_lembar_direncanakan' => 'nullable|integer|min:1',
+            'kain_terpakai' => 'nullable|numeric|min:0.01|max:99999999.99',
+            'id_roll' => 'nullable|integer|exists:Detail_Roll_Bahan,id_roll',
+            'panjang_gelar' => 'nullable|numeric|min:0.1',
+            'jumlah_tumpuk' => 'nullable|integer|min:1',
+            'total_lembar_gelar' => 'nullable|integer|min:1',
+            'status_roll_baru' => 'nullable|in:Tersedia,Dipotong,Habis',
+        ]);
+
+        return DB::transaction(function () use ($potong, $validated, $request) {
+            $tglPotong = date('Y-m-d H:i:s', strtotime($validated['tgl_potong']));
+
+            $potong->update([
+                'id_pesanan' => $validated['id_pesanan'],
+                'id_user_pemotong' => $validated['id_user_pemotong'],
+                'kode_seri' => $validated['kode_seri'],
+                'jenis_variasi' => $validated['jenis_variasi'] ?? null,
+                'tgl_potong' => $tglPotong,
+                'total_lembar_hasil' => $validated['total_lembar_hasil'],
+            ]);
+
+            $detailPw = $potong->detailPemotonganWarna->first();
+            $oldKain = $detailPw ? (float) $detailPw->kain_terpakai : 0.0;
+            $newKain = isset($validated['kain_terpakai']) ? (float) $validated['kain_terpakai'] : $oldKain;
+
+            if ($detailPw) {
+                $detailPw->update([
+                    'id_detail_warna' => $validated['id_detail_warna'] ?? $detailPw->id_detail_warna,
+                    'total_lembar_direncanakan' => $validated['total_lembar_direncanakan'] ?? $detailPw->total_lembar_direncanakan,
+                    'kain_terpakai' => $newKain,
+                ]);
+            } elseif (!empty($validated['id_detail_warna'])) {
+                $detailPw = DetailPemotonganWarna::create([
+                    'id_potong' => $potong->id_potong,
+                    'id_detail_warna' => $validated['id_detail_warna'],
+                    'total_lembar_direncanakan' => $validated['total_lembar_direncanakan'] ?? $validated['total_lembar_hasil'],
+                    'kain_terpakai' => $newKain,
+                ]);
+            }
+
+            if ($detailPw) {
+                $gelaran = $detailPw->detailGelaranKain()->first();
+                $oldRollId = $gelaran ? $gelaran->id_roll : null;
+                $newRollId = $validated['id_roll'] ?? $oldRollId;
+
+                if ($gelaran) {
+                    $gelaran->update([
+                        'id_roll' => $newRollId,
+                        'panjang_gelar' => $validated['panjang_gelar'] ?? $gelaran->panjang_gelar,
+                        'jumlah_tumpuk' => $validated['jumlah_tumpuk'] ?? $gelaran->jumlah_tumpuk,
+                        'total_lembar_gelar' => $validated['total_lembar_gelar'] ?? $gelaran->total_lembar_gelar,
+                    ]);
+                } elseif ($newRollId) {
+                    DetailGelaranKain::create([
+                        'id_potong_warna' => $detailPw->id_potong_warna,
+                        'id_roll' => $newRollId,
+                        'panjang_gelar' => $validated['panjang_gelar'] ?? 2.5,
+                        'jumlah_tumpuk' => $validated['jumlah_tumpuk'] ?? 50,
+                        'total_lembar_gelar' => $validated['total_lembar_gelar'] ?? $validated['total_lembar_hasil'],
+                    ]);
+                }
+
+                // Adjust roll stock when kain_terpakai or id_roll changes
+                if ($oldRollId && $newRollId && $oldRollId != $newRollId) {
+                    $oldRoll = DetailRollBahan::where('id_roll', $oldRollId)->lockForUpdate()->first();
+                    if ($oldRoll) {
+                        $restored = min((float) $oldRoll->ukuran_awal, (float) $oldRoll->ukuran_sisa + $oldKain);
+                        $oldRoll->ukuran_sisa = $restored;
+                        $oldRoll->status_roll = ($restored >= (float) $oldRoll->ukuran_awal - 0.01) ? 'Tersedia' : 'Dipotong';
+                        $oldRoll->save();
+                    }
+                    $newRoll = DetailRollBahan::where('id_roll', $newRollId)->lockForUpdate()->first();
+                    if ($newRoll) {
+                        $statusReq = $validated['status_roll_baru'] ?? 'Dipotong';
+                        $sisa = max(0.0, (float) $newRoll->ukuran_sisa - $newKain);
+                        if ($statusReq === 'Habis' || $sisa <= 0.05) {
+                            $newRoll->ukuran_sisa = 0.0;
+                            $newRoll->status_roll = 'Habis';
+                        } else {
+                            $newRoll->ukuran_sisa = $sisa;
+                            $newRoll->status_roll = $statusReq;
+                        }
+                        $newRoll->save();
+                    }
+                } elseif ($newRollId) {
+                    $roll = DetailRollBahan::where('id_roll', $newRollId)->lockForUpdate()->first();
+                    if ($roll) {
+                        $diff = $newKain - $oldKain;
+                        $adjustedSisa = max(0.0, min((float) $roll->ukuran_awal, (float) $roll->ukuran_sisa - $diff));
+                        $statusReq = $validated['status_roll_baru'] ?? $roll->status_roll;
+                        if ($statusReq === 'Habis') {
+                            $roll->ukuran_sisa = 0.0;
+                            $roll->status_roll = 'Habis';
+                        } else {
+                            $roll->ukuran_sisa = $adjustedSisa;
+                            $roll->status_roll = $statusReq;
+                        }
+                        $roll->save();
+                    }
+                }
+            }
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => "Data pemotongan seri {$potong->kode_seri} berhasil diperbarui.",
+                    'data' => $potong->fresh(['pesanan', 'userPemotong', 'detailPemotonganWarna.detailGelaranKain.detailRollBahan']),
+                ]);
+            }
+
+            return redirect()->route('pemotongan.index')->with('success', "Data pemotongan seri {$potong->kode_seri} berhasil diperbarui.");
         });
     }
 }

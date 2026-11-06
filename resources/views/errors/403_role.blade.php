@@ -9,6 +9,9 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans flex items-center justify-center min-h-screen p-4">
+  @php
+    $authRole = $_COOKIE['bong_garment_auth_role'] ?? request()->cookie('bong_garment_auth_role');
+  @endphp
   <div class="max-w-md w-full bg-white rounded-2xl border border-slate-200 shadow-xl p-8 text-center space-y-6">
     <div class="w-16 h-16 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-100 shadow-sm">
       <i data-lucide="shield-alert" class="w-8 h-8"></i>
@@ -20,7 +23,7 @@
       </span>
       <h2 class="text-xl font-bold text-slate-900 mt-3">Izin Akses Tidak Mencukupi</h2>
       <p class="text-xs text-slate-500 mt-2">
-        {{ $customMessage ?? "Peran aktif Anda saat ini (" . ($userRole ?? 'Guest') . ") tidak memiliki hak akses untuk membuka modul ini." }}
+        {{ $customMessage ?? "Akun divisi Anda saat ini (" . ($userRole ?? 'Guest') . ") tidak memiliki hak akses untuk membuka modul ini." }}
       </p>
     </div>
 
@@ -30,11 +33,11 @@
         <span class="font-mono font-semibold text-slate-700">/{{ $requestedUrl ?? '' }}</span>
       </div>
       <div class="flex justify-between">
-        <span class="text-slate-400">Peran Aktif:</span>
+        <span class="text-slate-400">Divisi Aktif:</span>
         <span class="font-semibold text-rose-600">{{ $userRole ?? 'Unknown' }}</span>
       </div>
       <div class="flex justify-between">
-        <span class="text-slate-400">Peran Berizin:</span>
+        <span class="text-slate-400">Divisi Berizin:</span>
         <span class="font-medium text-slate-600">{{ implode(', ', (array)($allowedRoles ?? ['Admin'])) }}</span>
       </div>
     </div>
@@ -44,9 +47,16 @@
         <i data-lucide="arrow-left" class="w-4 h-4"></i>
         <span>Kembali ke Dashboard</span>
       </a>
+      @if($authRole === 'Admin')
       <button type="button" onclick="resetToAdmin()" class="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors">
-        Beralih ke Peran Admin (Akses Penuh)
+        Kembali ke Peran Admin (Akses Penuh)
       </button>
+      @else
+      <a href="/logout" onclick="clearLocalAuth()" class="w-full py-2.5 px-4 bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 font-semibold text-xs rounded-xl transition-colors flex items-center justify-center gap-2">
+        <i data-lucide="log-out" class="w-4 h-4"></i>
+        <span>Keluar / Ganti Akun</span>
+      </a>
+      @endif
     </div>
   </div>
 
@@ -59,6 +69,12 @@
       document.cookie = "bong_garment_role=Admin; path=/; max-age=31536000; SameSite=Lax";
       document.cookie = "bong_garment_user_id=1; path=/; max-age=31536000; SameSite=Lax";
       window.location.reload();
+    }
+    function clearLocalAuth() {
+      localStorage.removeItem('bong_garment_auth_role');
+      localStorage.removeItem('bong_garment_role');
+      localStorage.removeItem('bong_garment_user_id');
+      localStorage.removeItem('bong_garment_user_name');
     }
   </script>
 </body>

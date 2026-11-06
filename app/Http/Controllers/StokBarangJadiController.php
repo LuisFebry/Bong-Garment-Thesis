@@ -69,4 +69,32 @@ class StokBarangJadiController extends Controller
             'data' => $stock,
         ]);
     }
+
+    public function update(Request $request, $id)
+    {
+        $stock = StokBarangJadi::findOrFail($id);
+
+        $validated = $request->validate([
+            'id_pola' => 'required|integer|exists:Pola,id_pola',
+            'id_spesifikasi' => 'required|integer|exists:Spesifikasi_Ukuran,id_spesifikasi',
+            'nama_warna' => 'required|string|max:50',
+            'jumlah_stok_pcs' => 'required|integer|min:0',
+        ]);
+
+        $stock->update([
+            'id_pola' => $validated['id_pola'],
+            'id_spesifikasi' => $validated['id_spesifikasi'],
+            'nama_warna' => $validated['nama_warna'],
+            'jumlah_stok_pcs' => $validated['jumlah_stok_pcs'],
+            'tgl_update_terakhir' => now(),
+        ]);
+
+        $stock->load(['pola', 'spesifikasiUkuran']);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Data Stok Barang Jadi #{$stock->id_stok} ({$stock->nama_warna}) berhasil diperbarui menjadi {$stock->jumlah_stok_pcs} Pcs.",
+            'data' => $stock,
+        ]);
+    }
 }
