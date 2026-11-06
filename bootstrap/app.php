@@ -17,15 +17,20 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
         $middleware->encryptCookies(except: [
             'bong_garment_role',
+            'bong_garment_user_id',
+            'bong_garment_user_name',
         ]);
         $middleware->alias([
             'role' => \App\Http\Middleware\RoleMiddleware::class,
         ]);
         $middleware->validateCsrfTokens(except: [
             'api/*',
+            'login*',
+            'logout*',
             'pesanan*',
             'pola*',
             'penerimaan*',
+            'supplier*',
             'pemotongan*',
             'qc*',
             'stok*',

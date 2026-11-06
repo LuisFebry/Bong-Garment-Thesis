@@ -17,19 +17,28 @@
 
     <!-- Card 1: Data Nota & Informasi Supplier -->
     <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-      <div class="flex items-center gap-3 pb-3 border-b border-slate-100 mb-4">
-        <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-          <i data-lucide="file-text" class="w-4 h-4"></i>
+      <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 mb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+            <i data-lucide="file-text" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-slate-900 text-sm">1. Data Nota & Informasi Supplier</h3>
+            <p class="text-[11px] text-slate-500">Pencatatan identitas surat jalan dan supplier kain (<code class="font-mono text-indigo-600">Penerimaan_Bahan</code>)</p>
+          </div>
         </div>
-        <div>
-          <h3 class="font-bold text-slate-900 text-sm">1. Data Nota & Informasi Supplier</h3>
-          <p class="text-[11px] text-slate-500">Pencatatan identitas surat jalan dan supplier kain (<code class="font-mono text-indigo-600">Penerimaan_Bahan</code>)</p>
-        </div>
+        <button type="button" onclick="openSupplierModal()" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 transition-colors">
+          <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+          + Tambah Supplier
+        </button>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Supplier Kain <span class="text-rose-500">*</span></label>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-semibold text-slate-700">Supplier Kain <span class="text-rose-500">*</span></label>
+            <button type="button" onclick="openSupplierModal()" class="text-[11px] font-semibold text-indigo-600 hover:underline">+ Supplier Baru</button>
+          </div>
           <select name="id_supplier" id="sel-supplier" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
             @foreach($suppliers ?? [] as $sp)
               <option value="{{ $sp->id_supplier }}">{{ $sp->nama_supplier }}</option>
@@ -110,7 +119,7 @@
           </div>
           <div>
             <h3 class="font-bold text-slate-900 text-sm">3. Rincian Gulungan Kain Fisik (Individual Roll Tracking)</h3>
-            <p class="text-[11px] text-slate-500">Setiap baris mencatat 1 roll fisik dengan berat aktual & alokasi rak (<code class="font-mono text-indigo-600">Detail_Roll_Bahan</code>)</p>
+            <p class="text-[11px] text-slate-500">Setiap baris mencatat 1 roll fisik beserta ukuran aktual (<code class="font-mono text-indigo-600">Detail_Roll_Bahan</code>)</p>
           </div>
         </div>
 
@@ -133,8 +142,7 @@
               <th class="py-2.5 pl-4 text-left w-28">No. Roll Ke</th>
               <th class="py-2.5 px-3 text-left w-36">Integer PK (Auto)</th>
               <th class="py-2.5 px-3 text-left">Kelompok Warna</th>
-              <th class="py-2.5 px-3 text-left w-48">Berat Roll *</th>
-              <th class="py-2.5 px-3 text-left w-36">Rak Alokasi</th>
+              <th class="py-2.5 px-3 text-left w-56">Ukuran Roll *</th>
               <th class="py-2.5 px-3 text-center w-28">Status Roll</th>
               <th class="py-2.5 pr-4 text-center w-16">Aksi</th>
             </tr>
@@ -205,7 +213,7 @@
             <div class="mt-2 space-y-1">
               @foreach($bw->detailRollBahan ?? [] as $roll)
               <div class="flex items-center justify-between text-[10px] font-mono bg-slate-50 p-1 rounded">
-                <span>Roll #{{ $roll->no_roll_ke }}</span>
+                <span>Roll #{{ $roll->no_roll_ke }} (#{{ $roll->id_roll }})</span>
                 <span>Sisa: <b>{{ $roll->ukuran_sisa }}</b> / {{ $roll->ukuran_awal }} {{ $roll->satuan }}</span>
                 <span class="px-1.5 py-0.5 rounded font-semibold {{ $roll->status_roll === 'Tersedia' ? 'bg-emerald-100 text-emerald-800' : ($roll->status_roll === 'Dipotong' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800') }}">
                   {{ $roll->status_roll }}
@@ -224,18 +232,106 @@
   </div>
 </div>
 
+<!-- Modal Tambah Supplier Baru -->
+<div id="modal-add-supplier" class="fixed inset-0 bg-slate-900/50 hidden items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+      <div>
+        <h3 class="font-bold text-slate-900 text-base">Tambah Supplier Baru</h3>
+        <p class="text-xs text-slate-500">Registrasi supplier kain/aksesoris ke tabel <code class="font-mono text-indigo-600">Supplier</code></p>
+      </div>
+      <button type="button" onclick="closeSupplierModal()" class="text-slate-400 hover:text-slate-600">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <form id="form-add-supplier" class="space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Supplier <span class="text-rose-500">*</span></label>
+        <input type="text" id="sup-nama" required placeholder="Contoh: PT Kahatex Tekstil Prima" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Kontak / No. Telepon</label>
+        <input type="text" id="sup-kontak" placeholder="Contoh: 021-5551234 / 08123456789" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Alamat Supplier</label>
+        <textarea id="sup-alamat" rows="2" placeholder="Contoh: Jl. Raya Rancaekek KM 23, Bandung" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500"></textarea>
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+        <button type="button" onclick="closeSupplierModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>
+        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm">Simpan Supplier</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 @push('scripts')
 <script>
+  // Supplier Modal Functions
+  function openSupplierModal() {
+    const m = document.getElementById('modal-add-supplier');
+    m.classList.remove('hidden');
+    m.classList.add('flex');
+  }
+  function closeSupplierModal() {
+    const m = document.getElementById('modal-add-supplier');
+    m.classList.add('hidden');
+    m.classList.remove('flex');
+  }
+
+  document.getElementById('form-add-supplier')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const payload = {
+      nama_supplier: document.getElementById('sup-nama').value,
+      kontak: document.getElementById('sup-kontak').value || null,
+      alamat: document.getElementById('sup-alamat').value || null
+    };
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+    fetch("{{ route('supplier.store', [], false) }}", {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': token
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success && data.data) {
+        const sel = document.getElementById('sel-supplier');
+        if (sel) {
+          const opt = document.createElement('option');
+          opt.value = data.data.id_supplier;
+          opt.textContent = data.data.nama_supplier;
+          opt.selected = true;
+          sel.appendChild(opt);
+        }
+        closeSupplierModal();
+        document.getElementById('form-add-supplier').reset();
+        alert(data.message || 'Supplier baru berhasil ditambahkan!');
+      } else {
+        alert('Gagal menambah supplier: ' + (data.message || 'Validasi gagal'));
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Terjadi kesalahan saat menyimpan supplier.');
+    });
+  });
+
   // Initial State for Color Groups & Draft Rolls
   let colorGroups = [
-    { id: 1, namaWarna: 'Hitam Reaktif', kodeWarna: 'BLK-30S-01', satuanUkur: 'Kg', rakDefault: 'B-04' }
+    { id: 1, namaWarna: 'Hitam Reaktif', kodeWarna: 'BLK-30S-01', satuanUkur: 'Kg' }
   ];
   let nextColorGroupId = 2;
 
   let draftRolls = [
-    { colorGroupId: 1, berat: 24.50, rakAlokasi: 'B-04' },
-    { colorGroupId: 1, berat: 25.00, rakAlokasi: 'B-04' },
-    { colorGroupId: 1, berat: 25.00, rakAlokasi: 'B-04' }
+    { colorGroupId: 1, berat: 24.50 },
+    { colorGroupId: 1, berat: 25.00 },
+    { colorGroupId: 1, berat: 25.00 }
   ];
 
   // Refresh Lucide Icons Helper
@@ -245,12 +341,15 @@
     }
   }
 
-  // Update Summary Counters
+  // Update Summary Counters & Color Group Badges
   function updateDraftRollsSummary() {
     const totalRolls = draftRolls.length;
-    let totalWeight = 0;
+    const totalsByUnit = {};
+
     draftRolls.forEach(function (r) {
-      totalWeight += (parseFloat(r.berat) || 0);
+      const cg = colorGroups.find(function (c) { return Number(c.id) === Number(r.colorGroupId); }) || colorGroups[0];
+      const unit = cg ? (cg.satuanUkur || 'Kg') : 'Kg';
+      totalsByUnit[unit] = (totalsByUnit[unit] || 0) + (parseFloat(r.berat) || 0);
     });
 
     const countEl = document.getElementById('summary-rolls-count');
@@ -258,9 +357,27 @@
 
     const weightEl = document.getElementById('summary-rolls-weight');
     if (weightEl) {
-      const unit = (colorGroups[0] && colorGroups[0].satuanUkur) ? colorGroups[0].satuanUkur : 'Kg';
-      weightEl.textContent = 'Total: ' + totalWeight.toFixed(2) + ' ' + unit;
+      const parts = Object.keys(totalsByUnit).map(function (u) {
+        return totalsByUnit[u].toFixed(2) + ' ' + u;
+      });
+      const fallbackUnit = (colorGroups[0] && colorGroups[0].satuanUkur) ? colorGroups[0].satuanUkur : 'Kg';
+      weightEl.textContent = 'Total: ' + (parts.length > 0 ? parts.join(' + ') : ('0.00 ' + fallbackUnit));
     }
+
+    // Also update each color group badge in Card 2 dynamically
+    colorGroups.forEach(function (cg) {
+      const badgeEl = document.querySelector(`.badge-cg-summary[data-cg-id="${cg.id}"]`);
+      if (badgeEl) {
+        const rollsInGroup = draftRolls.filter(function (r) {
+          return Number(r.colorGroupId) === Number(cg.id);
+        });
+        let totalSizeInGroup = 0;
+        rollsInGroup.forEach(function (r) {
+          totalSizeInGroup += (parseFloat(r.berat) || 0);
+        });
+        badgeEl.textContent = `${rollsInGroup.length} Roll (${totalSizeInGroup.toFixed(1)} ${cg.satuanUkur || 'Kg'})`;
+      }
+    });
   }
 
   // Render Color Groups in Card 2
@@ -272,9 +389,9 @@
       const rollsInGroup = draftRolls.filter(function (r) {
         return Number(r.colorGroupId) === Number(cg.id);
       });
-      let totalKgInGroup = 0;
+      let totalSizeInGroup = 0;
       rollsInGroup.forEach(function (r) {
-        totalKgInGroup += (parseFloat(r.berat) || 0);
+        totalSizeInGroup += (parseFloat(r.berat) || 0);
       });
 
       return `
@@ -299,8 +416,8 @@
           </div>
 
           <div class="flex items-center justify-between gap-2">
-            <span class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-mono font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
-              ${rollsInGroup.length} Roll (${totalKgInGroup.toFixed(1)} ${cg.satuanUkur || 'Kg'})
+            <span class="badge-cg-summary inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-mono font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100" data-cg-id="${cg.id}">
+              ${rollsInGroup.length} Roll (${totalSizeInGroup.toFixed(1)} ${cg.satuanUkur || 'Kg'})
             </span>
             ${colorGroups.length > 1 ? `
               <button type="button" class="btn-remove-cg px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg inline-flex items-center gap-1 transition-colors" data-cg-id="${cg.id}">
@@ -335,6 +452,7 @@
         const id = Number(this.dataset.cgId);
         const cg = colorGroups.find(function (c) { return c.id === id; });
         if (cg) cg.satuanUkur = this.value;
+        renderColorGroups();
         renderDraftRollsTable();
       });
     });
@@ -378,13 +496,10 @@
             </select>
           </td>
           <td class="px-3 py-2.5">
-            <div class="relative flex items-center">
-              <input type="number" step="0.01" min="0.1" class="inp-roll-weight w-full h-8 text-xs font-mono p-1.5 pr-8 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500" data-roll-idx="${i}" value="${Number(r.berat).toFixed(2)}">
-              <span class="absolute right-2 text-xs text-slate-400 font-mono pointer-events-none">${unitLabel}</span>
+            <div class="flex items-stretch border border-slate-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 bg-white">
+              <input type="number" step="0.01" min="0.1" class="inp-roll-weight flex-1 min-w-0 h-8 text-xs font-mono px-2.5 py-1.5 border-0 focus:outline-none" data-roll-idx="${i}" value="${Number(r.berat).toFixed(2)}">
+              <span class="px-2.5 bg-slate-50 border-l border-slate-200 text-[11px] text-slate-600 font-mono font-semibold flex items-center select-none">${unitLabel}</span>
             </div>
-          </td>
-          <td class="px-3 py-2.5">
-            <input type="text" class="inp-roll-rak w-full h-8 text-xs font-mono uppercase p-1.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500" data-roll-idx="${i}" value="${r.rakAlokasi || 'B-04'}" placeholder="cth. B-04">
           </td>
           <td class="px-3 py-2.5 text-center">
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
@@ -422,15 +537,6 @@
       });
     });
 
-    tbody.querySelectorAll('.inp-roll-rak').forEach(function (inp) {
-      inp.addEventListener('input', function () {
-        const idx = Number(this.dataset.rollIdx);
-        if (draftRolls[idx]) {
-          draftRolls[idx].rakAlokasi = this.value;
-        }
-      });
-    });
-
     tbody.querySelectorAll('.btn-remove-roll').forEach(function (btn) {
       btn.addEventListener('click', function () {
         const idx = Number(this.dataset.rollIdx);
@@ -448,8 +554,7 @@
       id: nextColorGroupId++,
       namaWarna: '',
       kodeWarna: '',
-      satuanUkur: 'Kg',
-      rakDefault: 'B-04'
+      satuanUkur: 'Kg'
     });
     renderColorGroups();
     renderDraftRollsTable();
@@ -472,11 +577,9 @@
   // Add 1 Roll Row
   function addRollRow(weight) {
     const defaultColorId = colorGroups[0] ? colorGroups[0].id : 1;
-    const defaultRak = (colorGroups[0] && colorGroups[0].rakDefault) ? colorGroups[0].rakDefault : 'B-04';
     draftRolls.push({
       colorGroupId: defaultColorId,
-      berat: weight !== undefined ? weight : 25.00,
-      rakAlokasi: defaultRak
+      berat: weight !== undefined ? weight : 25.00
     });
     renderDraftRollsTable();
     renderColorGroups();
@@ -485,12 +588,10 @@
   // Add 5 Rolls at Once
   function add5Rolls() {
     const defaultColorId = colorGroups[0] ? colorGroups[0].id : 1;
-    const defaultRak = (colorGroups[0] && colorGroups[0].rakDefault) ? colorGroups[0].rakDefault : 'B-04';
     for (let i = 0; i < 5; i++) {
       draftRolls.push({
         colorGroupId: defaultColorId,
-        berat: 25.00,
-        rakAlokasi: defaultRak
+        berat: 25.00
       });
     }
     renderDraftRollsTable();
@@ -508,13 +609,13 @@
   // Reset Form
   function resetPenerimaanForm() {
     colorGroups = [
-      { id: 1, namaWarna: 'Hitam Reaktif', kodeWarna: 'BLK-30S-01', satuanUkur: 'Kg', rakDefault: 'B-04' }
+      { id: 1, namaWarna: 'Hitam Reaktif', kodeWarna: 'BLK-30S-01', satuanUkur: 'Kg' }
     ];
     nextColorGroupId = 2;
     draftRolls = [
-      { colorGroupId: 1, berat: 24.50, rakAlokasi: 'B-04' },
-      { colorGroupId: 1, berat: 25.00, rakAlokasi: 'B-04' },
-      { colorGroupId: 1, berat: 25.00, rakAlokasi: 'B-04' }
+      { colorGroupId: 1, berat: 24.50 },
+      { colorGroupId: 1, berat: 25.00 },
+      { colorGroupId: 1, berat: 25.00 }
     ];
     document.getElementById('form-penerimaan').reset();
     setDefaultDateAndNota();
@@ -580,11 +681,11 @@
       return;
     }
 
-    // Check each roll has positive weight
+    // Check each roll has positive size
     for (let i = 0; i < draftRolls.length; i++) {
       const w = parseFloat(draftRolls[i].berat);
       if (isNaN(w) || w <= 0) {
-        alert('Berat roll pada baris Roll #' + (i + 1) + ' tidak valid (harus lebih dari 0).');
+        alert('Ukuran roll pada baris Roll #' + (i + 1) + ' tidak valid (harus lebih dari 0).');
         return;
       }
     }

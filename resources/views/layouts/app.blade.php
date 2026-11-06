@@ -5,6 +5,15 @@
       $currentRole = 'Admin';
   }
 
+  $roleUsers = [
+      'Admin' => ['id' => 1, 'name' => 'Luis Febry (Admin Produksi)', 'username' => '@admin', 'initials' => 'LF'],
+      'Pemilik' => ['id' => 2, 'name' => 'Bong (Pemilik CMT)', 'username' => '@pemilik', 'initials' => 'BG'],
+      'Pemotong' => ['id' => 3, 'name' => 'Budi Santoso (Head Cutter)', 'username' => '@pemotong', 'initials' => 'BS'],
+      'QC' => ['id' => 4, 'name' => 'Siti Rahma (Lead QC)', 'username' => '@qc', 'initials' => 'SR'],
+      'Gudang' => ['id' => 5, 'name' => 'Agus Hermawan (Kepala Gudang)', 'username' => '@gudang', 'initials' => 'AH'],
+  ];
+  $activeUser = $roleUsers[$currentRole] ?? $roleUsers['Admin'];
+
   $showPesanan = in_array($currentRole, ['Admin']);
   $showPenerimaan = in_array($currentRole, ['Admin', 'Gudang']);
   $showPemotongan = in_array($currentRole, ['Admin', 'Pemotong']);
@@ -65,11 +74,14 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <style>
-    /* Custom Scrollbar */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #f1f5f9; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    @media print {
+      aside, header, .no-print { display: none !important; }
+      body, main { height: auto !important; overflow: visible !important; background: #fff !important; padding: 0 !important; }
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans antialiased flex h-screen overflow-hidden">
@@ -129,16 +141,21 @@
       </nav>
     </div>
 
-    <!-- User / Thesis Badge Footer -->
+    <!-- User / Session Profile Card Footer -->
     <div class="p-4 border-t border-slate-100">
-      <div class="flex items-center gap-3 p-2 bg-slate-50 rounded-xl border border-slate-100">
-        <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs">
-          LF
+      <div class="flex items-center justify-between gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+        <div class="flex items-center gap-2.5 overflow-hidden">
+          <div id="sidebar-user-initials" class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs shrink-0">
+            {{ $activeUser['initials'] }}
+          </div>
+          <div class="overflow-hidden">
+            <p id="sidebar-user-name" class="text-xs font-semibold text-slate-800 truncate">{{ $activeUser['name'] }}</p>
+            <p class="text-[10px] text-slate-400 font-mono">Luis Febry &bull; 825220088</p>
+          </div>
         </div>
-        <div class="overflow-hidden">
-          <p class="text-xs font-semibold text-slate-800 truncate">Luis Febry</p>
-          <p class="text-[10px] text-slate-400 font-mono">NIM: 825220088</p>
-        </div>
+        <a href="{{ route('login', [], false) }}" title="Ganti Akun / Login" class="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors shrink-0">
+          <i data-lucide="log-out" class="w-4 h-4"></i>
+        </a>
       </div>
       <p class="text-[10px] text-slate-400 text-center mt-2 font-medium">Skripsi SI UNTAR &copy; 2026</p>
     </div>
@@ -148,14 +165,19 @@
   <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
     <!-- Top Navigation Header -->
     <header class="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0 z-20">
-      <!-- Search Input -->
-      <div class="relative w-80">
-        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-        <input type="text" id="global-search" placeholder="Cari pesanan, nota, seri..." class="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all text-slate-700">
+      <!-- Left: System Context Info -->
+      <div class="flex items-center gap-3">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          Sistem Produksi Aktif
+        </span>
+        <span class="hidden sm:inline-block text-xs text-slate-400 font-medium">
+          Manajemen Produksi &amp; Inventori Konveksi CMT (EDF Scheduling)
+        </span>
       </div>
 
-      <!-- Header Right: Role Switcher & Audit Mode Badge -->
-      <div class="flex items-center gap-4">
+      <!-- Header Right: Active Account, Role Switcher & Logout -->
+      <div class="flex items-center gap-3">
         <!-- Mode Audit Indicator (for Pemilik) -->
         <div id="audit-mode-badge" class="{{ $currentRole === 'Pemilik' ? '' : 'hidden' }} flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium">
           <i data-lucide="eye" class="w-3.5 h-3.5"></i>
@@ -164,6 +186,7 @@
 
         <!-- Role Selector Dropdown -->
         <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
+          <i data-lucide="shield" class="w-3.5 h-3.5 text-indigo-600"></i>
           <label for="role-select" class="text-xs text-slate-500 font-medium">Peran Aktif:</label>
           <select id="role-select" class="text-xs font-semibold bg-transparent text-indigo-900 border-none focus:ring-0 cursor-pointer pr-6 py-1">
             <option value="Admin" {{ $currentRole === 'Admin' ? 'selected' : '' }}>Admin (Penuh)</option>
@@ -173,6 +196,12 @@
             <option value="Gudang" {{ $currentRole === 'Gudang' ? 'selected' : '' }}>Gudang (Bahan & Stok)</option>
           </select>
         </div>
+
+        <!-- Login / Switch User Page Link -->
+        <a href="{{ route('login', [], false) }}" class="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-indigo-600 text-xs font-semibold flex items-center gap-1.5 transition-colors">
+          <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
+          <span class="hidden md:inline">Halaman Login</span>
+        </a>
       </div>
     </header>
 
@@ -192,6 +221,7 @@
     window.openModal = function (id) {
       const el = document.getElementById(id);
       if (el) el.classList.remove('hidden');
+      if (window.lucide) lucide.createIcons();
     };
     window.closeModal = function (id) {
       const el = document.getElementById(id);
@@ -203,7 +233,7 @@
     window.fetch = function (url, options) {
       options = options || {};
       options.headers = options.headers || {};
-      const role = localStorage.getItem('bong_garment_role') || 'Admin';
+      const role = localStorage.getItem('bong_garment_role') || '{{ $currentRole }}';
 
       if (options.headers instanceof Headers) {
         if (!options.headers.has('X-User-Role')) options.headers.set('X-User-Role', role);
@@ -218,12 +248,26 @@
       const auditBadge = document.getElementById('audit-mode-badge');
       const navItems = document.querySelectorAll('.nav-item[data-roles]');
 
+      const roleDirectory = {
+        'Admin': { id: 1, name: 'Luis Febry (Admin Produksi)', initials: 'LF' },
+        'Pemilik': { id: 2, name: 'Bong (Pemilik CMT)', initials: 'BG' },
+        'Pemotong': { id: 3, name: 'Budi Santoso (Head Cutter)', initials: 'BS' },
+        'QC': { id: 4, name: 'Siti Rahma (Lead QC)', initials: 'SR' },
+        'Gudang': { id: 5, name: 'Agus Hermawan (Kepala Gudang)', initials: 'AH' }
+      };
+
       function applyRole(role) {
         localStorage.setItem('bong_garment_role', role);
         document.cookie = "bong_garment_role=" + encodeURIComponent(role) + "; path=/; max-age=31536000; SameSite=Lax";
         if (roleSelect && roleSelect.value !== role) {
           roleSelect.value = role;
         }
+
+        const profile = roleDirectory[role] || roleDirectory['Admin'];
+        const nameEl = document.getElementById('sidebar-user-name');
+        const initEl = document.getElementById('sidebar-user-initials');
+        if (nameEl) nameEl.textContent = profile.name;
+        if (initEl) initEl.textContent = profile.initials;
 
         if (auditBadge) {
           auditBadge.classList.toggle('hidden', role !== 'Pemilik');
@@ -253,7 +297,6 @@
           localStorage.setItem('bong_garment_role', newRole);
           document.cookie = "bong_garment_role=" + encodeURIComponent(newRole) + "; path=/; max-age=31536000; SameSite=Lax";
 
-          // Route permission check on role change
           const path = window.location.pathname;
           const rolePermissions = {
             'Admin': ['*'],
@@ -317,9 +360,11 @@
         });
       };
 
-      // Window helper: Complete QC Rework
+      // Window helper: Complete QC Rework with actual completion date/time
       window.completeRework = function (id) {
-        if (!confirm('Tandai inspeksi QC #' + id + ' sebagai Rework Selesai?')) return;
+        const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
+        const tglSelesai = prompt('Masukkan Tanggal & Waktu Aktual Selesai Perbaikan Rework (YYYY-MM-DD HH:MM):', nowStr);
+        if (!tglSelesai) return;
 
         fetch('/qc/' + id + '/complete-rework', {
           method: 'POST',
@@ -327,7 +372,10 @@
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'X-CSRF-TOKEN': csrfToken
-          }
+          },
+          body: JSON.stringify({
+            tgl_selesai_perbaikan: tglSelesai
+          })
         })
         .then(function (res) { return res.json(); })
         .then(function (data) {
@@ -343,27 +391,6 @@
           alert('Terjadi kesalahan saat memproses permintaan.');
         });
       };
-
-      // Real-time global search across tables and card items (Penerimaan, etc.)
-      const searchInput = document.getElementById('global-search');
-      if (searchInput) {
-        searchInput.addEventListener('input', function () {
-          const query = this.value.toLowerCase().trim();
-          // Filter table rows
-          const rows = document.querySelectorAll('main table tbody tr');
-          rows.forEach(function (row) {
-            if (row.querySelector('td[colspan]')) return;
-            const text = row.textContent.toLowerCase();
-            row.style.display = (!query || text.includes(query)) ? '' : 'none';
-          });
-          // Filter searchable cards (such as in Penerimaan Bahan)
-          const cards = document.querySelectorAll('main .searchable-card');
-          cards.forEach(function (card) {
-            const text = card.textContent.toLowerCase();
-            card.style.display = (!query || text.includes(query)) ? '' : 'none';
-          });
-        });
-      }
     });
   </script>
   @stack('scripts')

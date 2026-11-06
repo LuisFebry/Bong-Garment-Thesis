@@ -51,5 +51,10 @@ class SpesifikasiUkuran extends Model
     {
         return $this->hasMany(StokBarangJadi::class, 'id_spesifikasi', 'id_spesifikasi');
     }
+
+    public function getUkuranAttribute(): ?string
+    {
+        return $this->nama_ukuran;
+    }
 }
 

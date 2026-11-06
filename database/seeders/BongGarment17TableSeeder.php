@@ -311,10 +311,20 @@ class BongGarment17TableSeeder extends Seeder
                 'tahap_qc' => 'Jahit Akhir', 'tgl_pemeriksaan' => '2026-10-30 16:00:00',
                 'jumlah_diperiksa' => 294, 'jumlah_lolos' => 290, 'jumlah_cacat' => 4,
                 'jenis_cacat' => 'Cacat Jahit',
-                'catatan_qc' => 'Obras kerah terlepas pada 4 pcs kaos, segera diperbaiki operator jahit',
+                'catatan_qc' => '[PIC: Mitra Penjahit CMT] Obras kerah terlepas pada 4 pcs kaos, segera diperbaiki operator jahit',
                 'status_qc' => 'Rework Selesai',
                 'tgl_target_perbaikan' => '2026-10-31',
                 'tgl_selesai_perbaikan' => '2026-10-31 09:00:00',
+            ],
+            [
+                'id_qc' => 3, 'id_pesanan' => 2, 'id_user_qc' => 4,
+                'tahap_qc' => 'Prototipe', 'tgl_pemeriksaan' => '2026-10-31 11:00:00',
+                'jumlah_diperiksa' => 20, 'jumlah_lolos' => 18, 'jumlah_cacat' => 2,
+                'jenis_cacat' => 'Cacat Bahan',
+                'catatan_qc' => '[PIC: Gudang Bahan (Klaim Retur Supplier)] Ditemukan noda oli tenun (fabric stain) pada 2 pcs sampel kain, diajukan klaim retur ke supplier',
+                'status_qc' => 'Need Rework',
+                'tgl_target_perbaikan' => '2026-11-05',
+                'tgl_selesai_perbaikan' => null,
             ],
         ]);
     }

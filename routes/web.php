@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PolaController;
 use App\Http\Controllers\AksesorisController;
@@ -19,6 +20,12 @@ use App\Http\Middleware\RoleMiddleware;
 | Undergraduate Thesis: Luis Febry (NIM: 825220088)
 | Universitas Tarumanagara 2026
 */
+
+// Authentication Routes (Login / Logout)
+Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
+Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
+Route::get('/logout', [AuthController::class, 'logout'])->name('logout');
+Route::post('/logout', [AuthController::class, 'logout'])->name('logout.post');
 
 Route::get('/', [DashboardController::class, 'index'])->name('home');
 Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
@@ -40,11 +47,15 @@ Route::prefix('pesanan')->middleware(RoleMiddleware::class . ':Admin')->group(fu
     Route::post('/{id}/status', [PesananController::class, 'updateStatus'])->name('pesanan.status');
 });
 
-// Penerimaan Bahan: Admin, Gudang
+// Penerimaan Bahan & Supplier Registration: Admin, Gudang
 Route::prefix('penerimaan')->middleware(RoleMiddleware::class . ':Admin,Gudang')->group(function () {
     Route::get('/', [PenerimaanBahanController::class, 'index'])->name('penerimaan.index');
     Route::post('/', [PenerimaanBahanController::class, 'store'])->name('penerimaan.store');
 });
+
+Route::post('/supplier', [PenerimaanBahanController::class, 'storeSupplier'])
+    ->middleware(RoleMiddleware::class . ':Admin,Gudang')
+    ->name('supplier.store');
 
 // Pemotongan Seri: Admin, Pemotong
 Route::prefix('pemotongan')->middleware(RoleMiddleware::class . ':Admin,Pemotong')->group(function () {
@@ -69,7 +80,11 @@ Route::prefix('stok')->middleware(RoleMiddleware::class . ':Admin,Gudang,Pemilik
 Route::prefix('aksesoris')->middleware(RoleMiddleware::class . ':Admin,Gudang')->group(function () {
     Route::get('/', [AksesorisController::class, 'index'])->name('aksesoris.index');
     Route::post('/', [AksesorisController::class, 'store'])->name('aksesoris.store');
+    Route::post('/pola-mapping', [AksesorisController::class, 'storePolaMapping'])->name('aksesoris.pola_mapping.store');
+    Route::post('/pola-mapping/delete', [AksesorisController::class, 'destroyPolaMapping'])->name('aksesoris.pola_mapping.delete');
     Route::post('/{id}/stock', [AksesorisController::class, 'updateStock'])->name('aksesoris.stock');
+    Route::post('/{id}/update', [AksesorisController::class, 'update'])->name('aksesoris.update');
+    Route::post('/{id}/delete', [AksesorisController::class, 'destroy'])->name('aksesoris.delete');
 });
 
 // Laporan Eksekutif: Admin, Pemilik

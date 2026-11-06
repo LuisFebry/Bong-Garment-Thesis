@@ -107,5 +107,22 @@ class PenerimaanBahanController extends Controller
             ], 201);
         });
     }
+
+    public function storeSupplier(Request $request)
+    {
+        $validated = $request->validate([
+            'nama_supplier' => 'required|string|max:100',
+            'kontak' => 'nullable|string|max:50',
+            'alamat' => 'nullable|string|max:255',
+        ]);
+
+        $supplier = Supplier::create($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Supplier {$supplier->nama_supplier} berhasil ditambahkan.",
+            'data' => $supplier,
+        ], 201);
+    }
 }
 

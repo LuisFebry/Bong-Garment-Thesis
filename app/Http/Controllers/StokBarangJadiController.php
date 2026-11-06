@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use App\Models\StokBarangJadi;
 use App\Models\Pola;
 use App\Models\SpesifikasiUkuran;
+use App\Models\Aksesoris;
+use App\Models\Supplier;
 
 class StokBarangJadiController extends Controller
 {
@@ -15,12 +17,12 @@ class StokBarangJadiController extends Controller
             ->orderBy('tgl_update_terakhir', 'desc')
             ->get();
 
-        $pola = Pola::with('spesifikasiUkuran')->get();
-        $aksesoris = \App\Models\Aksesoris::with('supplier')->get();
-        $suppliers = \App\Models\Supplier::all();
+        $pola = Pola::with(['spesifikasiUkuran', 'detailAksesorisPola.aksesoris'])->get();
+        $aksesoris = Aksesoris::with('supplier')->get();
+        $suppliers = Supplier::all();
 
         if ($request->wantsJson()) {
-            return response()->json(['success' => true, 'data' => compact('stok', 'aksesoris')]);
+            return response()->json(['success' => true, 'data' => compact('stok', 'aksesoris', 'pola')]);
         }
 
         return view('bong.gudang', compact('stok', 'pola', 'aksesoris', 'suppliers'));
@@ -33,6 +35,7 @@ class StokBarangJadiController extends Controller
             'id_spesifikasi' => 'required|integer|exists:Spesifikasi_Ukuran,id_spesifikasi',
             'nama_warna' => 'required|string|max:50',
             'delta_pcs' => 'required|integer',
+            'alasan_penyesuaian' => 'nullable|string|max:150',
         ]);
 
         $stock = StokBarangJadi::firstOrNew([
@@ -45,7 +48,7 @@ class StokBarangJadiController extends Controller
         if ($newPcs < 0) {
             return response()->json([
                 'success' => false,
-                'message' => 'Stok barang jadi tidak boleh bernilai negatif.',
+                'message' => 'Stok barang jadi tidak mencukupi (tidak boleh bernilai negatif).',
             ], 422);
         }
 
@@ -55,9 +58,14 @@ class StokBarangJadiController extends Controller
 
         $stock->load(['pola', 'spesifikasiUkuran']);
 
+        $alasanText = !empty($validated['alasan_penyesuaian']) ? " ({$validated['alasan_penyesuaian']})" : '';
+        $jenisText = $validated['delta_pcs'] < 0
+            ? 'Pengeluaran stok ' . abs($validated['delta_pcs']) . ' pcs'
+            : 'Penambahan stok +' . $validated['delta_pcs'] . ' pcs';
+
         return response()->json([
             'success' => true,
-            'message' => "Stok barang jadi diperbarui menjadi {$stock->jumlah_stok_pcs} pcs.",
+            'message' => "{$jenisText}{$alasanText} berhasil dicatat. Sisa stok barang jadi: {$stock->jumlah_stok_pcs} pcs.",
             'data' => $stock,
         ]);
     }
