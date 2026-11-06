@@ -17,18 +17,6 @@ class DashboardController extends Controller
 {
     public function index(Request $request)
     {
-        // Auto-provision 17 tables on first web visit if tables do not exist yet
-        try {
-            if (!Schema::hasTable('Pesanan')) {
-                Artisan::call('migrate:fresh', [
-                    '--force' => true,
-                    '--seed' => true,
-                ]);
-            }
-        } catch (\Throwable $e) {
-            report($e);
-        }
-
         $kpi = [
             'total_pesanan_aktif' => Pesanan::whereNotIn('status_pesanan', ['Selesai', 'Dibatalkan'])->count(),
             'total_roll_tersedia' => DetailRollBahan::where('status_roll', 'Tersedia')->count(),

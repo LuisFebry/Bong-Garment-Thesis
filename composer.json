@@ -1,7 +1,7 @@
 {
     "name": "bong-garment/production-system",
     "type": "project",
-    "description": "Sistem Informasi Manajemen Produksi & Inventori CMT Bong Garment - Skripsi S1 Sistem Informasi UNTAR 2026 oleh Luis Febry (NIM: 825220088)",
+    "description": "Sistem Informasi Manajemen Produksi & Inventori CMT Bong Garment — oleh Luis Febry",
     "keywords": ["laravel", "garment", "cmt", "inventory", "production", "edf-scheduling"],
     "license": "MIT",
     "require": {

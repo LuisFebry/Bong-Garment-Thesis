@@ -2,29 +2,46 @@
   $validRoles = ['Admin', 'Pemilik', 'Pemotong', 'QC', 'Gudang'];
   $authRole = $_COOKIE['bong_garment_auth_role'] ?? request()->cookie('bong_garment_auth_role');
   $cookieRole = $_COOKIE['bong_garment_role'] ?? request()->cookie('bong_garment_role');
+  $authUserId = $_COOKIE['bong_garment_user_id'] ?? request()->cookie('bong_garment_user_id');
 
-  if ($authRole && in_array($authRole, $validRoles, true)) {
-      if ($authRole === 'Admin' && $cookieRole && in_array($cookieRole, $validRoles, true)) {
-          $currentRole = $cookieRole;
-      } else {
-          $currentRole = $authRole;
+  // Query the actual authenticated user from the database so their real identity is always preserved
+  $loggedInUser = null;
+  if ($authUserId) {
+      try {
+          $loggedInUser = \App\Models\User::find($authUserId);
+      } catch (\Throwable $e) {
+          $loggedInUser = null;
       }
-  } elseif ($cookieRole && in_array($cookieRole, $validRoles, true)) {
+  }
+
+  $trueUserRole = $loggedInUser ? $loggedInUser->role : ($authRole ?: 'Admin');
+  $isAdminAccount = ($trueUserRole === 'Admin');
+
+  if ($isAdminAccount && $cookieRole && in_array($cookieRole, $validRoles, true)) {
       $currentRole = $cookieRole;
+  } elseif (in_array($trueUserRole, $validRoles, true)) {
+      $currentRole = $trueUserRole;
   } else {
       $currentRole = 'Admin';
   }
 
-  $isAdminAccount = ($authRole === 'Admin');
+  $displayUserName = $loggedInUser ? $loggedInUser->nama_user : ($_COOKIE['bong_garment_user_name'] ?? request()->cookie('bong_garment_user_name') ?? 'Administrator');
+  // Clean up any legacy seeded name if still in cookie
+  if (stripos($displayUserName, 'Luis Febry') !== false) {
+      $displayUserName = 'Administrator';
+  }
+  $displayUsername = $loggedInUser ? ('@' . $loggedInUser->username) : '@admin';
 
-  $roleUsers = [
-      'Admin' => ['id' => 1, 'name' => 'Luis Febry (Admin Produksi)', 'username' => '@admin', 'initials' => 'LF', 'label' => 'Admin (Akses Penuh)'],
-      'Pemilik' => ['id' => 2, 'name' => 'Bong (Pemilik CMT)', 'username' => '@pemilik', 'initials' => 'BG', 'label' => 'Pemilik (Mode Audit)'],
-      'Pemotong' => ['id' => 3, 'name' => 'Budi Santoso (Head Cutter)', 'username' => '@pemotong', 'initials' => 'BS', 'label' => 'Pemotong (Cutting)'],
-      'QC' => ['id' => 4, 'name' => 'Siti Rahma (Lead QC)', 'username' => '@qc', 'initials' => 'SR', 'label' => 'QC (Inspeksi)'],
-      'Gudang' => ['id' => 5, 'name' => 'Agus Hermawan (Kepala Gudang)', 'username' => '@gudang', 'initials' => 'AH', 'label' => 'Gudang (Bahan & Stok)'],
+  $words = preg_split('/\s+/', trim(preg_replace('/\([^)]*\)/', '', $displayUserName)));
+  $initials = strtoupper(substr($words[0] ?? 'A', 0, 1) . substr($words[1] ?? ($words[0] ?? 'D'), 0, 1));
+
+  $roleLabels = [
+      'Admin' => 'Admin (Akses Penuh)',
+      'Pemilik' => 'Pemilik (Mode Audit)',
+      'Pemotong' => 'Pemotong (Cutting)',
+      'QC' => 'QC (Inspeksi)',
+      'Gudang' => 'Gudang (Bahan & Stok)',
   ];
-  $activeUser = $roleUsers[$currentRole] ?? $roleUsers['Admin'];
 
   $showPesanan = in_array($currentRole, ['Admin']);
   $showPenerimaan = in_array($currentRole, ['Admin', 'Gudang']);
@@ -32,6 +49,7 @@
   $showQc = in_array($currentRole, ['Admin', 'QC']);
   $showStok = in_array($currentRole, ['Admin', 'Gudang', 'Pemilik']);
   $showLaporan = in_array($currentRole, ['Admin', 'Pemilik']);
+  $showPengaturan = $isAdminAccount;
 @endphp
 <!DOCTYPE html>
 <html lang="id">
@@ -140,26 +158,36 @@
           <i data-lucide="pie-chart" class="w-4 h-4"></i>
           <span>Laporan Eksekutif</span>
         </a>
+
+        @if($showPengaturan)
+        <div class="pt-3 mt-3 border-t border-slate-100">
+          <p class="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">ADMINISTRASI SISTEM</p>
+          <a href="{{ route('pengaturan.index', [], false) }}" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors {{ request()->routeIs('pengaturan.*') ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100' }}">
+            <i data-lucide="settings" class="w-4 h-4"></i>
+            <span>Pengaturan & Pengguna</span>
+          </a>
+        </div>
+        @endif
       </nav>
     </div>
 
-    <!-- User / Session Profile Card Footer -->
+    <!-- User / Session Profile Card Footer (Always shows the actual logged-in user's identity) -->
     <div class="p-4 border-t border-slate-100">
       <div class="flex items-center justify-between gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-100">
         <div class="flex items-center gap-2.5 overflow-hidden">
           <div id="sidebar-user-initials" class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs shrink-0">
-            {{ $activeUser['initials'] }}
+            {{ $initials }}
           </div>
           <div class="overflow-hidden">
-            <p id="sidebar-user-name" class="text-xs font-semibold text-slate-800 truncate">{{ $activeUser['name'] }}</p>
-            <p class="text-[10px] text-slate-400 font-mono">Luis Febry &bull; 825220088</p>
+            <p id="sidebar-user-name" class="text-xs font-semibold text-slate-800 truncate">{{ $displayUserName }}</p>
+            <p class="text-[10px] text-slate-500 font-mono truncate">{{ $displayUsername }} &bull; {{ $trueUserRole }}</p>
           </div>
         </div>
         <a href="{{ route('logout', [], false) }}" onclick="window.clearAuthStorage()" title="Keluar (Logout)" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0">
           <i data-lucide="log-out" class="w-4 h-4"></i>
         </a>
       </div>
-      <p class="text-[10px] text-slate-400 text-center mt-2 font-medium">Skripsi SI UNTAR &copy; 2026</p>
+      <p class="text-[10px] text-slate-400 text-center mt-2 font-medium">&copy; 2026 Luis Febry</p>
     </div>
   </aside>
 
@@ -178,7 +206,7 @@
         </span>
       </div>
 
-      <!-- Header Right: Active Account, Role Switcher (Admin Only) & Logout -->
+      <!-- Header Right: Active Account, Role View Simulator (Admin Only) & Logout -->
       <div class="flex items-center gap-3">
         <!-- Mode Audit Indicator (for Pemilik) -->
         <div id="audit-mode-badge" class="{{ $currentRole === 'Pemilik' ? '' : 'hidden' }} flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium">
@@ -187,16 +215,16 @@
         </div>
 
         @if($isAdminAccount)
-        <!-- Role Selector Dropdown (Visible ONLY when logged in with Admin Full Access credentials) -->
-        <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
+        <!-- Role View Simulator (Visible ONLY when logged in with an Admin account; keeps Admin identity while previewing role permissions) -->
+        <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1" title="Simulasikan tampilan menu dan batasan hak akses divisi lain tanpa mengganti akun login Anda">
           <i data-lucide="shield" class="w-3.5 h-3.5 text-indigo-600"></i>
-          <label for="role-select" class="text-xs text-slate-500 font-medium">Peran Aktif:</label>
+          <label for="role-select" class="text-xs text-slate-500 font-medium">Mode Tampilan:</label>
           <select id="role-select" class="text-xs font-semibold bg-transparent text-indigo-900 border-none focus:ring-0 cursor-pointer pr-6 py-1">
             <option value="Admin" {{ $currentRole === 'Admin' ? 'selected' : '' }}>Admin (Akses Penuh)</option>
-            <option value="Pemilik" {{ $currentRole === 'Pemilik' ? 'selected' : '' }}>Pemilik (Mode Audit)</option>
-            <option value="Pemotong" {{ $currentRole === 'Pemotong' ? 'selected' : '' }}>Pemotong (Cutting)</option>
-            <option value="QC" {{ $currentRole === 'QC' ? 'selected' : '' }}>QC (Inspeksi)</option>
-            <option value="Gudang" {{ $currentRole === 'Gudang' ? 'selected' : '' }}>Gudang (Bahan & Stok)</option>
+            <option value="Pemilik" {{ $currentRole === 'Pemilik' ? 'selected' : '' }}>Simulasi: Pemilik (Mode Audit)</option>
+            <option value="Pemotong" {{ $currentRole === 'Pemotong' ? 'selected' : '' }}>Simulasi: Pemotong (Cutting)</option>
+            <option value="QC" {{ $currentRole === 'QC' ? 'selected' : '' }}>Simulasi: QC (Inspeksi)</option>
+            <option value="Gudang" {{ $currentRole === 'Gudang' ? 'selected' : '' }}>Simulasi: Gudang (Bahan & Stok)</option>
           </select>
         </div>
         @else
@@ -204,7 +232,7 @@
         <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
           <i data-lucide="user-check" class="w-3.5 h-3.5 text-indigo-600"></i>
           <span class="text-xs text-slate-500 font-medium">Divisi:</span>
-          <span class="text-xs font-bold text-indigo-900">{{ $activeUser['label'] }}</span>
+          <span class="text-xs font-bold text-indigo-900">{{ $roleLabels[$currentRole] ?? $currentRole }}</span>
         </div>
         @endif
 
@@ -273,10 +301,10 @@
           const path = window.location.pathname;
           const rolePermissions = {
             'Admin': ['*'],
-            'Pemilik': ['/', '/dashboard', '/stok', '/laporan'],
-            'Pemotong': ['/', '/dashboard', '/pemotongan'],
-            'QC': ['/', '/dashboard', '/qc'],
-            'Gudang': ['/', '/dashboard', '/penerimaan', '/stok', '/aksesoris']
+            'Pemilik': ['/', '/dashboard', '/stok', '/laporan', '/pengaturan'],
+            'Pemotong': ['/', '/dashboard', '/pemotongan', '/pengaturan'],
+            'QC': ['/', '/dashboard', '/qc', '/pengaturan'],
+            'Gudang': ['/', '/dashboard', '/penerimaan', '/stok', '/aksesoris', '/pengaturan']
           };
 
           const allowed = rolePermissions[newRole] || ['/dashboard'];
@@ -287,7 +315,7 @@
           if (canStay) {
             window.location.reload();
           } else {
-            alert("Peran aktif diubah menjadi '" + newRole + "'. Anda dialihkan ke Dashboard karena peran ini tidak memiliki akses ke halaman saat ini.");
+            alert("Mode tampilan diubah menjadi '" + newRole + "'. Anda dialihkan ke Dashboard karena peran ini tidak memiliki akses ke halaman saat ini.");
             window.location.href = '/dashboard';
           }
         });

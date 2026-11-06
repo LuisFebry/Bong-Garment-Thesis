@@ -11,14 +11,13 @@ use App\Http\Controllers\PemotonganSeriController;
 use App\Http\Controllers\QcController;
 use App\Http\Controllers\StokBarangJadiController;
 use App\Http\Controllers\LaporanEksekutifController;
+use App\Http\Controllers\PengaturanController;
 use App\Http\Middleware\RoleMiddleware;
 
 /*
 |--------------------------------------------------------------------------
 | Web & AJAX Routes for Bong Garment CMT Production System
 |--------------------------------------------------------------------------
-| Undergraduate Thesis: Luis Febry (NIM: 825220088)
-| Universitas Tarumanagara 2026
 */
 
 // Authentication Routes (Login / Logout)
@@ -102,24 +101,20 @@ Route::prefix('laporan')->middleware(RoleMiddleware::class . ':Admin,Pemilik')->
     Route::get('/', [LaporanEksekutifController::class, 'index'])->name('laporan.index');
 });
 
-// Web-triggered database migration & seeding helper
-Route::get('/migrate-db', function () {
-    try {
-        \Illuminate\Support\Facades\Artisan::call('migrate:fresh', [
-            '--force' => true,
-            '--seed' => true,
-        ]);
-        $output = \Illuminate\Support\Facades\Artisan::output();
-        return response("<div style='font-family:sans-serif;padding:30px;background:#f8fafc;color:#1e293b;max-width:700px;margin:40px auto;border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 4px 6px -1px rgb(0 0 0 / 0.1);'>"
-            . "<h2 style='color:#16a34a;margin-top:0;'>&#10004; 17 Tables Migrated and Seeded Successfully</h2>"
-            . "<p>Your MySQL database has been provisioned with all canonical tables and demonstration records.</p>"
-            . "<pre style='background:#0f172a;color:#38bdf8;padding:16px;border-radius:8px;font-size:12px;overflow-x:auto;'>" . htmlspecialchars($output) . "</pre>"
-            . "<p style='margin-top:20px;'><a href='/' style='background:#4f46e5;color:white;padding:10px 20px;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;display:inline-block;'>Go to Dashboard &rarr;</a></p>"
-            . "</div>");
-    } catch (\Throwable $e) {
-        return response("<div style='font-family:sans-serif;padding:30px;background:#fff1f2;color:#9f1239;max-width:700px;margin:40px auto;border-radius:12px;border:1px solid #fecdd3;'>"
-            . "<h2 style='margin-top:0;'>&#10006; Migration Error</h2>"
-            . "<pre style='background:#881337;color:#ffe4e6;padding:16px;border-radius:8px;font-size:12px;overflow-x:auto;'>" . htmlspecialchars($e->getMessage()) . "</pre>"
-            . "</div>", 500);
-    }
-})->name('migrate.db');
+// Pengaturan Sistem, Manajemen Pengguna & Reset Produksi: Admin
+Route::prefix('pengaturan')->middleware(RoleMiddleware::class . ':Admin')->group(function () {
+    Route::get('/', [PengaturanController::class, 'index'])->name('pengaturan.index');
+    Route::post('/user', [PengaturanController::class, 'storeUser'])->name('pengaturan.user.store');
+    Route::post('/user/{id}/update', [PengaturanController::class, 'updateUser'])->name('pengaturan.user.update');
+    Route::post('/user/{id}/delete', [PengaturanController::class, 'destroyUser'])->name('pengaturan.user.delete');
+    Route::post('/kategori', [PengaturanController::class, 'storeKategori'])->name('pengaturan.kategori.store');
+    Route::post('/kategori/{id}/update', [PengaturanController::class, 'updateKategori'])->name('pengaturan.kategori.update');
+    Route::post('/kategori/{id}/delete', [PengaturanController::class, 'destroyKategori'])->name('pengaturan.kategori.delete');
+    Route::post('/sumber', [PengaturanController::class, 'storeSumber'])->name('pengaturan.sumber.store');
+    Route::post('/sumber/{id}/update', [PengaturanController::class, 'updateSumber'])->name('pengaturan.sumber.update');
+    Route::post('/sumber/{id}/delete', [PengaturanController::class, 'destroySumber'])->name('pengaturan.sumber.delete');
+    Route::post('/supplier/{id}/update', [PengaturanController::class, 'updateSupplier'])->name('pengaturan.supplier.update');
+    Route::post('/supplier/{id}/delete', [PengaturanController::class, 'destroySupplier'])->name('pengaturan.supplier.delete');
+    Route::post('/reset-operational', [PengaturanController::class, 'resetOperationalData'])->name('pengaturan.reset');
+    Route::post('/seed-sample', [PengaturanController::class, 'seedSampleData'])->name('pengaturan.seed_sample');
+});

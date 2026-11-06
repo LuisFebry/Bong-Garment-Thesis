@@ -1,6 +1,5 @@
 /* ============================================================================
  * BONG GARMENT — CMT (Cut, Make, Trim) Production & Inventory Management System
- * Undergraduate Thesis · Luis Febry (NIM 825220088) · Information Systems UNTAR
  * ----------------------------------------------------------------------------
  * app.js · Canonical 17-Table Relational Engine & Interactive SPA
  *   1. BongDB   — 17-table relational store with localStorage persistence
@@ -152,7 +151,7 @@
    * 1. SEED DATA — 17 physical tables (canonical schema)
    * ------------------------------------------------------------------------ */
   function buildSeed() {
-    const rnd = mulberry32(825220088);
+    const rnd = mulberry32(20261001);
     const d = (n) => addDays(APP_TODAY, n);
 
     // 1. Sumber_Inisiasi
@@ -234,7 +233,7 @@
 
     // 5. User (5 RBAC Roles)
     const User = [
-      { id_user: 1, username: 'luis.febry', nama_user: 'Luis Febry', role: 'Admin' },
+      { id_user: 1, username: 'admin', nama_user: 'Administrator', role: 'Admin' },
       { id_user: 2, username: 'bong.owner', nama_user: 'Bong Hartono', role: 'Pemilik' },
       { id_user: 3, username: 'budi.cutter', nama_user: 'Budi Santoso', role: 'Pemotong' },
       { id_user: 4, username: 'sari.qc', nama_user: 'Siti Rahma', role: 'QC' },
@@ -284,13 +283,13 @@
       pb(1, 2, '796', d(-16), 'Combed 30s', '72" · 180 gsm', 'D 8123 AB', 'Agus Hermawan'),
       pb(2, 3, '797', d(-14), 'Flanel Yarn Dyed', '58" · 165 gsm', 'B 9012 KLA', 'Agus Hermawan'),
       pb(3, 4, '798', d(-13), 'Lacoste PE', '72" · 220 gsm', 'D 1456 TR', 'Agus Hermawan'),
-      pb(4, 1, '799', d(-12), 'Cotton Oxford', '58" · 130 gsm', 'D 7781 UF', 'Luis Febry'),
-      pb(5, 1, '800', d(-11), 'Twill Drill', '58" · 240 gsm', 'D 7781 UF', 'Luis Febry'),
+      pb(4, 1, '799', d(-12), 'Cotton Oxford', '58" · 130 gsm', 'D 7781 UF', 'Administrator'),
+      pb(5, 1, '800', d(-11), 'Twill Drill', '58" · 240 gsm', 'D 7781 UF', 'Administrator'),
       pb(6, 2, '801', d(-8), 'Combed 30s', '72" · 180 gsm', 'D 8123 AB', 'Agus Hermawan'),
       pb(7, 4, '802', d(-7), 'Canvas', '60" · 12 oz', 'D 1456 TR', 'Agus Hermawan'),
-      pb(8, 1, '803', d(-2), 'Drill', '58" · 230 gsm', 'D 7781 UF', 'Luis Febry'),
+      pb(8, 1, '803', d(-2), 'Drill', '58" · 230 gsm', 'D 7781 UF', 'Administrator'),
       pb(9, 2, '804', d(-1), 'Fleece Cotton', '72" · 280 gsm', 'D 8123 AB', 'Agus Hermawan'),
-      pb(10, 4, '805', d(0), 'Canvas', '60" · 12 oz', 'D 1456 TR', 'Luis Febry'),
+      pb(10, 4, '805', d(0), 'Canvas', '60" · 12 oz', 'D 1456 TR', 'Administrator'),
     ];
 
     // 10 + 11. Detail_Bahan_Warna & Detail_Roll_Bahan
@@ -3840,7 +3839,7 @@
     },
     'logout': () => confirmDialog({
       title: 'Keluar dari sistem?', icon: 'log-out', danger: true, confirmText: 'Keluar',
-      message: 'Sesi <b>Luis Febry</b> akan diakhiri. Pada prototipe ini data tetap tersimpan di localStorage browser.',
+      message: 'Sesi <b>Administrator</b> akan diakhiri. Pada prototipe ini data tetap tersimpan di localStorage browser.',
       onConfirm: () => {
         applyRole('Admin');
         switchTab('dashboard');

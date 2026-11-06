@@ -121,7 +121,7 @@ class BongGarment17TableSeeder extends Seeder
         DB::table('User')->insert([
             [
                 'id_user' => 1, 'username' => 'admin', 'password' => Hash::make('admin123'),
-                'nama_user' => 'Luis Febry (Admin Produksi)', 'role' => 'Admin',
+                'nama_user' => 'Administrator', 'role' => 'Admin',
             ],
             [
                 'id_user' => 2, 'username' => 'pemilik', 'password' => Hash::make('pemilik123'),

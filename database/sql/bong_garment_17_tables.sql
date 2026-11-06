@@ -1,9 +1,7 @@
 -- ========================================================
 -- SISTEM INFORMASI MANAJEMEN PRODUKSI & INVENTORI CMT
--- BONG GARMENT - REVISI 17 TABEL
+-- BONG GARMENT - SKEMA BASIS DATA 17 TABEL
 -- DBMS: MySQL 8.0+ | Engine: InnoDB
--- Skripsi: Luis Febry (NIM: 825220088)
--- Program Studi Sistem Informasi - Universitas Tarumanagara
 -- ========================================================
 
 SET FOREIGN_KEY_CHECKS = 0;

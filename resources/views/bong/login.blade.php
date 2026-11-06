@@ -90,8 +90,8 @@
     </div>
 
     <div class="mt-8 pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-      <span>Luis Febry &bull; NIM: 825220088</span>
-      <span>Skripsi SI UNTAR &copy; 2026</span>
+      <span>Bong Garment CMT System</span>
+      <span>&copy; 2026 Luis Febry</span>
     </div>
   </div>
 
