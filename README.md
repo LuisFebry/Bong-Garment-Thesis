@@ -196,7 +196,18 @@ erDiagram
 
 In garment manufacturing, late delivery penalties and bottlenecked cutting tables require dynamic priority scheduling. The system implements an **Earliest Deadline First (EDF)** queue:
 
-$$\text{Priority Rank} = \operatorname{sort}\Big(\min(\text{deadline\_terbaru}, \text{deadline\_awal})\Big) \quad \text{ASC}$$
+$$
+\text{Effective Deadline} = \min(\text{deadline-terbaru}, \text{deadline-awal})
+$$
+
+```sql
+-- Query Algoritma Antrean Meja Potong EDF
+SELECT id_pesanan, id_pola, nama_mitra, deadline_awal, deadline_terbaru,
+       COALESCE(deadline_terbaru, deadline_awal) AS deadline_prioritas_edf
+FROM Pesanan
+WHERE status_pesanan IN ('Antrean', 'Pemotongan')
+ORDER BY COALESCE(deadline_terbaru, deadline_awal) ASC;
+```
 
 - **Dynamic Priority Sorting:** The cutting floor antrean automatically sorts all active orders (`Antrean`, `Pemotongan`) by `COALESCE(deadline_terbaru, deadline_awal) ASC`.
 - **Revision Audit Logging:** When an order's delivery deadline is accelerated or delayed by a client, the system records `deadline_terbaru`, timestamp `tgl_perubahan_deadline`, and audit reason `alasan_perubahan_deadline`.
