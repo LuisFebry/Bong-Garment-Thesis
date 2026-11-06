@@ -19,8 +19,8 @@
           <i data-lucide="clock" class="w-4 h-4"></i>
         </div>
         <div>
-          <h3 class="font-bold text-slate-900 text-sm">Antrean Prioritas Pemotongan (Algoritma EDF — Earliest Deadline First)</h3>
-          <p class="text-[11px] text-slate-500">Urutan eksekusi potong otomatis berdasarkan <code class="font-mono text-indigo-600">COALESCE(deadline_terbaru, deadline_awal) ASC</code></p>
+          <h3 class="font-bold text-slate-900 text-sm">Antrean Pengerjaan Meja Potong</h3>
+          <p class="text-[11px] text-slate-500">Urutan eksekusi potong otomatis berdasarkan batas waktu terdekat (<code class="font-mono text-indigo-600">Earliest Deadline First</code>)</p>
         </div>
       </div>
       <span class="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
@@ -32,12 +32,12 @@
       <table class="w-full text-left text-xs">
         <thead>
           <tr class="border-b border-slate-100 text-slate-400 uppercase font-semibold">
-            <th class="pb-2">Prioritas EDF</th>
+            <th class="pb-2">Prioritas</th>
             <th class="pb-2">ID & Mitra / Sumber</th>
             <th class="pb-2">Pola Pakaian</th>
             <th class="pb-2">Nota Kain & Warna</th>
             <th class="pb-2">Deadline Awal</th>
-            <th class="pb-2">Deadline Terbaru (EDF)</th>
+            <th class="pb-2">Deadline Terbaru</th>
             <th class="pb-2">Status</th>
             <th class="pb-2 text-right">Aksi</th>
           </tr>

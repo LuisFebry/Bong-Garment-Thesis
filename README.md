@@ -1,4 +1,4 @@
-# Bong Garment — CMT Production & Inventory Management System
+# Bong Garment - CMT Production & Inventory Management System
 
 A full-stack, enterprise-grade production and inventory management web application engineered for **Cut, Make, Trim (CMT)** apparel manufacturing. The system features physical fabric roll tracking (`Detail_Roll_Bahan`), an **Earliest Deadline First (EDF)** dynamic priority cutting schedule (`Pesanan`), an 11-metric garment dimension matrix (`Spesifikasi_Ukuran`), multi-stage Quality Control (`QC`) with rework workflows, and perpetual finished goods inventory (`Stok_Barang_Jadi`).
 
@@ -12,59 +12,103 @@ This repository contains the software implementation for an undergraduate thesis
 
 ## System Architecture & Tech Stack
 
-The platform is designed with a **Dual-Execution Architecture**: a production-grade full-stack PHP/MySQL implementation alongside a zero-dependency client-side browser replica.
+The application is engineered as a multi-tier, enterprise-grade production platform. It decouples presentation, route protection, business domain logic, and relational persistence into a high-throughput, maintainable architecture.
 
 ```mermaid
-flowchart TD
-    subgraph ClientLayer["Frontend & Client Layer"]
-        UI["Tailwind CSS 3 + Blade Templates"]
-        Icons["Lucide Icons CDN"]
-        ClientSPA["Standalone Browser Replica (index.html + app.js)"]
-    end
-
-    subgraph AppLayer["Application Layer (Laravel 11 / PHP 8.3)"]
-        Router["HTTP Routing (web.php)"]
-        RBAC["RoleMiddleware (RBAC Guard)"]
-        Auth["AuthController (Session + Secure Cookies)"]
-        
-        subgraph Controllers["Business Logic Controllers"]
-            DashC["DashboardController"]
-            PolaC["PolaController (11-Metric Matrix)"]
-            PesananC["PesananController (EDF Queue)"]
-            PenerimaanC["PenerimaanBahanController (Roll Tracking)"]
-            PotongC["PemotonganSeriController (Spreading & Yield)"]
-            QcC["QcController (3-Stage QC + Rework)"]
-            StokC["StokBarangJadiController (Perpetual Inventory)"]
-            AccC["AksesorisController (BOM Mapping)"]
-            LaporanC["LaporanEksekutifController (Analytics & CSV Export)"]
-            SettingC["PengaturanController (User Admin & DB Reset)"]
+flowchart TB
+    subgraph ClientLayer["1. Presentation & Client Layer"]
+        direction TB
+        subgraph UIComponents["User Interface & Templates"]
+            Blade["Laravel Blade 11 Engine<br/>(Component-Driven Views & Slots)"]
+            Tailwind["Tailwind CSS 3.4 CDN<br/>(Responsive Garment UI Palette)"]
+            Lucide["Lucide Icons CDN<br/>(Dynamic SVG Indicators)"]
+            Fonts["Google Fonts<br/>(Inter & JetBrains Mono)"]
         end
+        subgraph DynamicInteractivity["Client-Side Interactivity"]
+            ModalDOM["Modal & Form Controllers<br/>(Multi-Roll Intake, Rework Dispatch, Deadline Revision)"]
+            CalcEngine["Real-Time Calculators<br/>(Spreading Ply, Fabric Yield & Consumption)"]
+            ExportEngine["Reporting Exporter<br/>(Dynamic CSV & @media print Stylesheets)"]
+        end
+        UIComponents --- DynamicInteractivity
     end
 
-    subgraph DataLayer["Persistence & Database Layer"]
-        MySQL[("MySQL 8.0 InnoDB (17 Canonical Tables)")]
-        Storage["Browser localStorage (Client-Side Mode)"]
+    subgraph SecurityLayer["2. Security & Middleware Pipeline"]
+        direction LR
+        CSRF["VerifyCsrfToken<br/>(Cross-Site Request Forgery Protection)"]
+        SessionGuard["Session Auth Guard<br/>(Stateful Secure Session Cookies)"]
+        RBAC["RoleMiddleware<br/>(5-Role Access Control Guard)"]
+        AutoMigrate["EnsureDatabaseMigrated<br/>(Zero-Downtime Auto-Init Middleware)"]
+        CSRF --> SessionGuard --> RBAC --> AutoMigrate
     end
 
-    UI --> Router
-    Router --> RBAC
-    RBAC --> Controllers
-    Controllers --> MySQL
-    ClientSPA -.-> Storage
+    subgraph AppLayer["3. Application & Controller Layer (Laravel 11 / PHP 8.3)"]
+        direction TB
+        Router["HTTP Routing Engine (routes/web.php)"]
+        
+        subgraph DomainControllers["Operational Domain Controllers"]
+            AuthC["AuthController<br/>(User Session & Auth)"]
+            DashC["DashboardController<br/>(Factory KPIs & EDF Queue)"]
+            PesananC["PesananController<br/>(Order Intake & Audit Revisions)"]
+            PolaC["PolaController<br/>(11-Metric Pattern Matrix)"]
+            PenerimaanC["PenerimaanBahanController<br/>(Multi-Roll Physical Intake)"]
+            PotongC["PemotonganSeriController<br/>(Spreading, Ply & Consumption)"]
+            QcC["QcController<br/>(3-Stage QC & Rework Dispatch)"]
+            StokC["StokBarangJadiController<br/>(Perpetual Stock & Outbound)"]
+            AccC["AksesorisController<br/>(Trims Stock & BOM Mapping)"]
+            LaporanC["LaporanEksekutifController<br/>(Yield Metrics & Analytics)"]
+            SettingC["PengaturanController<br/>(Staff RBAC & Database Modes)"]
+        end
+        Router --> DomainControllers
+    end
+
+    subgraph DataLayer["4. Persistence & Database Layer (MySQL 8.0 InnoDB)"]
+        direction TB
+        ORM["Eloquent ORM & Schema Builder<br/>(ACID Transactions via DB::transaction)"]
+        
+        subgraph CanonicalTables["17 Canonical Relational Tables"]
+            direction LR
+            T_Users["User<br/>(5 RBAC Roles)"]
+            T_Pola["Pola & Kategori<br/>(11-Metric Dimensi)"]
+            T_Pesanan["Pesanan & Sumber<br/>(EDF Priority Sorting)"]
+            T_Roll["Penerimaan & Roll Fisik<br/>(Kg / Yard / Meter)"]
+            T_Potong["Pemotongan & Gelaran<br/>(Ply & Yield Tracking)"]
+            T_QC["Inspeksi QC & Rework<br/>(3-Stage Defect Logs)"]
+            T_Stok["Stok Barang Jadi<br/>(Perpetual Warehousing)"]
+            T_Acc["Aksesoris & BOM<br/>(Per-Pattern Trim Usage)"]
+        end
+        ORM --> CanonicalTables
+    end
+
+    subgraph InfraLayer["5. Infrastructure, DevOps & Cloud Deployment"]
+        direction LR
+        Docker["Docker & Docker Compose<br/>(Multi-Arch PHP 8.3 Apache/Nginx)"]
+        Heroku["Heroku Cloud PaaS<br/>(heroku-php-apache2 Procfile)"]
+        ArtisanCLI["Artisan CLI Suite<br/>(Production vs Sample Seeders)"]
+    end
+
+    ClientLayer ==> SecurityLayer
+    SecurityLayer ==> AppLayer
+    AppLayer ==> DataLayer
+    DataLayer -.-> InfraLayer
 ```
 
-### Technology Breakdown
+### In-Depth Technology Breakdown
 
-| Component | Technology | Version | Purpose |
+| Category | Component / Tool | Version / Spec | Architecture & Operational Role |
 |---|---|---|---|
-| **Backend Framework** | Laravel | `^11.0` | MVC architecture, Eloquent ORM, database migrations, seeders, transaction safety |
-| **Runtime Engine** | PHP | `^8.2 / 8.3` | Modern typed PHP with JIT support and strict type enforcement |
-| **Relational Database** | MySQL (InnoDB) | `8.0+` | 17 relational tables, foreign key constraints (`ON DELETE RESTRICT ON UPDATE CASCADE`), decimal precision (`DECIMAL(10,2)`) |
-| **Styling & Design System** | Tailwind CSS CDN | `3.4+` | Fully responsive utility-first UI, custom color palette (`brand-50` to `brand-900`) |
-| **Typography** | Google Fonts | Web | `Inter` (prose UI) & `JetBrains Mono` (codes, batch IDs, measurements) |
-| **Iconography** | Lucide Icons | Latest | SVG-based operational icons across all cards, modals, and navigation badges |
-| **Client-Side Engine** | Pure JavaScript (ES6+) | Vanilla | Standalone browser mode (`index.html` + `app.js`) with complete 17-table relational simulation |
-| **Web Server & Hosting** | Apache / Nginx | Linux | Production deployment via Apache on Heroku (`heroku-php-apache2`), Docker, or Ubuntu VPS |
+| **Backend Framework** | Laravel | `^11.0` | MVC architecture, dependency injection service container, Eloquent ORM, database migrations, seeders, and atomic transaction handling |
+| **Runtime Engine** | PHP | `^8.2 / 8.3` | High-performance modern PHP with strict typing, constructor promotion, enums, match expressions, and JIT compilation |
+| **Relational Database** | MySQL (InnoDB) | `8.0+` | Normalized 17-table relational schema, strict foreign keys (`ON DELETE RESTRICT ON UPDATE CASCADE`), decimal precision (`DECIMAL(10,2)` for physical units) |
+| **Security & Authorization** | Laravel Middleware | Custom RBAC | Role-Based Access Control (`RoleMiddleware`) guarding endpoints per division; CSRF verification; secure HTTP-only cookies; database bootstrap guard (`EnsureDatabaseMigrated`) |
+| **Frontend Templating** | Laravel Blade | Engine 11 | Component-driven server-side rendering, layout inheritance (`layouts/app.blade.php`), slot injection, and modular view stack pushes (`@push('scripts')`) |
+| **Styling & Design System** | Tailwind CSS CDN | `3.4+` | Utility-first responsive design system, custom manufacturing color palette (`brand-50` to `brand-900`, `emerald`, `amber`, `rose`), flexbox and CSS grid layouts |
+| **Typography** | Google Fonts | Web | `Inter` (high-readability UI typography) & `JetBrains Mono` (tabular numbers, batch roll IDs, and physical measurement metrics) |
+| **Iconography** | Lucide Icons | Latest CDN | Scalable SVG operational icons embedded across sidebar navigation, status badges, and action buttons |
+| **Frontend Interactivity** | Pure JavaScript | ECMAScript 2023 | Interactive modal management (multi-roll intake, rework assignment, deadline revisions), real-time cutting yield calculators, dynamic unit switchers, and live search filters |
+| **Document & Data Export** | CSV & Browser Print | Dynamic Stream | Instant CSV export with dynamic headers for production analytics, plus formatted `@media print` stylesheets for executive factory reports |
+| **Containerization** | Docker & Compose | Multi-Stage | Portable containerized execution (`Dockerfile`, `docker-compose.yml`) bundling PHP 8.3-FPM, Apache/Nginx web server, and MySQL database container |
+| **Cloud Deployment** | Heroku Cloud PaaS | Linux 64-bit | Live production hosting with `heroku-php-apache2` web server routing, automatic Procfile release migrations (`php artisan migrate --force`), and JawsDB MySQL integration |
+| **Database Initialization** | Laravel Seeders | Dual Mode | Dedicated production seeder (`ProductionBootstrapSeeder` for factory go-live with zero sample data) and evaluation seeder (`DatabaseSeeder` with realistic 17-table sample data) |
 
 ---
 
@@ -306,9 +350,7 @@ Application is immediately accessible at `http://localhost:8080`.
 The repository includes deployment configuration (`Procfile`, `app.json`):
 - `Procfile` executes `release: php artisan migrate --force` to apply schema updates without wiping production data.
 - The `EnsureDatabaseMigrated` middleware automatically migrates and boots default accounts on first launch if the database is uninitialized.
-
-### Option 4: Standalone Client-Side Preview (Zero Backend)
-Simply open `index.html` in any modern web browser. It runs a zero-backend client-side implementation powered by `app.js` and `localStorage`.
+- Apache web server routing is handled through `heroku-php-apache2 public/` with complete `.htaccess` rewrite rules.
 
 ---
 

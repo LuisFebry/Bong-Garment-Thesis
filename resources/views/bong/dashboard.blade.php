@@ -11,10 +11,10 @@
       <p class="text-xs text-slate-500 mt-1">Sistem Informasi Manajemen Produksi & Inventori Bong Garment</p>
     </div>
     <div class="flex items-center gap-2">
-      <span class="text-xs bg-emerald-50 text-emerald-700 font-medium px-2.5 py-1 rounded-full border border-emerald-200 flex items-center gap-1.5">
-        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-        Sistem Berjalan Aktif
-      </span>
+      <div class="flex items-center gap-2 text-xs font-medium text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
+        <i data-lucide="calendar" class="w-3.5 h-3.5 text-slate-400"></i>
+        <span>{{ \Carbon\Carbon::now()->locale('id')->isoFormat('D MMMM Y') }}</span>
+      </div>
     </div>
   </div>
 
@@ -75,8 +75,8 @@
     <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
       <div class="flex items-center justify-between mb-4">
         <div>
-          <h3 class="font-bold text-slate-900 text-sm">Antrean Prioritas Potong (EDF Scheduling)</h3>
-          <p class="text-xs text-slate-400">Urutan pemotongan berbasis batas waktu terdekat (Earliest Deadline First)</p>
+          <h3 class="font-bold text-slate-900 text-sm">Antrean Pemotongan Pesanan</h3>
+          <p class="text-xs text-slate-400">Prioritas pengerjaan meja potong berbasis batas waktu terdekat (Earliest Deadline First)</p>
         </div>
         <span class="text-xs font-mono bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md">
           {{ count($edfQueue ?? []) }} Pesanan Aktif
@@ -90,7 +90,7 @@
               <th class="pb-2">ID</th>
               <th class="pb-2">Pesanan / Mitra</th>
               <th class="pb-2">Pola Pakaian</th>
-              <th class="pb-2">Deadline EDF</th>
+              <th class="pb-2">Batas Waktu (Deadline)</th>
               <th class="pb-2">Status</th>
             </tr>
           </thead>

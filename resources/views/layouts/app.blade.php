@@ -195,15 +195,17 @@
   <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
     <!-- Top Navigation Header -->
     <header class="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0 z-20">
-      <!-- Left: System Context Info -->
+      <!-- Left: Welcome & Workspace Context -->
       <div class="flex items-center gap-3">
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-          Sistem Produksi Aktif
-        </span>
-        <span class="hidden sm:inline-block text-xs text-slate-400 font-medium">
-          Manajemen Produksi &amp; Inventori Konveksi CMT (EDF Scheduling)
-        </span>
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-medium text-slate-500">
+            Selamat Datang, <strong class="text-slate-800 font-semibold">{{ $displayUserName }}</strong>
+          </span>
+          <span class="hidden md:inline-block text-slate-300">&bull;</span>
+          <span class="hidden md:inline-block text-xs text-slate-400 font-medium">
+            Manajemen Produksi &amp; Inventori Konveksi CMT
+          </span>
+        </div>
       </div>
 
       <!-- Header Right: Active Account, Role View Simulator (Admin Only) & Logout -->

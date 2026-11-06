@@ -66,7 +66,7 @@
 
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">
-            Tanggal Deadline Awal (EDF) <span class="text-rose-500 font-bold">*</span>
+            Tanggal Batas Waktu / Deadline Awal <span class="text-rose-500 font-bold">*</span>
           </label>
           <input type="date" name="deadline_awal" id="inp-deadline-awal" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 font-mono">
         </div>
@@ -205,7 +205,7 @@
   <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
     <div class="flex items-center justify-between mb-4">
       <div>
-        <h3 class="font-bold text-slate-900 text-sm">Daftar Pesanan & Status Produksi (EDF Queue)</h3>
+        <h3 class="font-bold text-slate-900 text-sm">Daftar Pesanan & Status Produksi</h3>
         <p class="text-xs text-slate-500 mt-0.5">Urutan otomatis berbasis prioritas batas waktu terdekat (Earliest Deadline First)</p>
       </div>
       <span class="text-xs font-semibold bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full border border-indigo-100">
@@ -475,7 +475,7 @@
 
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">
-            Tanggal Deadline Terbaru (Target EDF)
+            Tanggal Deadline Terbaru (Revisi)
           </label>
           <input type="date" name="deadline_terbaru" id="edit-deadline-terbaru" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 font-mono">
         </div>
@@ -890,7 +890,7 @@
     const tglOrder = formData.get('tgl_order') || new Date().toISOString().split('T')[0];
 
     if (!deadlineAwal) {
-      alert('Tanggal Deadline Awal wajib diisi untuk algoritma penjadwalan EDF.');
+      alert('Tanggal Deadline Awal wajib diisi untuk penjadwalan antrean produksi.');
       return;
     }
 
