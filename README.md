@@ -82,7 +82,8 @@ flowchart TB
 
     subgraph InfraLayer["5. Infrastructure, DevOps & Cloud Deployment"]
         direction LR
-        Docker["Docker & Docker Compose<br/>(Multi-Arch PHP 8.3 Apache/Nginx)"]
+        Docker["Docker & Docker Compose<br/>(PHP 8.4-FPM + Internal Nginx)"]
+        Baremetal["Baremetal Linux / VPS<br/>(PHP 8.4/8.5 + OpenResty/Nginx)"]
         Heroku["Heroku Cloud PaaS<br/>(heroku-php-apache2 Procfile)"]
         ArtisanCLI["Artisan CLI Suite<br/>(Production vs Sample Seeders)"]
     end
@@ -98,7 +99,7 @@ flowchart TB
 | Category | Component / Tool | Version / Spec | Architecture & Operational Role |
 |---|---|---|---|
 | **Backend Framework** | Laravel | `^11.0` | MVC architecture, dependency injection service container, Eloquent ORM, database migrations, seeders, and atomic transaction handling |
-| **Runtime Engine** | PHP | `^8.2 / 8.3` | High-performance modern PHP with strict typing, constructor promotion, enums, match expressions, and JIT compilation |
+| **Runtime Engine** | PHP | `^8.2 / 8.3 / 8.4 / 8.5` | High-performance modern PHP with strict typing, constructor promotion, enums, match expressions, and JIT compilation |
 | **Relational Database** | MySQL (InnoDB) | `8.0+` | Normalized 18-table relational schema, strict foreign keys (`ON DELETE RESTRICT ON UPDATE CASCADE`), decimal precision (`DECIMAL(10,2)` for physical units) |
 | **Security & Authorization** | Laravel Middleware | Custom RBAC | Role-Based Access Control (`RoleMiddleware`) guarding endpoints per division; CSRF verification; secure HTTP-only cookies; database bootstrap guard (`EnsureDatabaseMigrated`) |
 | **Frontend Templating** | Laravel Blade | Engine 11 | Component-driven server-side rendering, layout inheritance (`layouts/app.blade.php`), slot injection, and modular view stack pushes (`@push('scripts')`) |
@@ -107,7 +108,7 @@ flowchart TB
 | **Iconography** | Lucide Icons | Latest CDN | Scalable SVG operational icons embedded across sidebar navigation, status badges, and action buttons |
 | **Frontend Interactivity** | Pure JavaScript | ECMAScript 2023 | Interactive modal management (multi-roll intake, rework assignment, deadline revisions), real-time cutting yield calculators, dynamic unit switchers, and live search filters |
 | **Document & Data Export** | CSV & Browser Print | Dynamic Stream | Instant CSV export with dynamic headers for production analytics, plus formatted `@media print` stylesheets for executive factory reports |
-| **Containerization** | Docker & Compose | Multi-Stage | Portable containerized execution (`Dockerfile`, `docker-compose.yml`) bundling PHP 8.3-FPM, Apache/Nginx web server, and MySQL database container |
+| **Containerization** | Docker & Compose | Multi-Stage | Portable containerized execution (`Dockerfile`, `docker-compose.yml`) bundling PHP 8.4-FPM, internal Nginx web server, and MySQL 8.0 database container |
 | **Cloud Deployment** | Heroku Cloud PaaS | Linux 64-bit | Live production hosting with `heroku-php-apache2` web server routing, automatic Procfile release migrations (`php artisan migrate --force`), and JawsDB MySQL integration |
 | **Database Initialization** | Laravel Seeders | Dual Mode | Dedicated production seeder (`ProductionBootstrapSeeder` for factory go-live with zero sample data) and evaluation seeder (`DatabaseSeeder` with realistic 18-table sample data) |
 
@@ -358,12 +359,28 @@ php artisan serve
 ```
 
 ### Option 2: Docker Setup
+The repository includes a containerized stack bundling PHP 8.4-FPM, internal Nginx, and a MySQL 8.0 container pre-configured with the canonical 18-table schema:
+
 ```bash
+# 1. Prepare environment & boot containers
+cp .env.example .env
 docker compose up -d --build
-docker compose exec app php artisan migrate --force
+
+# 2. Install dependencies & initialize encryption key
+docker compose exec app composer install --no-dev --optimize-autoloader
+docker compose exec app php artisan key:generate --force
+
+# 3. Seed production admin account (MySQL boots with all 18 tables automatically)
 docker compose exec app php artisan db:seed --class=Database\\Seeders\\ProductionBootstrapSeeder --force
+
+# 4. Set storage permissions & build production caches
+docker compose exec app chown -R www-data:www-data storage bootstrap/cache
+docker compose exec app chmod -R 775 storage bootstrap/cache
+docker compose exec app php artisan config:cache
+docker compose exec app php artisan route:cache
+docker compose exec app php artisan view:cache
 ```
-Application is immediately accessible at `http://localhost:8080`.
+Application is immediately accessible at `http://localhost:8000` (or proxied via host OpenResty/Nginx).
 
 ### Option 3: Cloud / Heroku Deployment
 
@@ -388,6 +405,41 @@ Environment variables are managed in the cloud provider console (**Heroku Dashbo
 #### Automated Release Phase & Self-Healing Database
 - Heroku's **Release Phase** executes `php artisan migrate --force` immediately following container builds, applying schema updates without downtime or data destruction.
 - The `EnsureDatabaseMigrated` application middleware provides automatic self-healing: if an empty database is connected, it provisions the canonical 18-table relational schema and registers default administrative credentials automatically on first launch.
+
+### Option 4: Baremetal Linux / VPS Deployment (PHP 8.4/8.5 + OpenResty/Nginx)
+For dedicated Linux servers (Ubuntu, Debian, Oracle Cloud Infrastructure) without global Composer or Redis dependencies:
+
+```bash
+# 1. Download localized Composer binary directly into project root
+php -r "copy('https://getcomposer.org/composer.phar', 'composer.phar');"
+php composer.phar install --no-dev --optimize-autoloader --ignore-platform-req=php
+
+# 2. Setup environment (.env)
+cp .env.example .env
+php artisan key:generate --force
+
+# Ensure .env contains:
+# DB_CONNECTION=mysql
+# DB_HOST=<your-mysql-ip>
+# SESSION_PATH=/
+# QUEUE_CONNECTION=sync
+# CACHE_STORE=file
+
+# 3. Configure storage permissions
+sudo chown -R $USER:www-data storage bootstrap/cache
+sudo chmod -R 775 storage bootstrap/cache
+
+# 4. Run database migrations & seed admin
+php artisan migrate --force
+php artisan db:seed --class=Database\\Seeders\\ProductionBootstrapSeeder --force
+
+# 5. Build production caches
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+```
+
+In your OpenResty/Nginx server block, point `root` to `/path/to/project/public`, configure `try_files $uri $uri/ /index.php?$query_string;`, and route PHP to your PHP-FPM FastCGI socket (`fastcgi_pass unix:/run/php/php8.5-fpm.sock;`).
 
 ---
 

@@ -1,7 +1,7 @@
 # ==============================================================================
 # Dockerfile: Bong Garment CMT Production & Inventory Management System
 # Base OS: Ubuntu 24.04 LTS (Noble Numbat)
-# Stack: PHP 8.3 FPM + Nginx + Node.js 20 + Composer
+# Stack: PHP 8.4 FPM + Nginx + Node.js 20 + Composer
 # Author: Luis Febry - Universitas Tarumanagara
 # ==============================================================================
 

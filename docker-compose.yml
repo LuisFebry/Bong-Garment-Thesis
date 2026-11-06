@@ -1,5 +1,5 @@
 services:
-  # Bong Garment Application (Ubuntu 24.04/26.04 + PHP 8.3-FPM + Nginx + Node.js 20)
+  # Bong Garment Application (Ubuntu 24.04/26.04 + PHP 8.4-FPM + Nginx + Node.js 20)
   app:
     build:
       context: .
