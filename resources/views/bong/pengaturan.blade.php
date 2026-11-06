@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Pengaturan & Manajemen Pengguna — Bong Garment')
+@section('title', 'Pengaturan & Manajemen Pengguna - Bong Garment')
 
 @section('content')
 @php

@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Kelola Pesanan & Pola — Bong Garment')
+@section('title', 'Kelola Pesanan & Pola - Bong Garment')
 
 @section('content')
 <div class="space-y-6">
@@ -87,7 +87,7 @@
           <select name="id_penerimaan" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
             <option value="">-- Pilih Nota Kain (Opsional, Dapat Diisi Nanti Saat Kain Tiba) --</option>
             @foreach($penerimaan ?? [] as $pn)
-              <option value="{{ $pn->id_penerimaan }}">{{ $pn->no_nota }} — {{ $pn->nama_kain }} (Tgl: {{ $pn->tgl_nota }})</option>
+              <option value="{{ $pn->id_penerimaan }}">{{ $pn->no_nota }} - {{ $pn->nama_kain }} (Tgl: {{ $pn->tgl_nota }})</option>
             @endforeach
           </select>
         </div>
@@ -100,7 +100,7 @@
             <label class="block text-xs font-semibold text-slate-700 mb-1">Pilih Master Pola Pakaian Terdaftar <span class="text-rose-500">*</span></label>
             <select name="id_pola" id="sel-pola-existing" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white font-medium">
               @foreach($pola ?? [] as $p)
-                <option value="{{ $p->id_pola }}">{{ $p->kode_pola }} — {{ $p->nama_pola }} ({{ $p->kategori->nama_kategori ?? 'Umum' }})</option>
+                <option value="{{ $p->id_pola }}">{{ $p->kode_pola }} - {{ $p->nama_pola }} ({{ $p->kategori->nama_kategori ?? 'Umum' }})</option>
               @endforeach
             </select>
           </div>
@@ -153,7 +153,7 @@
         <!-- Tabel Input 11-Metrik Spesifikasi Ukuran (S, M, L, XL) -->
         <div>
           <div class="flex items-center justify-between mb-2">
-            <label class="text-xs font-bold text-slate-800">Tabel Spesifikasi Ukuran 11-Metrik (cm) — <code class="font-mono text-indigo-600">Spesifikasi_Ukuran</code></label>
+            <label class="text-xs font-bold text-slate-800">Tabel Spesifikasi Ukuran 11-Metrik (cm) - <code class="font-mono text-indigo-600">Spesifikasi_Ukuran</code></label>
             <button type="button" onclick="addNewPolaSizeRow()" class="px-2.5 py-1 bg-white hover:bg-slate-100 text-indigo-600 border border-indigo-200 rounded-md text-[11px] font-semibold inline-flex items-center gap-1">
               <i data-lucide="plus" class="w-3 h-3"></i> Tambah Baris Ukuran
             </button>
@@ -187,7 +187,7 @@
         <!-- Kebutuhan Aksesoris per Pola (Detail_Aksesoris_Pola) -->
         <div>
           <div class="flex items-center justify-between mb-2">
-            <label class="text-xs font-bold text-slate-800">Kebutuhan Aksesoris per 1 Potong Pakaian (Opsional) — <code class="font-mono text-indigo-600">Detail_Aksesoris_Pola</code></label>
+            <label class="text-xs font-bold text-slate-800">Kebutuhan Aksesoris per 1 Potong Pakaian (Opsional) - <code class="font-mono text-indigo-600">Detail_Aksesoris_Pola</code></label>
             <button type="button" onclick="addNewPolaAccRow()" class="px-2.5 py-1 bg-white hover:bg-slate-100 text-indigo-600 border border-indigo-200 rounded-md text-[11px] font-semibold inline-flex items-center gap-1">
               <i data-lucide="plus" class="w-3 h-3"></i> Tambah Aksesoris Pola
             </button>
@@ -445,7 +445,7 @@
           <label class="block text-xs font-semibold text-slate-700 mb-1">Pola Pakaian</label>
           <select name="id_pola" id="edit-id-pola" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500" required>
             @foreach($pola ?? [] as $p)
-              <option value="{{ $p->id_pola }}">{{ $p->kode_pola }} — {{ $p->nama_pola }}</option>
+              <option value="{{ $p->id_pola }}">{{ $p->kode_pola }} - {{ $p->nama_pola }}</option>
             @endforeach
           </select>
         </div>
@@ -458,12 +458,12 @@
         <div class="col-span-full">
           <label class="block text-xs font-semibold text-slate-700 mb-1">
             Bahan Kain (Nota Penerimaan Gudang)
-            <span class="text-[11px] text-indigo-600 font-normal ml-1">— Dapat ditautkan saat kain tiba di gudang</span>
+            <span class="text-[11px] text-indigo-600 font-normal ml-1">- Dapat ditautkan saat kain tiba di gudang</span>
           </label>
           <select name="id_penerimaan" id="edit-id-penerimaan" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
             <option value="">-- Tanpa Nota / Belum Ada Bahan Kain (Menunggu Kedatangan) --</option>
             @foreach($penerimaan ?? [] as $pn)
-              <option value="{{ $pn->id_penerimaan }}">{{ $pn->no_nota }} — {{ $pn->nama_kain }} (Tgl: {{ $pn->tgl_nota }})</option>
+              <option value="{{ $pn->id_penerimaan }}">{{ $pn->no_nota }} - {{ $pn->nama_kain }} (Tgl: {{ $pn->tgl_nota }})</option>
             @endforeach
           </select>
         </div>
@@ -1014,7 +1014,7 @@
 
     container.innerHTML = newPolaAccs.map(function (item, idx) {
       const opts = availableAksesoris.map(function (a) {
-        return `<option value="${a.id_aksesoris}" ${Number(item.id_aksesoris) === Number(a.id_aksesoris) ? 'selected' : ''}>${a.nama_aksesoris} (${a.ukuran || '-'}) — Stok: ${a.stok} ${a.satuan}</option>`;
+        return `<option value="${a.id_aksesoris}" ${Number(item.id_aksesoris) === Number(a.id_aksesoris) ? 'selected' : ''}>${a.nama_aksesoris} (${a.ukuran || '-'}) - Stok: ${a.stok} ${a.satuan}</option>`;
       }).join('');
 
       return `

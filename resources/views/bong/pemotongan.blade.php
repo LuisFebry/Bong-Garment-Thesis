@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Pemotongan Seri & Gelaran — Bong Garment')
+@section('title', 'Pemotongan Seri & Gelaran - Bong Garment')
 
 @section('content')
 <div class="space-y-6">
@@ -131,7 +131,7 @@
                 $wId = $ord->penerimaanBahan?->detailBahanWarna?->first()?->id_detail_warna;
               @endphp
               <option value="{{ $ord->id_pesanan }}" data-penerimaan="{{ $ord->id_penerimaan }}" data-default-warna="{{ $wId }}">
-                [Prioritas #{{ $idx + 1 }}] Pesanan #{{ $ord->id_pesanan }} — {{ $ord->pola->nama_pola ?? $ord->jenis_pesanan }} ({{ $ord->nama_mitra ?? 'Internal' }})
+                [Prioritas #{{ $idx + 1 }}] Pesanan #{{ $ord->id_pesanan }} - {{ $ord->pola->nama_pola ?? $ord->jenis_pesanan }} ({{ $ord->nama_mitra ?? 'Internal' }})
               </option>
             @endforeach
           </select>
@@ -141,7 +141,7 @@
           <label class="block text-xs font-semibold text-slate-700 mb-1">Operator Pemotong (Cutter) <span class="text-rose-500">*</span></label>
           <select name="id_user_pemotong" id="sel-cutter" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
             @foreach($users ?? [] as $usr)
-              <option value="{{ $usr->id_user }}">{{ $usr->nama_user }} ({{ $usr->role }} — @ {{ $usr->username }})</option>
+              <option value="{{ $usr->id_user }}">{{ $usr->nama_user }} ({{ $usr->role }} - @ {{ $usr->username }})</option>
             @endforeach
           </select>
         </div>
@@ -156,7 +156,7 @@
           <select name="id_detail_warna" id="sel-warna-bahan" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
             @foreach($warnaList ?? [] as $w)
               <option value="{{ $w->id_detail_warna }}" data-penerimaan="{{ $w->id_penerimaan }}" data-satuan="{{ $w->satuan_ukur }}">
-                #{{ $w->id_detail_warna }} — {{ $w->nama_warna }} ({{ $w->penerimaanBahan->no_nota ?? 'Nota' }} · {{ $w->penerimaanBahan->nama_kain ?? '' }} · {{ $w->total_ukuran }} {{ $w->satuan_ukur }})
+                #{{ $w->id_detail_warna }} - {{ $w->nama_warna }} ({{ $w->penerimaanBahan->no_nota ?? 'Nota' }} · {{ $w->penerimaanBahan->nama_kain ?? '' }} · {{ $w->total_ukuran }} {{ $w->satuan_ukur }})
               </option>
             @endforeach
           </select>
@@ -379,7 +379,7 @@
           <label class="block text-xs font-semibold text-slate-700 mb-1">Pesanan Target <span class="text-rose-500">*</span></label>
           <select id="edit-pm-pesanan" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white">
             @foreach($orders ?? [] as $ord)
-              <option value="{{ $ord->id_pesanan }}">Pesanan #{{ $ord->id_pesanan }} — {{ $ord->pola->nama_pola ?? $ord->jenis_pesanan }} ({{ $ord->nama_mitra ?? 'Internal' }})</option>
+              <option value="{{ $ord->id_pesanan }}">Pesanan #{{ $ord->id_pesanan }} - {{ $ord->pola->nama_pola ?? $ord->jenis_pesanan }} ({{ $ord->nama_mitra ?? 'Internal' }})</option>
             @endforeach
           </select>
         </div>
@@ -407,7 +407,7 @@
           <label class="block text-xs font-semibold text-slate-700 mb-1">Warna Bahan Kain (<code class="font-mono">id_detail_warna</code>)</label>
           <select id="edit-pm-warna" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white">
             @foreach($warnaList ?? [] as $w)
-              <option value="{{ $w->id_detail_warna }}">#{{ $w->id_detail_warna }} — {{ $w->nama_warna }} ({{ $w->penerimaanBahan->no_nota ?? 'Nota' }} · {{ $w->satuan_ukur }})</option>
+              <option value="{{ $w->id_detail_warna }}">#{{ $w->id_detail_warna }} - {{ $w->nama_warna }} ({{ $w->penerimaanBahan->no_nota ?? 'Nota' }} · {{ $w->satuan_ukur }})</option>
             @endforeach
           </select>
         </div>
@@ -427,7 +427,7 @@
           <label class="block text-xs font-semibold text-slate-700 mb-1">Roll Fisik Utama (<code class="font-mono">id_roll</code>)</label>
           <select id="edit-pm-roll" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white font-mono">
             @foreach(($allRolls ?? $rolls ?? []) as $r)
-              <option value="{{ $r->id_roll }}">#id_roll: {{ $r->id_roll }} — Roll #{{ $r->no_roll_ke }} ({{ $r->detailBahanWarna->nama_warna ?? '-' }} · Sisa: {{ $r->ukuran_sisa }} {{ $r->satuan }})</option>
+              <option value="{{ $r->id_roll }}">#id_roll: {{ $r->id_roll }} - Roll #{{ $r->no_roll_ke }} ({{ $r->detailBahanWarna->nama_warna ?? '-' }} · Sisa: {{ $r->ukuran_sisa }} {{ $r->satuan }})</option>
             @endforeach
           </select>
         </div>
@@ -504,7 +504,7 @@
         const isMatchWarna = Number(r.id_detail_warna) === selectedWarnaId;
         const prefix = isMatchWarna ? '★ ' : '';
         const selected = Number(row.id_roll) === Number(r.id_roll) ? 'selected' : '';
-        return `<option value="${r.id_roll}" ${selected}>${prefix}#id_roll: ${r.id_roll} — Roll #${r.no_roll_ke} (${r.nama_warna} · Sisa: ${r.ukuran_sisa}/${r.ukuran_awal} ${r.satuan}) [${r.status_roll}]</option>`;
+        return `<option value="${r.id_roll}" ${selected}>${prefix}#id_roll: ${r.id_roll} - Roll #${r.no_roll_ke} (${r.nama_warna} · Sisa: ${r.ukuran_sisa}/${r.ukuran_awal} ${r.satuan}) [${r.status_roll}]</option>`;
       }).join('');
 
       return `

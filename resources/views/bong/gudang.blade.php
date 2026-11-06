@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Gudang & Stok Barang Jadi — Bong Garment')
+@section('title', 'Gudang & Stok Barang Jadi - Bong Garment')
 
 @section('content')
 @php
@@ -409,7 +409,7 @@
           <label class="block text-xs font-semibold text-slate-700 mb-1">1. Pola Target (<code class="font-mono">id_pola</code>) <span class="text-rose-500">*</span></label>
           <select id="adj-id-pola" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
             @foreach($pola ?? [] as $pl)
-              <option value="{{ $pl->id_pola }}">{{ $pl->kode_pola }} — {{ $pl->nama_pola }}</option>
+              <option value="{{ $pl->id_pola }}">{{ $pl->kode_pola }} - {{ $pl->nama_pola }}</option>
             @endforeach
           </select>
         </div>
@@ -627,7 +627,7 @@
         <label class="block text-xs font-semibold text-slate-700 mb-1">Pilih Master Pola (<code class="font-mono">id_pola</code>) <span class="text-rose-500">*</span></label>
         <select id="map-id-pola" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
           @foreach($pola ?? [] as $pl)
-            <option value="{{ $pl->id_pola }}">{{ $pl->kode_pola }} — {{ $pl->nama_pola }}</option>
+            <option value="{{ $pl->id_pola }}">{{ $pl->kode_pola }} - {{ $pl->nama_pola }}</option>
           @endforeach
         </select>
       </div>
@@ -678,7 +678,7 @@
         <label class="block text-xs font-semibold text-slate-700 mb-1">Pola Pakaian (<code class="font-mono">id_pola</code>) <span class="text-rose-500">*</span></label>
         <select id="edit-stok-pola" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white">
           @foreach($pola ?? [] as $pl)
-            <option value="{{ $pl->id_pola }}">{{ $pl->kode_pola }} — {{ $pl->nama_pola }}</option>
+            <option value="{{ $pl->id_pola }}">{{ $pl->kode_pola }} - {{ $pl->nama_pola }}</option>
           @endforeach
         </select>
       </div>

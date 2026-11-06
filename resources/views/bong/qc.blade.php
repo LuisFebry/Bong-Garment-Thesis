@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Quality Control & Cacat — Bong Garment')
+@section('title', 'Quality Control & Cacat - Bong Garment')
 
 @section('content')
 <div class="space-y-6">
@@ -37,7 +37,7 @@
                 $defaultWarna = $ord->penerimaanBahan?->detailBahanWarna?->first()?->nama_warna ?? 'Hitam Reaktif';
               @endphp
               <option value="{{ $ord->id_pesanan }}" data-pola-id="{{ $ord->id_pola }}" data-pola-nama="{{ $ord->pola->nama_pola ?? '-' }}" data-warna="{{ $defaultWarna }}">
-                Pesanan #{{ $ord->id_pesanan }} — {{ $ord->pola->nama_pola ?? $ord->jenis_pesanan }} ({{ $ord->nama_mitra ?? 'Internal Produk Abadi' }} · Status: {{ $ord->status_pesanan }})
+                Pesanan #{{ $ord->id_pesanan }} - {{ $ord->pola->nama_pola ?? $ord->jenis_pesanan }} ({{ $ord->nama_mitra ?? 'Internal Produk Abadi' }} · Status: {{ $ord->status_pesanan }})
               </option>
             @endforeach
           </select>
@@ -56,7 +56,7 @@
             @endphp
             @foreach($qcUsers ?? [] as $usr)
               <option value="{{ $usr->id_user }}" {{ (string)$activeCookieUserId === (string)$usr->id_user ? 'selected' : '' }}>
-                {{ $usr->nama_user }} ({{ $usr->role }} — @ {{ $usr->username }})
+                {{ $usr->nama_user }} ({{ $usr->role }} - @ {{ $usr->username }})
               </option>
             @endforeach
           </select>
@@ -310,7 +310,7 @@
           <label class="block text-xs font-semibold text-slate-700 mb-1">Pesanan Target <span class="text-rose-500">*</span></label>
           <select id="edit-qc-pesanan" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white">
             @foreach($orders ?? [] as $ord)
-              <option value="{{ $ord->id_pesanan }}">Pesanan #{{ $ord->id_pesanan }} — {{ $ord->pola->nama_pola ?? $ord->jenis_pesanan }}</option>
+              <option value="{{ $ord->id_pesanan }}">Pesanan #{{ $ord->id_pesanan }} - {{ $ord->pola->nama_pola ?? $ord->jenis_pesanan }}</option>
             @endforeach
           </select>
         </div>

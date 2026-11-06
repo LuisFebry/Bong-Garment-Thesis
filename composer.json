@@ -1,8 +1,15 @@
 {
     "name": "bong-garment/production-system",
     "type": "project",
-    "description": "Sistem Informasi Manajemen Produksi & Inventori CMT Bong Garment — oleh Luis Febry",
-    "keywords": ["laravel", "garment", "cmt", "inventory", "production", "edf-scheduling"],
+    "description": "Sistem Informasi Manajemen Produksi & Inventori CMT Bong Garment - oleh Luis Febry",
+    "keywords": [
+        "laravel",
+        "garment",
+        "cmt",
+        "inventory",
+        "production",
+        "edf-scheduling"
+    ],
     "license": "MIT",
     "require": {
         "php": "^8.2",
@@ -60,4 +67,3 @@
     "minimum-stability": "stable",
     "prefer-stable": true
 }
-
