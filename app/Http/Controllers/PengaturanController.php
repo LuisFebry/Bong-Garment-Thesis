@@ -32,44 +32,7 @@ class PengaturanController extends Controller
             'aksesoris' => DB::table('Aksesoris')->count(),
         ];
 
-        // Resolve Heroku Dyno, Web Server & JawsDB Database Ports & Diagnostic Information
-        $jawsUrl = env('JAWSDB_URL');
-        $dbHost = config('database.connections.mysql.host', '127.0.0.1');
-        $dbPort = config('database.connections.mysql.port', '3306');
-        $dbName = config('database.connections.mysql.database', 'bong_garment');
-
-        if ($jawsUrl) {
-            $parsed = parse_url($jawsUrl);
-            $dbHost = $parsed['host'] ?? $dbHost;
-            $dbPort = $parsed['port'] ?? $dbPort;
-            $dbName = isset($parsed['path']) ? ltrim($parsed['path'], '/') : $dbName;
-        }
-
-        $maskedHost = $dbHost;
-        if (strlen($dbHost) > 18) {
-            $maskedHost = substr($dbHost, 0, 8) . '...' . substr($dbHost, -10);
-        }
-
-        $herokuDynoPort = env('PORT') ?: ($_SERVER['PORT'] ?? null);
-        $clientPort = request()->getPort();
-        $isHttps = request()->secure() || request()->header('x-forwarded-proto') === 'https';
-        $clientScheme = $isHttps ? 'HTTPS' : 'HTTP';
-
-        $systemDiagnostics = [
-            'dyno_port' => $herokuDynoPort ?: 'Dynamic (Assigned by Heroku Router)',
-            'client_port' => $clientPort ? "{$clientPort} ({$clientScheme})" : "443 (HTTPS)",
-            'db_port' => $dbPort,
-            'db_host' => $maskedHost,
-            'db_name' => $dbName,
-            'db_provider' => $jawsUrl ? 'JawsDB MySQL (PaaS Cloud Add-on)' : 'Localhost / Docker MySQL',
-            'app_env' => app()->environment(),
-            'php_version' => PHP_VERSION,
-            'laravel_version' => app()->version(),
-            'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? (PHP_SAPI === 'cli' ? 'PHP Built-in Server' : 'Apache 2.4 (Heroku)'),
-            'hostname' => gethostname() ?: 'dyno-worker',
-        ];
-
-        return view('bong.pengaturan', compact('users', 'kategori', 'sumber', 'suppliers', 'counts', 'systemDiagnostics'));
+        return view('bong.pengaturan', compact('users', 'kategori', 'sumber', 'suppliers', 'counts'));
     }
 
     public function storeUser(Request $request)

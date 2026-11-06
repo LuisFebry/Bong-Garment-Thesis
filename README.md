@@ -374,15 +374,19 @@ web: vendor/bin/heroku-php-apache2 public/
 release: php artisan migrate --force
 ```
 
-#### Dynamic Port Architecture & Reverse Proxy Routing
-- **Heroku Dyno Bind Port (`$PORT`):** Heroku dyno containers are assigned a dynamic, unprivileged TCP port at container boot time via the `$PORT` environment variable (e.g. `PORT=24391`). The `heroku-php-apache2` startup script automatically binds Apache 2.4 to listen on this assigned container port.
+#### Dynamic Port Architecture & Config Vars Configuration
+- **Heroku Dyno Bind Port (`$PORT`):** Heroku dyno containers are assigned a dynamic, unprivileged TCP port at container boot time via the `$PORT` environment variable. The `heroku-php-apache2` startup script automatically binds Apache 2.4 to listen on this assigned container port.
 - **Client Web & SSL Endpoints (Ports 80 & 443):** Public web traffic connects via standard internet ports **80 (HTTP)** and **443 (HTTPS)**. Heroku's edge routing layer terminates TLS/SSL certificates and forwards requests to the dyno container with the `x-forwarded-proto: https` request header.
 - **JawsDB MySQL Cloud Integration (Port 3306):** Cloud database persistence is provided by JawsDB MySQL. When provisioned, Heroku injects `JAWSDB_URL` (`mysql://username:password@hostname:3306/dbname`), which Laravel parses automatically in `config/database.php` into MySQL connection credentials pointing to canonical remote port **3306**.
-- **Live System Diagnostic & Port Panel (`/pengaturan`):** The system exposes a live, read-only diagnostic card in the admin console to verify runtime port bindings and infrastructure health:
-  1. *Port Dyno Heroku ($PORT)*: Live container bind port allocated by the Heroku router.
-  2. *Port Klien (HTTPS / Web)*: Connected client endpoint (`443 HTTPS` or `80 HTTP`).
-  3. *Port Basis Data (MySQL : 3306)*: Target database port and provider identification (`JawsDB MySQL` vs. `Localhost / Docker MySQL`).
-  4. *Host & Runtime Engine*: Remote masked DB host, PHP 8.3 runtime, Laravel 11 framework, and dyno container hostname.
+- **Heroku Dashboard Config Vars:** Environment variables are managed entirely through the cloud provider console (**Heroku Dashboard &rarr; Settings &rarr; Config Vars**):
+  - `APP_ENV`: `production`
+  - `APP_DEBUG`: `false` (or `true` during thesis evaluation)
+  - `APP_KEY`: Application encryption key
+  - `APP_NAME`: `Bong Garment CMT`
+  - `DB_CONNECTION`: `mysql`
+  - `JAWSDB_URL`: Automatically provisioned by the JawsDB MySQL add-on
+  - `LOG_CHANNEL`: `errorlog`
+  - `SESSION_DRIVER`: `cookie`
 
 #### Automated Release Phase & Self-Healing Database
 - Heroku's **Release Phase** executes `php artisan migrate --force` immediately following container builds, applying schema updates without downtime or data destruction.
@@ -449,7 +453,7 @@ release: php artisan migrate --force
 | **Executive Reports & Data Export** | | | | |
 | `GET` | `/laporan` | `LaporanEksekutifController@index` | Admin, Pemilik | Executive production analytics, yield metrics, and CSV export |
 | **Pengaturan Sistem & User Administration** | | | | |
-| `GET` | `/pengaturan` | `PengaturanController@index` | Admin | Server diagnostics, user account management, and database reset |
+| `GET` | `/pengaturan` | `PengaturanController@index` | Admin | User account administration, master lookups, and DB reset |
 | `POST` | `/pengaturan/user` | `PengaturanController@storeUser` | Admin | Register new staff account with assigned role |
 | `POST` | `/pengaturan/user/{id}/update` | `PengaturanController@updateUser` | Admin | Update user display names, usernames, roles, and passwords |
 | `POST` | `/pengaturan/user/{id}/delete` | `PengaturanController@destroyUser` | Admin | Delete user account (guarded against self-deletion) |
