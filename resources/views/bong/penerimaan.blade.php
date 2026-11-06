@@ -29,7 +29,7 @@
         </div>
         <button type="button" onclick="openSupplierModal()" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 transition-colors">
           <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
-          + Tambah Supplier
+          + Tambah / Edit Supplier
         </button>
       </div>
 
@@ -37,11 +37,15 @@
         <div>
           <div class="flex items-center justify-between mb-1">
             <label class="block text-xs font-semibold text-slate-700">Supplier Kain <span class="text-rose-500">*</span></label>
-            <button type="button" onclick="openSupplierModal()" class="text-[11px] font-semibold text-indigo-600 hover:underline">+ Supplier Baru</button>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="openSupplierModal()" class="text-[11px] font-semibold text-indigo-600 hover:underline">+ Supplier Baru</button>
+              <span class="text-slate-300">|</span>
+              <button type="button" onclick="editCurrentSelectedSupplier('sel-supplier')" class="text-[11px] font-semibold text-amber-600 hover:underline">Edit Supplier</button>
+            </div>
           </div>
           <select name="id_supplier" id="sel-supplier" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
             @foreach($suppliers ?? [] as $sp)
-              <option value="{{ $sp->id_supplier }}">{{ $sp->nama_supplier }}</option>
+              <option value="{{ $sp->id_supplier }}" data-kontak="{{ $sp->kontak ?? '' }}" data-alamat="{{ $sp->alamat ?? '' }}">{{ $sp->nama_supplier }}</option>
             @endforeach
           </select>
         </div>
@@ -310,10 +314,17 @@
       <input type="hidden" id="edit-nota-id">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Supplier Kain <span class="text-rose-500">*</span></label>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-semibold text-slate-700">Supplier Kain <span class="text-rose-500">*</span></label>
+            <div class="flex items-center gap-1.5">
+              <button type="button" onclick="openSupplierModal()" class="text-[11px] font-semibold text-indigo-600 hover:underline">+ Baru</button>
+              <span class="text-slate-300">|</span>
+              <button type="button" onclick="editCurrentSelectedSupplier('edit-nota-supplier')" class="text-[11px] font-semibold text-amber-600 hover:underline">Edit</button>
+            </div>
+          </div>
           <select id="edit-nota-supplier" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white">
             @foreach($suppliers ?? [] as $sp)
-              <option value="{{ $sp->id_supplier }}">{{ $sp->nama_supplier }}</option>
+              <option value="{{ $sp->id_supplier }}" data-kontak="{{ $sp->kontak ?? '' }}" data-alamat="{{ $sp->alamat ?? '' }}">{{ $sp->nama_supplier }}</option>
             @endforeach
           </select>
         </div>
@@ -469,44 +480,70 @@
   </div>
 </div>
 
-<!-- Modal Tambah Supplier Baru -->
+<!-- Modal Tambah & Kelola Supplier -->
 <div id="modal-add-supplier" class="fixed inset-0 bg-slate-900/50 hidden items-center justify-center z-50 p-4">
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full p-6">
     <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
       <div>
-        <h3 class="font-bold text-slate-900 text-base">Tambah Supplier Baru</h3>
-        <p class="text-xs text-slate-500">Registrasi supplier kain/aksesoris ke tabel <code class="font-mono text-indigo-600">Supplier</code></p>
+        <h3 id="sup-modal-title" class="font-bold text-slate-900 text-base">Tambah & Kelola Supplier</h3>
+        <p class="text-xs text-slate-500">Registrasi dan revisi data supplier pada tabel <code class="font-mono text-indigo-600">Supplier</code></p>
       </div>
       <button type="button" onclick="closeSupplierModal()" class="text-slate-400 hover:text-slate-600">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
     </div>
 
-    <form id="form-add-supplier" class="space-y-4">
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Supplier <span class="text-rose-500">*</span></label>
-        <input type="text" id="sup-nama" required placeholder="Contoh: PT Kahatex Tekstil Prima" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-700 mb-1">Kontak / No. Telepon</label>
-        <input type="text" id="sup-kontak" placeholder="Contoh: 021-5551234 / 08123456789" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+    <form id="form-add-supplier" class="space-y-3 mb-4">
+      <input type="hidden" id="sup-edit-id" value="">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label id="sup-nama-label" class="block text-xs font-semibold text-slate-700 mb-1">Nama Supplier <span class="text-rose-500">*</span></label>
+          <input type="text" id="sup-nama" required placeholder="Contoh: PT Kahatex Tekstil Prima" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Kontak / No. Telepon</label>
+          <input type="text" id="sup-kontak" placeholder="Contoh: 021-5551234 / 08123456789" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+        </div>
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Alamat Supplier</label>
         <textarea id="sup-alamat" rows="2" placeholder="Contoh: Jl. Raya Rancaekek KM 23, Bandung" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500"></textarea>
       </div>
-      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-        <button type="button" onclick="closeSupplierModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>
-        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm">Simpan Supplier</button>
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button type="button" id="sup-cancel-edit-btn" onclick="resetSupplierForm()" class="hidden px-3 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg">Batal Edit</button>
+        <button type="submit" id="sup-submit-btn" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm">+ Simpan Supplier Baru</button>
       </div>
     </form>
+
+    <div class="border-t border-slate-100 pt-3">
+      <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Daftar Supplier Terdaftar (Klik Edit untuk Revisi)</p>
+      <div id="supplier-modal-list" class="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+        @foreach($suppliers ?? [] as $sp)
+        <div id="sup-row-{{ $sp->id_supplier }}" class="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 text-xs">
+          <div>
+            <p id="sup-row-nama-{{ $sp->id_supplier }}" class="font-semibold text-slate-800">{{ $sp->nama_supplier }}</p>
+            <p id="sup-row-meta-{{ $sp->id_supplier }}" class="text-[11px] text-slate-500 font-mono">{{ $sp->kontak ?? 'Tanpa kontak' }} {{ $sp->alamat ? '• ' . $sp->alamat : '' }}</p>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <button type="button" onclick="startEditSupplier({{ $sp->id_supplier }}, '{{ addslashes($sp->nama_supplier) }}', '{{ addslashes($sp->kontak ?? '') }}', '{{ addslashes($sp->alamat ?? '') }}')" class="px-2 py-1 bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-slate-200 rounded text-[10px] font-semibold">Edit</button>
+            <button type="button" onclick="deleteSupplierItem({{ $sp->id_supplier }})" class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-semibold">Hapus</button>
+          </div>
+        </div>
+        @endforeach
+      </div>
+    </div>
+
+    <div class="flex justify-end pt-3 mt-3 border-t border-slate-100">
+      <button type="button" onclick="closeSupplierModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg">Tutup</button>
+    </div>
   </div>
 </div>
 
 @push('scripts')
 <script>
-  // Supplier Modal Functions
+  // Supplier Modal Functions (Add, Edit & Delete)
   function openSupplierModal() {
+    resetSupplierForm();
     const m = document.getElementById('modal-add-supplier');
     m.classList.remove('hidden');
     m.classList.add('flex');
@@ -515,6 +552,69 @@
     const m = document.getElementById('modal-add-supplier');
     m.classList.add('hidden');
     m.classList.remove('flex');
+  }
+  function resetSupplierForm() {
+    document.getElementById('sup-edit-id').value = '';
+    document.getElementById('sup-nama').value = '';
+    document.getElementById('sup-kontak').value = '';
+    document.getElementById('sup-alamat').value = '';
+    document.getElementById('sup-modal-title').textContent = 'Tambah & Kelola Supplier';
+    document.getElementById('sup-nama-label').innerHTML = 'Nama Supplier <span class="text-rose-500">*</span>';
+    document.getElementById('sup-submit-btn').textContent = '+ Simpan Supplier Baru';
+    document.getElementById('sup-cancel-edit-btn').classList.add('hidden');
+  }
+  function startEditSupplier(id, nama, kontak, alamat) {
+    document.getElementById('sup-edit-id').value = id;
+    document.getElementById('sup-nama').value = nama || '';
+    document.getElementById('sup-kontak').value = kontak || '';
+    document.getElementById('sup-alamat').value = alamat || '';
+    document.getElementById('sup-modal-title').textContent = 'Edit Data Supplier #' + id;
+    document.getElementById('sup-nama-label').innerHTML = 'Edit Nama Supplier <span class="font-mono text-indigo-600">#' + id + '</span> <span class="text-rose-500">*</span>';
+    document.getElementById('sup-submit-btn').textContent = 'Simpan Perubahan Supplier';
+    document.getElementById('sup-cancel-edit-btn').classList.remove('hidden');
+    const m = document.getElementById('modal-add-supplier');
+    m.classList.remove('hidden');
+    m.classList.add('flex');
+    document.getElementById('sup-nama').focus();
+  }
+  function editCurrentSelectedSupplier(selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel || !sel.value) {
+      openSupplierModal();
+      return;
+    }
+    const opt = sel.options[sel.selectedIndex];
+    const id = sel.value;
+    const nama = opt ? opt.textContent.trim() : '';
+    const kontak = opt ? (opt.getAttribute('data-kontak') || '') : '';
+    const alamat = opt ? (opt.getAttribute('data-alamat') || '') : '';
+    startEditSupplier(id, nama, kontak, alamat);
+  }
+  async function deleteSupplierItem(id) {
+    if (!confirm('Hapus supplier ini?')) return;
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    try {
+      const res = await fetch('/supplier/' + id + '/delete', {
+        method: 'POST',
+        headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': token }
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        alert(json.message || 'Gagal menghapus supplier.');
+        return;
+      }
+      ['sel-supplier', 'edit-nota-supplier'].forEach(selId => {
+        const sel = document.getElementById(selId);
+        if (sel) {
+          const opt = sel.querySelector('option[value="' + id + '"]');
+          if (opt) opt.remove();
+        }
+      });
+      const row = document.getElementById('sup-row-' + id);
+      if (row) row.remove();
+    } catch (e) {
+      alert('Terjadi kesalahan jaringan saat menghapus supplier.');
+    }
   }
 
   function closeModal(modalId) {
@@ -691,14 +791,16 @@
 
   document.getElementById('form-add-supplier')?.addEventListener('submit', function(e) {
     e.preventDefault();
+    const editId = document.getElementById('sup-edit-id').value;
     const payload = {
-      nama_supplier: document.getElementById('sup-nama').value,
-      kontak: document.getElementById('sup-kontak').value || null,
-      alamat: document.getElementById('sup-alamat').value || null
+      nama_supplier: document.getElementById('sup-nama').value.trim(),
+      kontak: document.getElementById('sup-kontak').value.trim() || null,
+      alamat: document.getElementById('sup-alamat').value.trim() || null
     };
     const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    const url = editId ? (`/supplier/${editId}/update`) : "{{ route('supplier.store', [], false) }}";
 
-    fetch("{{ route('supplier.store', [], false) }}", {
+    fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -710,19 +812,59 @@
     .then(res => res.json())
     .then(data => {
       if (data.success && data.data) {
-        const sel = document.getElementById('sel-supplier');
-        if (sel) {
-          const opt = document.createElement('option');
-          opt.value = data.data.id_supplier;
-          opt.textContent = data.data.nama_supplier;
-          opt.selected = true;
-          sel.appendChild(opt);
+        const sp = data.data;
+        if (editId) {
+          ['sel-supplier', 'edit-nota-supplier'].forEach(selId => {
+            const sel = document.getElementById(selId);
+            if (sel) {
+              const opt = sel.querySelector('option[value="' + sp.id_supplier + '"]');
+              if (opt) {
+                opt.textContent = sp.nama_supplier;
+                opt.setAttribute('data-kontak', sp.kontak || '');
+                opt.setAttribute('data-alamat', sp.alamat || '');
+              }
+            }
+          });
+          const namaEl = document.getElementById('sup-row-nama-' + sp.id_supplier);
+          if (namaEl) namaEl.textContent = sp.nama_supplier;
+          const metaEl = document.getElementById('sup-row-meta-' + sp.id_supplier);
+          if (metaEl) metaEl.textContent = (sp.kontak || 'Tanpa kontak') + (sp.alamat ? ' • ' + sp.alamat : '');
+          resetSupplierForm();
+          alert(data.message || 'Data supplier berhasil diperbarui!');
+        } else {
+          ['sel-supplier', 'edit-nota-supplier'].forEach(selId => {
+            const sel = document.getElementById(selId);
+            if (sel) {
+              const opt = document.createElement('option');
+              opt.value = sp.id_supplier;
+              opt.textContent = sp.nama_supplier;
+              opt.setAttribute('data-kontak', sp.kontak || '');
+              opt.setAttribute('data-alamat', sp.alamat || '');
+              opt.selected = true;
+              sel.appendChild(opt);
+            }
+          });
+          const list = document.getElementById('supplier-modal-list');
+          if (list) {
+            const row = document.createElement('div');
+            row.id = 'sup-row-' + sp.id_supplier;
+            row.className = 'flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 text-xs';
+            const safeNama = (sp.nama_supplier || '').replace(/'/g, "\\'");
+            const safeKontak = (sp.kontak || '').replace(/'/g, "\\'");
+            const safeAlamat = (sp.alamat || '').replace(/'/g, "\\'");
+            row.innerHTML = '<div><p id="sup-row-nama-' + sp.id_supplier + '" class="font-semibold text-slate-800">' + sp.nama_supplier + '</p>' +
+              '<p id="sup-row-meta-' + sp.id_supplier + '" class="text-[11px] text-slate-500 font-mono">' + (sp.kontak || 'Tanpa kontak') + (sp.alamat ? ' • ' + sp.alamat : '') + '</p></div>' +
+              '<div class="flex items-center gap-1 shrink-0">' +
+              '<button type="button" onclick="startEditSupplier(' + sp.id_supplier + ', \'' + safeNama + '\', \'' + safeKontak + '\', \'' + safeAlamat + '\')" class="px-2 py-1 bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-slate-200 rounded text-[10px] font-semibold">Edit</button>' +
+              '<button type="button" onclick="deleteSupplierItem(' + sp.id_supplier + ')" class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-semibold">Hapus</button>' +
+              '</div>';
+            list.appendChild(row);
+          }
+          resetSupplierForm();
+          alert(data.message || 'Supplier baru berhasil ditambahkan!');
         }
-        closeSupplierModal();
-        document.getElementById('form-add-supplier').reset();
-        alert(data.message || 'Supplier baru berhasil ditambahkan!');
       } else {
-        alert('Gagal menambah supplier: ' + (data.message || 'Validasi gagal'));
+        alert('Gagal menyimpan supplier: ' + (data.message || 'Validasi gagal'));
       }
     })
     .catch(err => {

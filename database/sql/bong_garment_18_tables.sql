@@ -1,10 +1,11 @@
 -- ========================================================
 -- SISTEM INFORMASI MANAJEMEN PRODUKSI & INVENTORI CMT
--- BONG GARMENT - SKEMA BASIS DATA 17 TABEL
+-- BONG GARMENT - SKEMA BASIS DATA 18 TABEL
 -- DBMS: MySQL 8.0+ | Engine: InnoDB
 -- ========================================================
 
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS Riwayat_Stok_Barang_Jadi;
 DROP TABLE IF EXISTS QC;
 DROP TABLE IF EXISTS Detail_Gelaran_Kain;
 DROP TABLE IF EXISTS Detail_Pemotongan_Warna;
@@ -241,6 +242,25 @@ CREATE TABLE QC (
     PRIMARY KEY (id_qc),
     FOREIGN KEY (id_pesanan) REFERENCES Pesanan(id_pesanan) ON DELETE RESTRICT ON UPDATE CASCADE,
     FOREIGN KEY (id_user_qc) REFERENCES User(id_user) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 18. Tabel Riwayat Transaksi Stok Barang Jadi (Inbound QC / Outbound Mitra & Penjualan)
+CREATE TABLE IF NOT EXISTS Riwayat_Stok_Barang_Jadi (
+    id_riwayat_stok INT NOT NULL AUTO_INCREMENT,
+    id_stok INT NULL,
+    id_pola INT NOT NULL,
+    id_spesifikasi INT NOT NULL,
+    nama_warna VARCHAR(50) NOT NULL,
+    jenis_transaksi ENUM('MASUK', 'KELUAR') NOT NULL DEFAULT 'KELUAR',
+    jumlah_pcs INT NOT NULL,
+    stok_sebelum INT NOT NULL DEFAULT 0,
+    stok_sesudah INT NOT NULL DEFAULT 0,
+    kategori_alasan VARCHAR(100) NOT NULL,
+    nama_mitra VARCHAR(100) NULL COMMENT 'Nama Mitra jika diambil oleh Mitra',
+    keterangan VARCHAR(255) NULL COMMENT 'Nomor surat jalan / catatan tambahan',
+    id_user INT NULL,
+    tgl_transaksi DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_riwayat_stok)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Performance Indexes

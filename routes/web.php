@@ -31,8 +31,8 @@ Route::middleware(RoleMiddleware::class . ':Admin,Pemilik,Pemotong,QC,Gudang')->
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 });
 
-// Pola & 11-Metric Specifications: Admin
-Route::prefix('pola')->middleware(RoleMiddleware::class . ':Admin')->group(function () {
+// Pola & 11-Metric Specifications: Admin, Pemotong, Gudang
+Route::prefix('pola')->middleware(RoleMiddleware::class . ':Admin,Pemotong,Gudang')->group(function () {
     Route::get('/', [PolaController::class, 'index'])->name('pola.index');
     Route::get('/{id}', [PolaController::class, 'show'])->name('pola.show');
     Route::post('/', [PolaController::class, 'store'])->name('pola.store');
@@ -59,9 +59,29 @@ Route::prefix('penerimaan')->middleware(RoleMiddleware::class . ':Admin,Gudang')
     Route::post('/roll/{id}/update', [PenerimaanBahanController::class, 'updateRoll'])->name('penerimaan.roll.update');
 });
 
-Route::post('/supplier', [PenerimaanBahanController::class, 'storeSupplier'])
-    ->middleware(RoleMiddleware::class . ':Admin,Gudang')
-    ->name('supplier.store');
+// Master Lookup & Supplier Management: Accessible to Admin, Gudang, and Pemotong directly from operational forms
+Route::middleware(RoleMiddleware::class . ':Admin,Gudang,Pemotong')->group(function () {
+    Route::post('/supplier', [PenerimaanBahanController::class, 'storeSupplier'])->name('supplier.store');
+    Route::post('/supplier/{id}/update', [PengaturanController::class, 'updateSupplier'])->name('supplier.update');
+    Route::post('/supplier/{id}/delete', [PengaturanController::class, 'destroySupplier'])->name('supplier.delete');
+
+    Route::post('/kategori', [PengaturanController::class, 'storeKategori'])->name('kategori.store');
+    Route::post('/kategori/{id}/update', [PengaturanController::class, 'updateKategori'])->name('kategori.update');
+    Route::post('/kategori/{id}/delete', [PengaturanController::class, 'destroyKategori'])->name('kategori.delete');
+
+    Route::post('/sumber', [PengaturanController::class, 'storeSumber'])->name('sumber.store');
+    Route::post('/sumber/{id}/update', [PengaturanController::class, 'updateSumber'])->name('sumber.update');
+    Route::post('/sumber/{id}/delete', [PengaturanController::class, 'destroySumber'])->name('sumber.delete');
+
+    Route::post('/pengaturan/kategori', [PengaturanController::class, 'storeKategori'])->name('pengaturan.kategori.store');
+    Route::post('/pengaturan/kategori/{id}/update', [PengaturanController::class, 'updateKategori'])->name('pengaturan.kategori.update');
+    Route::post('/pengaturan/kategori/{id}/delete', [PengaturanController::class, 'destroyKategori'])->name('pengaturan.kategori.delete');
+    Route::post('/pengaturan/sumber', [PengaturanController::class, 'storeSumber'])->name('pengaturan.sumber.store');
+    Route::post('/pengaturan/sumber/{id}/update', [PengaturanController::class, 'updateSumber'])->name('pengaturan.sumber.update');
+    Route::post('/pengaturan/sumber/{id}/delete', [PengaturanController::class, 'destroySumber'])->name('pengaturan.sumber.delete');
+    Route::post('/pengaturan/supplier/{id}/update', [PengaturanController::class, 'updateSupplier'])->name('pengaturan.supplier.update');
+    Route::post('/pengaturan/supplier/{id}/delete', [PengaturanController::class, 'destroySupplier'])->name('pengaturan.supplier.delete');
+});
 
 // Pemotongan Seri: Admin, Pemotong
 Route::prefix('pemotongan')->middleware(RoleMiddleware::class . ':Admin,Pemotong')->group(function () {
@@ -107,14 +127,6 @@ Route::prefix('pengaturan')->middleware(RoleMiddleware::class . ':Admin')->group
     Route::post('/user', [PengaturanController::class, 'storeUser'])->name('pengaturan.user.store');
     Route::post('/user/{id}/update', [PengaturanController::class, 'updateUser'])->name('pengaturan.user.update');
     Route::post('/user/{id}/delete', [PengaturanController::class, 'destroyUser'])->name('pengaturan.user.delete');
-    Route::post('/kategori', [PengaturanController::class, 'storeKategori'])->name('pengaturan.kategori.store');
-    Route::post('/kategori/{id}/update', [PengaturanController::class, 'updateKategori'])->name('pengaturan.kategori.update');
-    Route::post('/kategori/{id}/delete', [PengaturanController::class, 'destroyKategori'])->name('pengaturan.kategori.delete');
-    Route::post('/sumber', [PengaturanController::class, 'storeSumber'])->name('pengaturan.sumber.store');
-    Route::post('/sumber/{id}/update', [PengaturanController::class, 'updateSumber'])->name('pengaturan.sumber.update');
-    Route::post('/sumber/{id}/delete', [PengaturanController::class, 'destroySumber'])->name('pengaturan.sumber.delete');
-    Route::post('/supplier/{id}/update', [PengaturanController::class, 'updateSupplier'])->name('pengaturan.supplier.update');
-    Route::post('/supplier/{id}/delete', [PengaturanController::class, 'destroySupplier'])->name('pengaturan.supplier.delete');
     Route::post('/reset-operational', [PengaturanController::class, 'resetOperationalData'])->name('pengaturan.reset');
     Route::post('/seed-sample', [PengaturanController::class, 'seedSampleData'])->name('pengaturan.seed_sample');
 });

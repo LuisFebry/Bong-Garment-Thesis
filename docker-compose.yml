@@ -45,7 +45,7 @@ services:
       --default-storage-engine=InnoDB
     volumes:
       - db_data:/var/lib/mysql
-      - ./database/sql/bong_garment_17_tables.sql:/docker-entrypoint-initdb.d/01_bong_garment_17_tables.sql:ro
+      - ./database/sql/bong_garment_18_tables.sql:/docker-entrypoint-initdb.d/01_bong_garment_18_tables.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_secret_password"]
       interval: 5s

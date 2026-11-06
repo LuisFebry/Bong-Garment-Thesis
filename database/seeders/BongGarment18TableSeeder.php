@@ -6,14 +6,17 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
-class BongGarment17TableSeeder extends Seeder
+class BongGarment18TableSeeder extends Seeder
 {
     /**
-     * Run the database seeds for all 17 tables.
+     * Run the database seeds for all 18 canonical tables.
      */
     public function run(): void
     {
         DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        if (\Illuminate\Support\Facades\Schema::hasTable('Riwayat_Stok_Barang_Jadi')) {
+            DB::table('Riwayat_Stok_Barang_Jadi')->truncate();
+        }
         DB::table('QC')->truncate();
         DB::table('Detail_Gelaran_Kain')->truncate();
         DB::table('Detail_Pemotongan_Warna')->truncate();
@@ -327,6 +330,28 @@ class BongGarment17TableSeeder extends Seeder
                 'tgl_selesai_perbaikan' => null,
             ],
         ]);
+
+        // 18. Riwayat_Stok_Barang_Jadi (Immutable Transaction Ledger with Mitra tracking)
+        if (\Illuminate\Support\Facades\Schema::hasTable('Riwayat_Stok_Barang_Jadi')) {
+            DB::table('Riwayat_Stok_Barang_Jadi')->insert([
+                [
+                    'id_riwayat_stok' => 1,
+                    'id_stok' => 1,
+                    'id_pola' => 1,
+                    'id_spesifikasi' => 1,
+                    'nama_warna' => 'Hitam Reaktif',
+                    'jenis_transaksi' => 'KELUAR',
+                    'jumlah_pcs' => 20,
+                    'stok_sebelum' => 100,
+                    'stok_sesudah' => 80,
+                    'kategori_alasan' => 'Diambil Mitra (Serah Terima Request Mitra)',
+                    'nama_mitra' => 'CV Sinar Apparel Distro',
+                    'keterangan' => 'Surat Jalan No. SJ-2026-1030 (Batch 1 Pengiriman)',
+                    'id_user' => 1,
+                    'tgl_transaksi' => '2026-10-30 16:30:00',
+                ],
+            ]);
+        }
     }
 }
 

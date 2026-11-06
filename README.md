@@ -1,6 +1,6 @@
 # Bong Garment - CMT Production & Inventory Management System
 
-A full-stack, enterprise-grade production and inventory management web application engineered for **Cut, Make, Trim (CMT)** apparel manufacturing. The system features physical fabric roll tracking (`Detail_Roll_Bahan`), an **Earliest Deadline First (EDF)** dynamic priority cutting schedule (`Pesanan`), an 11-metric garment dimension matrix (`Spesifikasi_Ukuran`), multi-stage Quality Control (`QC`) with rework workflows, and perpetual finished goods inventory (`Stok_Barang_Jadi`).
+A full-stack, enterprise-grade production and inventory management web application engineered for **Cut, Make, Trim (CMT)** apparel manufacturing. The system features physical fabric roll tracking (`Detail_Roll_Bahan`), an **Earliest Deadline First (EDF)** dynamic priority cutting schedule (`Pesanan`), an 11-metric garment dimension matrix (`Spesifikasi_Ukuran`), multi-stage Quality Control (`QC`) with rework workflows, perpetual finished goods inventory (`Stok_Barang_Jadi`), and an immutable finished goods transaction ledger with client tracking (`Riwayat_Stok_Barang_Jadi`).
 
 This repository contains the software implementation for an undergraduate thesis at **Universitas Tarumanagara (UNTAR)**, Faculty of Information Technology, Department of Information Systems.
 
@@ -65,7 +65,7 @@ flowchart TB
         direction TB
         ORM["Eloquent ORM & Schema Builder<br/>(ACID Transactions via DB::transaction)"]
         
-        subgraph CanonicalTables["17 Canonical Relational Tables"]
+        subgraph CanonicalTables["18 Canonical Relational Tables"]
             direction LR
             T_Users["User<br/>(5 RBAC Roles)"]
             T_Pola["Pola & Kategori<br/>(11-Metric Dimensi)"]
@@ -74,6 +74,7 @@ flowchart TB
             T_Potong["Pemotongan & Gelaran<br/>(Ply & Yield Tracking)"]
             T_QC["Inspeksi QC & Rework<br/>(3-Stage Defect Logs)"]
             T_Stok["Stok Barang Jadi<br/>(Perpetual Warehousing)"]
+            T_Riwayat["Riwayat Stok & Mitra<br/>(Outbound & Inbound Ledger)"]
             T_Acc["Aksesoris & BOM<br/>(Per-Pattern Trim Usage)"]
         end
         ORM --> CanonicalTables
@@ -98,7 +99,7 @@ flowchart TB
 |---|---|---|---|
 | **Backend Framework** | Laravel | `^11.0` | MVC architecture, dependency injection service container, Eloquent ORM, database migrations, seeders, and atomic transaction handling |
 | **Runtime Engine** | PHP | `^8.2 / 8.3` | High-performance modern PHP with strict typing, constructor promotion, enums, match expressions, and JIT compilation |
-| **Relational Database** | MySQL (InnoDB) | `8.0+` | Normalized 17-table relational schema, strict foreign keys (`ON DELETE RESTRICT ON UPDATE CASCADE`), decimal precision (`DECIMAL(10,2)` for physical units) |
+| **Relational Database** | MySQL (InnoDB) | `8.0+` | Normalized 18-table relational schema, strict foreign keys (`ON DELETE RESTRICT ON UPDATE CASCADE`), decimal precision (`DECIMAL(10,2)` for physical units) |
 | **Security & Authorization** | Laravel Middleware | Custom RBAC | Role-Based Access Control (`RoleMiddleware`) guarding endpoints per division; CSRF verification; secure HTTP-only cookies; database bootstrap guard (`EnsureDatabaseMigrated`) |
 | **Frontend Templating** | Laravel Blade | Engine 11 | Component-driven server-side rendering, layout inheritance (`layouts/app.blade.php`), slot injection, and modular view stack pushes (`@push('scripts')`) |
 | **Styling & Design System** | Tailwind CSS CDN | `3.4+` | Utility-first responsive design system, custom manufacturing color palette (`brand-50` to `brand-900`, `emerald`, `amber`, `rose`), flexbox and CSS grid layouts |
@@ -108,7 +109,7 @@ flowchart TB
 | **Document & Data Export** | CSV & Browser Print | Dynamic Stream | Instant CSV export with dynamic headers for production analytics, plus formatted `@media print` stylesheets for executive factory reports |
 | **Containerization** | Docker & Compose | Multi-Stage | Portable containerized execution (`Dockerfile`, `docker-compose.yml`) bundling PHP 8.3-FPM, Apache/Nginx web server, and MySQL database container |
 | **Cloud Deployment** | Heroku Cloud PaaS | Linux 64-bit | Live production hosting with `heroku-php-apache2` web server routing, automatic Procfile release migrations (`php artisan migrate --force`), and JawsDB MySQL integration |
-| **Database Initialization** | Laravel Seeders | Dual Mode | Dedicated production seeder (`ProductionBootstrapSeeder` for factory go-live with zero sample data) and evaluation seeder (`DatabaseSeeder` with realistic 17-table sample data) |
+| **Database Initialization** | Laravel Seeders | Dual Mode | Dedicated production seeder (`ProductionBootstrapSeeder` for factory go-live with zero sample data) and evaluation seeder (`DatabaseSeeder` with realistic 18-table sample data) |
 
 ---
 
@@ -131,11 +132,11 @@ flowchart LR
 2. **Order Planning & EDF Queue (`Pesanan`):** Orders are mapped to master patterns (`Pola`), garment size dimensions (`Spesifikasi_Ukuran`), and fabric notes, then queued using the **Earliest Deadline First (EDF)** algorithm.
 3. **Spreading & Series Cutting (`Pemotongan_Seri`):** Fabric rolls are spread on cutting tables (`panjang_gelar`, `jumlah_tumpuk`), deducting roll balances (`kain_terpakai`) and updating roll statuses (`Tersedia`, `Dipotong`, `Habis`).
 4. **Multi-Stage QC & Rework (`QC`):** Batches are inspected across 3 checkpoints (`Prototipe`, `Potong`, `Jahit Akhir`) with defect classification (`Cacat Potong`, `Cacat Jahit`, `Cacat Bahan`), PIC assignment, and target completion dates.
-5. **Perpetual Finished Stock (`Stok_Barang_Jadi`):** Units passing final sewing QC (`Jahit Akhir`) automatically credit finished goods warehouse balances by pattern, size, and color.
+5. **Perpetual Finished Stock & Transaction Ledger (`Stok_Barang_Jadi` & `Riwayat_Stok_Barang_Jadi`):** Units passing final sewing QC (`Jahit Akhir`) automatically credit finished goods warehouse balances. Outbound transactions (client shipments / store retail) log immutable debit records capturing the exact recipient Mitra, quantity, and timestamp.
 
 ---
 
-## Relational Database Schema (17 Canonical Tables)
+## Relational Database Schema (18 Canonical Tables)
 
 The database enforces ACID transactions, strict data integrity, and normalized foreign key constraints:
 
@@ -163,6 +164,8 @@ erDiagram
     User ||--o{ QC : "diperiksa oleh"
     Pola ||--o{ Stok_Barang_Jadi : "menghasilkan"
     Spesifikasi_Ukuran ||--o{ Stok_Barang_Jadi : "ukuran produk"
+    Stok_Barang_Jadi ||--o{ Riwayat_Stok_Barang_Jadi : "mencatat transaksi"
+    User ||--o{ Riwayat_Stok_Barang_Jadi : "dicatat oleh"
 
     User {
         int id_user PK
@@ -232,6 +235,22 @@ erDiagram
         int jumlah_stok_pcs
         datetime tgl_update_terakhir
     }
+    Riwayat_Stok_Barang_Jadi {
+        int id_riwayat_stok PK
+        int id_stok FK
+        int id_pola FK
+        int id_spesifikasi FK
+        string nama_warna
+        enum jenis_transaksi "MASUK, KELUAR"
+        int jumlah_pcs
+        int stok_sebelum
+        int stok_sesudah
+        string kategori_alasan
+        string nama_mitra "Mitra pengambil barang"
+        string keterangan "No. surat jalan / catatan"
+        int id_user FK
+        datetime tgl_transaksi
+    }
 ```
 
 ---
@@ -289,11 +308,11 @@ flowchart TD
     Init --> ModeB["Sample Data Mode<br/>(Demonstration & Training)"]
 
     ModeA --> CleanDB["Wipe all operational sample records<br/>Keep User accounts & Master Lookup tables<br/>Start from Zero Factory Input"]
-    ModeB --> SeedDB["Seed canonical 17 tables with<br/>realistic sample orders, rolls, cutting,<br/>and multi-stage QC records"]
+    ModeB --> SeedDB["Seed canonical 18 tables with<br/>realistic sample orders, rolls, cutting,<br/>QC, and stock audit records"]
 ```
 
 ### 1. Web UI Control (`/pengaturan`)
-- **Kosongkan Data Operasional Sekarang:** Clears all transactional data (`Pesanan`, `Penerimaan_Bahan`, `Detail_Roll_Bahan`, `Pemotongan_Seri`, `QC`, `Stok_Barang_Jadi`, and optionally Master `Pola`/`Aksesoris`/`Supplier`) while preserving user accounts.
+- **Kosongkan Data Operasional Sekarang:** Clears all transactional data (`Pesanan`, `Penerimaan_Bahan`, `Detail_Roll_Bahan`, `Pemotongan_Seri`, `QC`, `Stok_Barang_Jadi`, `Riwayat_Stok_Barang_Jadi`, and optionally Master `Pola`/`Aksesoris`/`Supplier`) while preserving user accounts.
 - **Muat Data Contoh:** Re-populates realistic CMT sample data for training or testing without altering custom user credentials.
 
 ### 2. Artisan CLI Setup
@@ -302,7 +321,7 @@ flowchart TD
   php artisan migrate:fresh --force
   php artisan db:seed --class=Database\\Seeders\\ProductionBootstrapSeeder --force
   ```
-- **Full Sample Dataset (17 Tables Seeded):**
+- **Full Sample Dataset (18 Tables Seeded):**
   ```bash
   php artisan migrate:fresh --seed --force
   ```
@@ -347,10 +366,27 @@ docker compose exec app php artisan db:seed --class=Database\\Seeders\\Productio
 Application is immediately accessible at `http://localhost:8080`.
 
 ### Option 3: Cloud / Heroku Deployment
-The repository includes deployment configuration (`Procfile`, `app.json`):
-- `Procfile` executes `release: php artisan migrate --force` to apply schema updates without wiping production data.
-- The `EnsureDatabaseMigrated` middleware automatically migrates and boots default accounts on first launch if the database is uninitialized.
-- Apache web server routing is handled through `heroku-php-apache2 public/` with complete `.htaccess` rewrite rules.
+
+The repository includes complete production cloud configuration for **Heroku PaaS** with **JawsDB MySQL**:
+
+```procfile
+web: vendor/bin/heroku-php-apache2 public/
+release: php artisan migrate --force
+```
+
+#### Dynamic Port Architecture & Reverse Proxy Routing
+- **Heroku Dyno Bind Port (`$PORT`):** Heroku dyno containers are assigned a dynamic, unprivileged TCP port at container boot time via the `$PORT` environment variable (e.g. `PORT=24391`). The `heroku-php-apache2` startup script automatically binds Apache 2.4 to listen on this assigned container port.
+- **Client Web & SSL Endpoints (Ports 80 & 443):** Public web traffic connects via standard internet ports **80 (HTTP)** and **443 (HTTPS)**. Heroku's edge routing layer terminates TLS/SSL certificates and forwards requests to the dyno container with the `x-forwarded-proto: https` request header.
+- **JawsDB MySQL Cloud Integration (Port 3306):** Cloud database persistence is provided by JawsDB MySQL. When provisioned, Heroku injects `JAWSDB_URL` (`mysql://username:password@hostname:3306/dbname`), which Laravel parses automatically in `config/database.php` into MySQL connection credentials pointing to canonical remote port **3306**.
+- **Live System Diagnostic & Port Panel (`/pengaturan`):** The system exposes a live, read-only diagnostic card in the admin console to verify runtime port bindings and infrastructure health:
+  1. *Port Dyno Heroku ($PORT)*: Live container bind port allocated by the Heroku router.
+  2. *Port Klien (HTTPS / Web)*: Connected client endpoint (`443 HTTPS` or `80 HTTP`).
+  3. *Port Basis Data (MySQL : 3306)*: Target database port and provider identification (`JawsDB MySQL` vs. `Localhost / Docker MySQL`).
+  4. *Host & Runtime Engine*: Remote masked DB host, PHP 8.3 runtime, Laravel 11 framework, and dyno container hostname.
+
+#### Automated Release Phase & Self-Healing Database
+- Heroku's **Release Phase** executes `php artisan migrate --force` immediately following container builds, applying schema updates without downtime or data destruction.
+- The `EnsureDatabaseMigrated` application middleware provides automatic self-healing: if an empty database is connected, it provisions the canonical 18-table relational schema and registers default administrative credentials automatically on first launch.
 
 ---
 
@@ -358,32 +394,67 @@ The repository includes deployment configuration (`Procfile`, `app.json`):
 
 | HTTP Method | URI Path | Controller & Action | Allowed Roles | Purpose |
 |---|---|---|---|---|
+| **Authentication & Dashboard** | | | | |
 | `GET` / `POST` | `/login`, `/logout` | `AuthController` | Public | Session authentication & credential verification |
-| `GET` | `/`, `/dashboard` | `DashboardController@index` | All Authenticated | High-level KPIs, EDF priority queue, and recent QC feed |
-| `GET` / `POST` | `/pesanan`, `/pesanan/store` | `PesananController` | Admin | Order intake, pattern selection, and EDF deadline setting |
-| `POST` | `/pesanan/{id}/update` | `PesananController@update` | Admin | Edit order details, assign fabric receipt note, or change status |
-| `POST` | `/pesanan/{id}/revise-deadline`| `PesananController@reviseDeadline` | Admin | Revise order delivery deadline with audit reason logging |
-| `GET` / `POST` | `/penerimaan`, `/penerimaan/store`| `PenerimaanBahanController` | Admin, Gudang | Record supplier delivery note, color groups, and roll metrics |
+| `GET` | `/`, `/dashboard` | `DashboardController@index` | All Authenticated | High-level KPIs, EDF cutting priority queue, and recent QC feed |
+| **Pola & 11-Metric Specifications** | | | | |
+| `GET` | `/pola` | `PolaController@index` | Admin, Pemotong, Gudang | Garment pattern catalogue with 11-metric size tables |
+| `POST` | `/pola` | `PolaController@store` | Admin, Pemotong, Gudang | Register new garment master pattern & size matrix |
+| `GET` | `/pola/{id}` | `PolaController@show` | Admin, Pemotong, Gudang | View pattern details and associated size specifications |
+| `POST` | `/pola/{id}/update` | `PolaController@update` | Admin, Pemotong, Gudang | Update pattern code, category, and size metric values |
+| **Pesanan & EDF Deadline Management** | | | | |
+| `GET` | `/pesanan` | `PesananController@index` | Admin | Production order list and intake form |
+| `POST` | `/pesanan` | `PesananController@store` | Admin | Register new production order with initial EDF deadline |
+| `POST` | `/pesanan/{id}/update` | `PesananController@update` | Admin | Edit order parameters, assign fabric receipt note, or change status |
+| `POST` | `/pesanan/{id}/revise-deadline` | `PesananController@reviseDeadline` | Admin | Revise order delivery deadline with immutable audit reason logging |
+| `POST` | `/pesanan/{id}/status` | `PesananController@updateStatus` | Admin | Update order manufacturing lifecycle status |
+| **Penerimaan Bahan & Roll Tracking** | | | | |
+| `GET` | `/penerimaan` | `PenerimaanBahanController@index` | Admin, Gudang | Fabric receipt notes, color batches, and individual roll inventory |
+| `POST` | `/penerimaan` | `PenerimaanBahanController@store` | Admin, Gudang | Record supplier delivery note, color groups, and roll metrics |
 | `POST` | `/penerimaan/{id}/update` | `PenerimaanBahanController@update` | Admin, Gudang | Edit receipt note details (supplier, delivery date, fabric name) |
 | `POST` | `/penerimaan/warna/{id}/update` | `PenerimaanBahanController@updateWarna` | Admin, Gudang | Edit color lot name, code, or unit (`Kg`/`Yard`/`Meter`) |
-| `POST` | `/penerimaan/warna/{id}/add-roll`| `PenerimaanBahanController@addRollToWarna`| Admin, Gudang | Add new physical rolls to an existing color lot |
-| `POST` | `/penerimaan/roll/{id}/update` | `PenerimaanBahanController@updateRoll` | Admin, Gudang | Edit roll initial/remaining size, unit, or status |
-| `POST` | `/supplier` | `PenerimaanBahanController@storeSupplier`| Admin, Gudang | Register new fabric or trims supplier |
-| `GET` / `POST` | `/pemotongan`, `/pemotongan/store`| `PemotonganSeriController` | Admin, Pemotong | Record series cutting, spreading parameters, and roll deductions |
-| `POST` | `/pemotongan/{id}/update` | `PemotonganSeriController@update` | Admin, Pemotong | Revise cutting series data and readjust roll balances |
-| `GET` / `POST` | `/qc`, `/qc/store` | `QcController` | Admin, QC | Record multi-stage QC inspection results (`Prototipe`, `Potong`, `Jahit`) |
+| `POST` | `/penerimaan/warna/{id}/add-roll` | `PenerimaanBahanController@addRollToWarna` | Admin, Gudang | Add new physical rolls to an existing color lot |
+| `POST` | `/penerimaan/roll/{id}/update` | `PenerimaanBahanController@updateRoll` | Admin, Gudang | Edit roll initial/remaining size, unit, or status (`Tersedia`/`Dipotong`/`Habis`) |
+| **Master Lookups (Operational Direct Access)** | | | | |
+| `POST` | `/supplier` | `PenerimaanBahanController@storeSupplier` | Admin, Gudang, Pemotong | Register new fabric or trims supplier directly from input forms |
+| `POST` | `/supplier/{id}/update` | `PengaturanController@updateSupplier` | Admin, Gudang, Pemotong | Edit supplier business name, contact info, and address |
+| `POST` | `/supplier/{id}/delete` | `PengaturanController@destroySupplier` | Admin, Gudang, Pemotong | Delete supplier record (guarded against active foreign keys) |
+| `POST` | `/kategori` | `PengaturanController@storeKategori` | Admin, Gudang, Pemotong | Register garment pattern category directly from pattern modal |
+| `POST` | `/kategori/{id}/update` | `PengaturanController@updateKategori` | Admin, Gudang, Pemotong | Edit pattern category name |
+| `POST` | `/kategori/{id}/delete` | `PengaturanController@destroyKategori` | Admin, Gudang, Pemotong | Delete pattern category |
+| `POST` | `/sumber` | `PengaturanController@storeSumber` | Admin, Gudang, Pemotong | Register client order source directly from order intake form |
+| `POST` | `/sumber/{id}/update` | `PengaturanController@updateSumber` | Admin, Gudang, Pemotong | Edit order source name |
+| `POST` | `/sumber/{id}/delete` | `PengaturanController@destroySumber` | Admin, Gudang, Pemotong | Delete order source |
+| **Pemotongan Seri & Gelaran Kain** | | | | |
+| `GET` | `/pemotongan` | `PemotonganSeriController@index` | Admin, Pemotong | Cutting queue sorted by EDF deadline and cutting series records |
+| `POST` | `/pemotongan` | `PemotonganSeriController@store` | Admin, Pemotong | Execute cutting series, spread rolls, and deduct roll balances |
+| `POST` | `/pemotongan/{id}/update` | `PemotonganSeriController@update` | Admin, Pemotong | Revise cutting series data and recalculate roll balance deductions |
+| **Quality Control Multi-Stage & Rework** | | | | |
+| `GET` | `/qc` | `QcController@index` | Admin, QC | Multi-stage inspection queue (`Prototipe`, `Potong`, `Jahit Akhir`) |
+| `POST` | `/qc` | `QcController@store` | Admin, QC | Record QC inspection batch (passed count, defects, rework PIC) |
 | `POST` | `/qc/{id}/update` | `QcController@update` | Admin, QC | Edit QC log quantities, defect type, and status |
 | `POST` | `/qc/{id}/complete-rework` | `QcController@completeRework` | Admin, QC | Selesaikan rework dengan timestamp penyelesaian aktual |
-| `GET` / `POST` | `/stok`, `/stok/adjust` | `StokBarangJadiController` | Admin, Gudang, Pemilik | Monitor perpetual finished stock & process outbound shipments |
-| `POST` | `/stok/{id}/update` | `StokBarangJadiController@update` | Admin, Gudang | Direct revision of finished stock quantities |
-| `GET` / `POST` | `/aksesoris`, `/aksesoris/store`| `AksesorisController` | Admin, Gudang | Manage trims inventory and quick mutation adjustments |
-| `POST` | `/aksesoris/pola-mapping` | `AksesorisController@storePolaMapping` | Admin, Gudang | Map accessory consumption per garment pattern (BOM) |
+| **Stok Barang Jadi & Riwayat Transaksi Mitra** | | | | |
+| `GET` | `/stok` | `StokBarangJadiController@index` | Admin, Gudang, Pemilik | Monitor perpetual finished stock & immutable transaction history |
+| `POST` | `/stok/adjust` | `StokBarangJadiController@adjustStock` | Admin, Gudang | Process outbound shipment with `nama_mitra` tracking & audit trail |
+| `POST` | `/stok/{id}/update` | `StokBarangJadiController@update` | Admin, Gudang | Direct revision of finished stock balance |
+| **Aksesoris & Bill of Materials (BOM)** | | | | |
+| `GET` | `/aksesoris` | `AksesorisController@index` | Admin, Gudang | Manage trims inventory and BOM pattern accessory allocations |
+| `POST` | `/aksesoris` | `AksesorisController@store` | Admin, Gudang | Register new trims or accessory stock item |
+| `POST` | `/aksesoris/{id}/stock` | `AksesorisController@updateStock` | Admin, Gudang | Quick stock addition/deduction for trims inventory |
+| `POST` | `/aksesoris/{id}/update` | `AksesorisController@update` | Admin, Gudang | Edit accessory name, supplier, or unit |
+| `POST` | `/aksesoris/{id}/delete` | `AksesorisController@destroy` | Admin, Gudang | Delete accessory item |
+| `POST` | `/aksesoris/pola-mapping` | `AksesorisController@storePolaMapping` | Admin, Gudang | Map accessory requirement per garment piece (BOM) |
+| `POST` | `/aksesoris/pola-mapping/delete` | `AksesorisController@destroyPolaMapping` | Admin, Gudang | Remove BOM pattern accessory requirement |
+| **Executive Reports & Data Export** | | | | |
 | `GET` | `/laporan` | `LaporanEksekutifController@index` | Admin, Pemilik | Executive production analytics, yield metrics, and CSV export |
-| `GET` | `/pengaturan` | `PengaturanController@index` | Admin | User account administration, master lookups, and DB reset |
-| `POST` | `/pengaturan/user` | `PengaturanController@storeUser` | Admin | Register new staff accounts with assigned roles |
+| **Pengaturan Sistem & User Administration** | | | | |
+| `GET` | `/pengaturan` | `PengaturanController@index` | Admin | Server diagnostics, user account management, and database reset |
+| `POST` | `/pengaturan/user` | `PengaturanController@storeUser` | Admin | Register new staff account with assigned role |
 | `POST` | `/pengaturan/user/{id}/update` | `PengaturanController@updateUser` | Admin | Update user display names, usernames, roles, and passwords |
-| `POST` | `/pengaturan/reset-operational` | `PengaturanController@resetOperationalData`| Admin | Clear operational data for clean factory production |
-| `POST` | `/pengaturan/seed-sample` | `PengaturanController@seedSampleData` | Admin | Re-populate sample CMT dataset for testing |
+| `POST` | `/pengaturan/user/{id}/delete` | `PengaturanController@destroyUser` | Admin | Delete user account (guarded against self-deletion) |
+| `POST` | `/pengaturan/reset-operational` | `PengaturanController@resetOperationalData` | Admin | Clear operational data for clean factory production |
+| `POST` | `/pengaturan/seed-sample` | `PengaturanController@seedSampleData` | Admin | Re-populate realistic 18-table CMT sample dataset |
 
 ---
 

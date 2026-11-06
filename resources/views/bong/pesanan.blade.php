@@ -44,7 +44,10 @@
       <!-- Baris 1: Sumber, Mitra, Tanggal Order, Tanggal Deadline Awal -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Sumber Inisiasi <span class="text-rose-500">*</span></label>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-semibold text-slate-700">Sumber Inisiasi <span class="text-rose-500">*</span></label>
+            <button type="button" onclick="openModalSumber()" class="text-[11px] font-semibold text-indigo-600 hover:underline">+ Sumber / Edit</button>
+          </div>
           <select name="id_sumber" id="pesanan-sumber" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
             @foreach($sumber ?? [] as $s)
               <option value="{{ $s->id_sumber }}">{{ $s->nama_sumber }}</option>
@@ -125,7 +128,10 @@
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label class="block text-xs font-semibold text-slate-700 mb-1">Kategori Pola <span class="text-rose-500">*</span></label>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-xs font-semibold text-slate-700">Kategori Pola <span class="text-rose-500">*</span></label>
+              <button type="button" onclick="openModalKategori()" class="text-[11px] font-semibold text-indigo-600 hover:underline">+ Kategori Baru / Edit</button>
+            </div>
             <select id="new-pola-kategori" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
               @foreach($kategori ?? [] as $kat)
                 <option value="{{ $kat->id_kategori }}">{{ $kat->nama_kategori }}</option>
@@ -419,7 +425,10 @@
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Sumber Inisiasi</label>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-semibold text-slate-700">Sumber Inisiasi</label>
+            <button type="button" onclick="openModalSumber()" class="text-[11px] font-semibold text-indigo-600 hover:underline">+ Sumber / Edit</button>
+          </div>
           <select name="id_sumber" id="edit-id-sumber" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500" required>
             @foreach($sumber ?? [] as $s)
               <option value="{{ $s->id_sumber }}">{{ $s->nama_sumber }}</option>
@@ -526,7 +535,10 @@
       <input type="hidden" id="edit-pola-id">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Kategori Pola <span class="text-rose-500">*</span></label>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-semibold text-slate-700">Kategori Pola <span class="text-rose-500">*</span></label>
+            <button type="button" onclick="openModalKategori()" class="text-[11px] font-semibold text-indigo-600 hover:underline">+ Kategori Baru / Edit</button>
+          </div>
           <select id="edit-pola-kategori" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white">
             @foreach($kategori ?? [] as $kat)
               <option value="{{ $kat->id_kategori }}">{{ $kat->nama_kategori }}</option>
@@ -567,9 +579,351 @@
   </div>
 </div>
 
+<!-- Modal Tambah & Kelola Kategori Pola (Kategori_Pola) -->
+<div id="modal-kelola-kategori" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+      <div>
+        <h3 class="font-bold text-slate-900 text-base">Tambah & Kelola Kategori Pola</h3>
+        <p class="text-xs text-slate-500">Tabel <code class="font-mono text-indigo-600">Kategori_Pola</code> (Klasifikasi Jenis Pakaian)</p>
+      </div>
+      <button type="button" onclick="closeModalKategori()" class="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center text-lg leading-none">&times;</button>
+    </div>
+
+    <form id="form-manage-kategori" class="space-y-3 mb-4">
+      <input type="hidden" id="kat-edit-id" value="">
+      <div>
+        <label id="kat-form-label" class="block text-xs font-semibold text-slate-700 mb-1">Nama Kategori Pola Baru <span class="text-rose-500">*</span></label>
+        <div class="flex gap-2">
+          <input type="text" id="kat-nama-input" required maxlength="50" placeholder="Contoh: Jaket & Outerwear, Seragam, Gamis..." class="flex-1 text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <button type="submit" id="kat-submit-btn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm whitespace-nowrap">+ Tambah</button>
+          <button type="button" id="kat-cancel-edit-btn" onclick="resetKategoriForm()" class="hidden px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold rounded-lg">Batal</button>
+        </div>
+      </div>
+    </form>
+
+    <div class="border-t border-slate-100 pt-3">
+      <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Daftar Kategori Terdaftar</p>
+      <div id="kategori-modal-list" class="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+        @foreach($kategori ?? [] as $kat)
+        <div id="kat-row-{{ $kat->id_kategori }}" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200/80 text-xs">
+          <span class="font-medium text-slate-800">
+            <span class="font-mono text-slate-400 mr-1">#{{ $kat->id_kategori }}</span>
+            <span id="kat-name-text-{{ $kat->id_kategori }}">{{ $kat->nama_kategori }}</span>
+          </span>
+          <div class="flex items-center gap-1">
+            <button type="button" onclick="startEditKategori({{ $kat->id_kategori }}, '{{ addslashes($kat->nama_kategori) }}')" class="px-2 py-0.5 bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-slate-200 rounded text-[10px] font-semibold">Edit</button>
+            <button type="button" onclick="deleteKategoriModal({{ $kat->id_kategori }})" class="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-semibold">Hapus</button>
+          </div>
+        </div>
+        @endforeach
+      </div>
+    </div>
+
+    <div class="flex justify-end pt-4 mt-3 border-t border-slate-100">
+      <button type="button" onclick="closeModalKategori()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-lg">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Tambah & Kelola Sumber Inisiasi (Sumber_Inisiasi) -->
+<div id="modal-kelola-sumber" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+      <div>
+        <h3 class="font-bold text-slate-900 text-base">Tambah & Kelola Sumber Inisiasi</h3>
+        <p class="text-xs text-slate-500">Tabel <code class="font-mono text-indigo-600">Sumber_Inisiasi</code> (Asal Inisiasi Pesanan)</p>
+      </div>
+      <button type="button" onclick="closeModalSumber()" class="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center text-lg leading-none">&times;</button>
+    </div>
+
+    <form id="form-manage-sumber" class="space-y-3 mb-4">
+      <input type="hidden" id="sum-edit-id" value="">
+      <div>
+        <label id="sum-form-label" class="block text-xs font-semibold text-slate-700 mb-1">Nama Sumber Inisiasi Baru <span class="text-rose-500">*</span></label>
+        <div class="flex gap-2">
+          <input type="text" id="sum-nama-input" required maxlength="50" placeholder="Contoh: Request Mitra, Produk Abadi, Pre-Order..." class="flex-1 text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <button type="submit" id="sum-submit-btn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm whitespace-nowrap">+ Tambah</button>
+          <button type="button" id="sum-cancel-edit-btn" onclick="resetSumberForm()" class="hidden px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold rounded-lg">Batal</button>
+        </div>
+      </div>
+    </form>
+
+    <div class="border-t border-slate-100 pt-3">
+      <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Daftar Sumber Inisiasi Terdaftar</p>
+      <div id="sumber-modal-list" class="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+        @foreach($sumber ?? [] as $s)
+        <div id="sum-row-{{ $s->id_sumber }}" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200/80 text-xs">
+          <span class="font-medium text-slate-800">
+            <span class="font-mono text-slate-400 mr-1">#{{ $s->id_sumber }}</span>
+            <span id="sum-name-text-{{ $s->id_sumber }}">{{ $s->nama_sumber }}</span>
+          </span>
+          <div class="flex items-center gap-1">
+            <button type="button" onclick="startEditSumber({{ $s->id_sumber }}, '{{ addslashes($s->nama_sumber) }}')" class="px-2 py-0.5 bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-slate-200 rounded text-[10px] font-semibold">Edit</button>
+            <button type="button" onclick="deleteSumberModal({{ $s->id_sumber }})" class="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-semibold">Hapus</button>
+          </div>
+        </div>
+        @endforeach
+      </div>
+    </div>
+
+    <div class="flex justify-end pt-4 mt-3 border-t border-slate-100">
+      <button type="button" onclick="closeModalSumber()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-lg">Tutup</button>
+    </div>
+  </div>
+</div>
+
 @push('scripts')
 <script>
   const availableAksesoris = @json($aksesoris ?? []);
+
+  // Kategori Pola Modal & Dynamic Dropdown Handlers
+  function openModalKategori() {
+    resetKategoriForm();
+    const m = document.getElementById('modal-kelola-kategori');
+    m.classList.remove('hidden');
+    m.classList.add('flex');
+    document.getElementById('kat-nama-input').focus();
+  }
+  function closeModalKategori() {
+    const m = document.getElementById('modal-kelola-kategori');
+    m.classList.add('hidden');
+    m.classList.remove('flex');
+  }
+  function resetKategoriForm() {
+    document.getElementById('kat-edit-id').value = '';
+    document.getElementById('kat-nama-input').value = '';
+    document.getElementById('kat-form-label').innerHTML = 'Nama Kategori Pola Baru <span class="text-rose-500">*</span>';
+    document.getElementById('kat-submit-btn').textContent = '+ Tambah';
+    document.getElementById('kat-cancel-edit-btn').classList.add('hidden');
+  }
+  function startEditKategori(id, currentName) {
+    document.getElementById('kat-edit-id').value = id;
+    document.getElementById('kat-nama-input').value = currentName;
+    document.getElementById('kat-form-label').innerHTML = 'Edit Kategori Pola <span class="font-mono text-indigo-600">#' + id + '</span>';
+    document.getElementById('kat-submit-btn').textContent = 'Simpan Perubahan';
+    document.getElementById('kat-cancel-edit-btn').classList.remove('hidden');
+    document.getElementById('kat-nama-input').focus();
+  }
+
+  document.getElementById('form-manage-kategori').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const editId = document.getElementById('kat-edit-id').value;
+    const nama = document.getElementById('kat-nama-input').value.trim();
+    if (!nama) return;
+
+    const url = editId ? ('/kategori/' + editId + '/update') : '/kategori';
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        },
+        body: JSON.stringify({ nama_kategori: nama })
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        alert(json.message || 'Gagal menyimpan kategori pola.');
+        return;
+      }
+      const kat = json.data;
+      if (editId) {
+        // Update existing dropdown options & modal list item
+        ['new-pola-kategori', 'edit-pola-kategori'].forEach(selId => {
+          const sel = document.getElementById(selId);
+          if (sel) {
+            const opt = sel.querySelector('option[value="' + kat.id_kategori + '"]');
+            if (opt) opt.textContent = kat.nama_kategori;
+          }
+        });
+        const txt = document.getElementById('kat-name-text-' + kat.id_kategori);
+        if (txt) txt.textContent = kat.nama_kategori;
+        resetKategoriForm();
+      } else {
+        // Append new option to dropdowns and select it
+        ['new-pola-kategori', 'edit-pola-kategori'].forEach(selId => {
+          const sel = document.getElementById(selId);
+          if (sel) {
+            const opt = document.createElement('option');
+            opt.value = kat.id_kategori;
+            opt.textContent = kat.nama_kategori;
+            sel.appendChild(opt);
+            sel.value = kat.id_kategori;
+          }
+        });
+        const list = document.getElementById('kategori-modal-list');
+        if (list) {
+          const row = document.createElement('div');
+          row.id = 'kat-row-' + kat.id_kategori;
+          row.className = 'flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200/80 text-xs';
+          const safeName = kat.nama_kategori.replace(/'/g, "\\'");
+          row.innerHTML = '<span class="font-medium text-slate-800"><span class="font-mono text-slate-400 mr-1">#' + kat.id_kategori + '</span><span id="kat-name-text-' + kat.id_kategori + '">' + kat.nama_kategori + '</span></span>' +
+            '<div class="flex items-center gap-1">' +
+            '<button type="button" onclick="startEditKategori(' + kat.id_kategori + ', \'' + safeName + '\')" class="px-2 py-0.5 bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-slate-200 rounded text-[10px] font-semibold">Edit</button>' +
+            '<button type="button" onclick="deleteKategoriModal(' + kat.id_kategori + ')" class="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-semibold">Hapus</button>' +
+            '</div>';
+          list.appendChild(row);
+        }
+        resetKategoriForm();
+      }
+    } catch (err) {
+      alert('Terjadi kesalahan jaringan saat menyimpan kategori.');
+    }
+  });
+
+  async function deleteKategoriModal(id) {
+    if (!confirm('Hapus kategori pola ini?')) return;
+    try {
+      const res = await fetch('/kategori/' + id + '/delete', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        }
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        alert(json.message || 'Gagal menghapus kategori.');
+        return;
+      }
+      ['new-pola-kategori', 'edit-pola-kategori'].forEach(selId => {
+        const sel = document.getElementById(selId);
+        if (sel) {
+          const opt = sel.querySelector('option[value="' + id + '"]');
+          if (opt) opt.remove();
+        }
+      });
+      const row = document.getElementById('kat-row-' + id);
+      if (row) row.remove();
+    } catch (err) {
+      alert('Terjadi kesalahan jaringan.');
+    }
+  }
+
+  // Sumber Inisiasi Modal & Dynamic Dropdown Handlers
+  function openModalSumber() {
+    resetSumberForm();
+    const m = document.getElementById('modal-kelola-sumber');
+    m.classList.remove('hidden');
+    m.classList.add('flex');
+    document.getElementById('sum-nama-input').focus();
+  }
+  function closeModalSumber() {
+    const m = document.getElementById('modal-kelola-sumber');
+    m.classList.add('hidden');
+    m.classList.remove('flex');
+  }
+  function resetSumberForm() {
+    document.getElementById('sum-edit-id').value = '';
+    document.getElementById('sum-nama-input').value = '';
+    document.getElementById('sum-form-label').innerHTML = 'Nama Sumber Inisiasi Baru <span class="text-rose-500">*</span>';
+    document.getElementById('sum-submit-btn').textContent = '+ Tambah';
+    document.getElementById('sum-cancel-edit-btn').classList.add('hidden');
+  }
+  function startEditSumber(id, currentName) {
+    document.getElementById('sum-edit-id').value = id;
+    document.getElementById('sum-nama-input').value = currentName;
+    document.getElementById('sum-form-label').innerHTML = 'Edit Sumber Inisiasi <span class="font-mono text-indigo-600">#' + id + '</span>';
+    document.getElementById('sum-submit-btn').textContent = 'Simpan Perubahan';
+    document.getElementById('sum-cancel-edit-btn').classList.remove('hidden');
+    document.getElementById('sum-nama-input').focus();
+  }
+
+  document.getElementById('form-manage-sumber').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const editId = document.getElementById('sum-edit-id').value;
+    const nama = document.getElementById('sum-nama-input').value.trim();
+    if (!nama) return;
+
+    const url = editId ? ('/sumber/' + editId + '/update') : '/sumber';
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        },
+        body: JSON.stringify({ nama_sumber: nama })
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        alert(json.message || 'Gagal menyimpan sumber inisiasi.');
+        return;
+      }
+      const sum = json.data;
+      if (editId) {
+        ['pesanan-sumber', 'edit-id-sumber'].forEach(selId => {
+          const sel = document.getElementById(selId);
+          if (sel) {
+            const opt = sel.querySelector('option[value="' + sum.id_sumber + '"]');
+            if (opt) opt.textContent = sum.nama_sumber;
+          }
+        });
+        const txt = document.getElementById('sum-name-text-' + sum.id_sumber);
+        if (txt) txt.textContent = sum.nama_sumber;
+        resetSumberForm();
+      } else {
+        ['pesanan-sumber', 'edit-id-sumber'].forEach(selId => {
+          const sel = document.getElementById(selId);
+          if (sel) {
+            const opt = document.createElement('option');
+            opt.value = sum.id_sumber;
+            opt.textContent = sum.nama_sumber;
+            sel.appendChild(opt);
+            sel.value = sum.id_sumber;
+          }
+        });
+        const list = document.getElementById('sumber-modal-list');
+        if (list) {
+          const row = document.createElement('div');
+          row.id = 'sum-row-' + sum.id_sumber;
+          row.className = 'flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200/80 text-xs';
+          const safeName = sum.nama_sumber.replace(/'/g, "\\'");
+          row.innerHTML = '<span class="font-medium text-slate-800"><span class="font-mono text-slate-400 mr-1">#' + sum.id_sumber + '</span><span id="sum-name-text-' + sum.id_sumber + '">' + sum.nama_sumber + '</span></span>' +
+            '<div class="flex items-center gap-1">' +
+            '<button type="button" onclick="startEditSumber(' + sum.id_sumber + ', \'' + safeName + '\')" class="px-2 py-0.5 bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-slate-200 rounded text-[10px] font-semibold">Edit</button>' +
+            '<button type="button" onclick="deleteSumberModal(' + sum.id_sumber + ')" class="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-semibold">Hapus</button>' +
+            '</div>';
+          list.appendChild(row);
+        }
+        resetSumberForm();
+      }
+    } catch (err) {
+      alert('Terjadi kesalahan jaringan saat menyimpan sumber inisiasi.');
+    }
+  });
+
+  async function deleteSumberModal(id) {
+    if (!confirm('Hapus sumber inisiasi ini?')) return;
+    try {
+      const res = await fetch('/sumber/' + id + '/delete', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        }
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        alert(json.message || 'Gagal menghapus sumber inisiasi.');
+        return;
+      }
+      ['pesanan-sumber', 'edit-id-sumber'].forEach(selId => {
+        const sel = document.getElementById(selId);
+        if (sel) {
+          const opt = sel.querySelector('option[value="' + id + '"]');
+          if (opt) opt.remove();
+        }
+      });
+      const row = document.getElementById('sum-row-' + id);
+      if (row) row.remove();
+    } catch (err) {
+      alert('Terjadi kesalahan jaringan.');
+    }
+  }
 
   // Default 4 size rows (S, M, L, XL) for New Pola registration
   let newPolaSpecs = [

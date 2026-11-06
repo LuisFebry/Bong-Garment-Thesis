@@ -27,11 +27,49 @@ class PengaturanController extends Controller
             'pemotongan' => DB::table('Pemotongan_Seri')->count(),
             'qc' => DB::table('QC')->count(),
             'stok_jadi' => DB::table('Stok_Barang_Jadi')->count(),
+            'riwayat_stok' => \Illuminate\Support\Facades\Schema::hasTable('Riwayat_Stok_Barang_Jadi') ? DB::table('Riwayat_Stok_Barang_Jadi')->count() : 0,
             'pola' => DB::table('Pola')->count(),
             'aksesoris' => DB::table('Aksesoris')->count(),
         ];
 
-        return view('bong.pengaturan', compact('users', 'kategori', 'sumber', 'suppliers', 'counts'));
+        // Resolve Heroku Dyno, Web Server & JawsDB Database Ports & Diagnostic Information
+        $jawsUrl = env('JAWSDB_URL');
+        $dbHost = config('database.connections.mysql.host', '127.0.0.1');
+        $dbPort = config('database.connections.mysql.port', '3306');
+        $dbName = config('database.connections.mysql.database', 'bong_garment');
+
+        if ($jawsUrl) {
+            $parsed = parse_url($jawsUrl);
+            $dbHost = $parsed['host'] ?? $dbHost;
+            $dbPort = $parsed['port'] ?? $dbPort;
+            $dbName = isset($parsed['path']) ? ltrim($parsed['path'], '/') : $dbName;
+        }
+
+        $maskedHost = $dbHost;
+        if (strlen($dbHost) > 18) {
+            $maskedHost = substr($dbHost, 0, 8) . '...' . substr($dbHost, -10);
+        }
+
+        $herokuDynoPort = env('PORT') ?: ($_SERVER['PORT'] ?? null);
+        $clientPort = request()->getPort();
+        $isHttps = request()->secure() || request()->header('x-forwarded-proto') === 'https';
+        $clientScheme = $isHttps ? 'HTTPS' : 'HTTP';
+
+        $systemDiagnostics = [
+            'dyno_port' => $herokuDynoPort ?: 'Dynamic (Assigned by Heroku Router)',
+            'client_port' => $clientPort ? "{$clientPort} ({$clientScheme})" : "443 (HTTPS)",
+            'db_port' => $dbPort,
+            'db_host' => $maskedHost,
+            'db_name' => $dbName,
+            'db_provider' => $jawsUrl ? 'JawsDB MySQL (PaaS Cloud Add-on)' : 'Localhost / Docker MySQL',
+            'app_env' => app()->environment(),
+            'php_version' => PHP_VERSION,
+            'laravel_version' => app()->version(),
+            'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? (PHP_SAPI === 'cli' ? 'PHP Built-in Server' : 'Apache 2.4 (Heroku)'),
+            'hostname' => gethostname() ?: 'dyno-worker',
+        ];
+
+        return view('bong.pengaturan', compact('users', 'kategori', 'sumber', 'suppliers', 'counts', 'systemDiagnostics'));
     }
 
     public function storeUser(Request $request)
@@ -238,6 +276,9 @@ class PengaturanController extends Controller
         $includeMaster = (bool) $request->input('include_master', false);
 
         DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        if (\Illuminate\Support\Facades\Schema::hasTable('Riwayat_Stok_Barang_Jadi')) {
+            DB::table('Riwayat_Stok_Barang_Jadi')->truncate();
+        }
         DB::table('QC')->truncate();
         DB::table('Detail_Gelaran_Kain')->truncate();
         DB::table('Detail_Pemotongan_Warna')->truncate();
@@ -275,7 +316,7 @@ class PengaturanController extends Controller
         $existingUsers = DB::table('User')->get()->map(fn($u) => (array) $u)->toArray();
 
         Artisan::call('db:seed', [
-            '--class' => \Database\Seeders\BongGarment17TableSeeder::class,
+            '--class' => \Database\Seeders\BongGarment18TableSeeder::class,
             '--force' => true,
         ]);
 

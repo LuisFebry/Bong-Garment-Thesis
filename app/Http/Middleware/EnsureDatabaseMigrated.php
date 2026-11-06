@@ -15,7 +15,7 @@ class EnsureDatabaseMigrated
     private static bool $checked = false;
 
     /**
-     * Ensure all 17 tables are migrated and bootstrapped before handling web requests.
+     * Ensure all 18 tables are migrated and bootstrapped before handling web requests.
      */
     public function handle(Request $request, Closure $next): Response
     {
@@ -33,6 +33,24 @@ class EnsureDatabaseMigrated
                     ]);
                 } else {
                     try {
+                        if (!Schema::hasTable('Riwayat_Stok_Barang_Jadi')) {
+                            Schema::create('Riwayat_Stok_Barang_Jadi', function (\Illuminate\Database\Schema\Blueprint $table) {
+                                $table->id('id_riwayat_stok');
+                                $table->unsignedBigInteger('id_stok')->nullable()->index();
+                                $table->unsignedBigInteger('id_pola')->index();
+                                $table->unsignedBigInteger('id_spesifikasi')->index();
+                                $table->string('nama_warna', 50);
+                                $table->enum('jenis_transaksi', ['MASUK', 'KELUAR'])->default('KELUAR');
+                                $table->integer('jumlah_pcs');
+                                $table->integer('stok_sebelum')->default(0);
+                                $table->integer('stok_sesudah')->default(0);
+                                $table->string('kategori_alasan', 100);
+                                $table->string('nama_mitra', 100)->nullable();
+                                $table->string('keterangan', 255)->nullable();
+                                $table->unsignedBigInteger('id_user')->nullable()->index();
+                                $table->dateTime('tgl_transaksi');
+                            });
+                        }
                         DB::statement("ALTER TABLE Detail_Pemotongan_Warna MODIFY kain_terpakai DECIMAL(10,2) NULL");
                         DB::statement("ALTER TABLE Detail_Roll_Bahan MODIFY ukuran_awal DECIMAL(10,2) NOT NULL");
                         DB::statement("ALTER TABLE Detail_Roll_Bahan MODIFY ukuran_sisa DECIMAL(10,2) NOT NULL");

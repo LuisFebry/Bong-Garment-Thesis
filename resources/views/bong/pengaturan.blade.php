@@ -21,6 +21,73 @@
     </div>
   </div>
 
+  <!-- Informasi Port & Diagnostik Server (Heroku Dyno & JawsDB MySQL) -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+    <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 mb-4">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+          <i data-lucide="network" class="w-4 h-4"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900 text-sm">Informasi Server, Port &amp; Koneksi Basis Data (Diagnostik)</h3>
+          <p class="text-[11px] text-slate-500">Pemantauan port web server Heroku, port basis data JawsDB/MySQL, serta identitas lingkungan runtime (Read-Only)</p>
+        </div>
+      </div>
+      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        {{ strtoupper($systemDiagnostics['app_env'] ?? 'PRODUCTION') }}
+      </span>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <!-- Dyno Web Port -->
+      <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+        <div class="flex items-center justify-between text-slate-500 mb-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wider">Port Dyno Heroku ($PORT)</span>
+          <i data-lucide="server" class="w-3.5 h-3.5 text-indigo-600"></i>
+        </div>
+        <div class="text-base font-bold font-mono text-indigo-600">{{ $systemDiagnostics['dyno_port'] ?? '-' }}</div>
+        <div class="text-[10px] text-slate-400 mt-0.5">Port dinamis alokasi Heroku Router</div>
+      </div>
+
+      <!-- Client HTTPS Port -->
+      <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+        <div class="flex items-center justify-between text-slate-500 mb-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wider">Port Klien (HTTPS / Web)</span>
+          <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-600"></i>
+        </div>
+        <div class="text-base font-bold font-mono text-slate-800">{{ $systemDiagnostics['client_port'] ?? '443 (HTTPS)' }}</div>
+        <div class="text-[10px] text-slate-400 mt-0.5">SSL / TLS Endpoint Publik</div>
+      </div>
+
+      <!-- Database Port & Provider -->
+      <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+        <div class="flex items-center justify-between text-slate-500 mb-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wider">Port Basis Data (MySQL)</span>
+          <i data-lucide="database" class="w-3.5 h-3.5 text-amber-600"></i>
+        </div>
+        <div class="text-base font-bold font-mono text-slate-800">Port {{ $systemDiagnostics['db_port'] ?? '3306' }}</div>
+        <div class="text-[10px] text-slate-400 mt-0.5 truncate" title="{{ $systemDiagnostics['db_provider'] ?? '' }}">
+          {{ $systemDiagnostics['db_provider'] ?? 'JawsDB MySQL' }}
+        </div>
+      </div>
+
+      <!-- Host & Database Target -->
+      <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+        <div class="flex items-center justify-between text-slate-500 mb-1">
+          <span class="text-[11px] font-semibold uppercase tracking-wider">Host &amp; Runtime Engine</span>
+          <i data-lucide="cpu" class="w-3.5 h-3.5 text-blue-600"></i>
+        </div>
+        <div class="text-xs font-bold font-mono text-slate-800 truncate" title="{{ $systemDiagnostics['db_host'] ?? '' }}">
+          {{ $systemDiagnostics['db_host'] ?? '127.0.0.1' }}
+        </div>
+        <div class="text-[10px] text-slate-400 mt-0.5">
+          PHP {{ $systemDiagnostics['php_version'] ?? '8.3' }} &bull; Laravel {{ $systemDiagnostics['laravel_version'] ?? '11' }}
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 1. Manajemen Akun & Otorisasi Pengguna (Tabel User) -->
   <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
     <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100 mb-4">
@@ -120,38 +187,42 @@
       </div>
     </div>
 
-    <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 mb-5">
-      <div class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-center">
+    <div class="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2 mb-5">
+      <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-center">
         <div class="text-base font-bold font-mono text-slate-800">{{ $counts['pesanan'] ?? 0 }}</div>
-        <div class="text-[10px] text-slate-500 font-semibold uppercase">Pesanan</div>
+        <div class="text-[9px] text-slate-500 font-semibold uppercase">Pesanan</div>
       </div>
-      <div class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-center">
+      <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-center">
         <div class="text-base font-bold font-mono text-slate-800">{{ $counts['penerimaan'] ?? 0 }}</div>
-        <div class="text-[10px] text-slate-500 font-semibold uppercase">Nota Kain</div>
+        <div class="text-[9px] text-slate-500 font-semibold uppercase">Nota Kain</div>
       </div>
-      <div class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-center">
+      <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-center">
         <div class="text-base font-bold font-mono text-slate-800">{{ $counts['roll'] ?? 0 }}</div>
-        <div class="text-[10px] text-slate-500 font-semibold uppercase">Roll Fisik</div>
+        <div class="text-[9px] text-slate-500 font-semibold uppercase">Roll Fisik</div>
       </div>
-      <div class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-center">
+      <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-center">
         <div class="text-base font-bold font-mono text-slate-800">{{ $counts['pemotongan'] ?? 0 }}</div>
-        <div class="text-[10px] text-slate-500 font-semibold uppercase">Seri Potong</div>
+        <div class="text-[9px] text-slate-500 font-semibold uppercase">Seri Potong</div>
       </div>
-      <div class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-center">
+      <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-center">
         <div class="text-base font-bold font-mono text-slate-800">{{ $counts['qc'] ?? 0 }}</div>
-        <div class="text-[10px] text-slate-500 font-semibold uppercase">Log QC</div>
+        <div class="text-[9px] text-slate-500 font-semibold uppercase">Log QC</div>
       </div>
-      <div class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-center">
+      <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-center">
         <div class="text-base font-bold font-mono text-slate-800">{{ $counts['stok_jadi'] ?? 0 }}</div>
-        <div class="text-[10px] text-slate-500 font-semibold uppercase">Stok Jadi</div>
+        <div class="text-[9px] text-slate-500 font-semibold uppercase">Stok Jadi</div>
       </div>
-      <div class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-center">
+      <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-center">
+        <div class="text-base font-bold font-mono text-indigo-600">{{ $counts['riwayat_stok'] ?? 0 }}</div>
+        <div class="text-[9px] text-slate-500 font-semibold uppercase">Riwayat Stok</div>
+      </div>
+      <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-center">
         <div class="text-base font-bold font-mono text-slate-800">{{ $counts['pola'] ?? 0 }}</div>
-        <div class="text-[10px] text-slate-500 font-semibold uppercase">Master Pola</div>
+        <div class="text-[9px] text-slate-500 font-semibold uppercase">Master Pola</div>
       </div>
-      <div class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-center">
+      <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-center">
         <div class="text-base font-bold font-mono text-slate-800">{{ $counts['aksesoris'] ?? 0 }}</div>
-        <div class="text-[10px] text-slate-500 font-semibold uppercase">Aksesoris</div>
+        <div class="text-[9px] text-slate-500 font-semibold uppercase">Aksesoris</div>
       </div>
     </div>
 

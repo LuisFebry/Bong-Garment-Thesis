@@ -8,7 +8,7 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
-     * 17 Canonical Tables for Bong Garment CMT Production & Inventory Management System
+     * 18 Canonical Tables for Bong Garment CMT Production & Inventory Management System
      */
     public function up(): void
     {
@@ -232,6 +232,24 @@ return new class extends Migration
             $table->foreign('id_user_qc')->references('id_user')->on('User')->onDelete('restrict')->onUpdate('cascade');
             $table->index(['tahap_qc', 'status_qc']);
         });
+
+        // 18. Riwayat_Stok_Barang_Jadi
+        Schema::create('Riwayat_Stok_Barang_Jadi', function (Blueprint $table) {
+            $table->id('id_riwayat_stok');
+            $table->unsignedBigInteger('id_stok')->nullable()->index();
+            $table->unsignedBigInteger('id_pola')->index();
+            $table->unsignedBigInteger('id_spesifikasi')->index();
+            $table->string('nama_warna', 50);
+            $table->enum('jenis_transaksi', ['MASUK', 'KELUAR'])->default('KELUAR');
+            $table->integer('jumlah_pcs');
+            $table->integer('stok_sebelum')->default(0);
+            $table->integer('stok_sesudah')->default(0);
+            $table->string('kategori_alasan', 100);
+            $table->string('nama_mitra', 100)->nullable()->comment('Nama Mitra jika diambil oleh Mitra');
+            $table->string('keterangan', 255)->nullable()->comment('Nomor surat jalan / catatan tambahan');
+            $table->unsignedBigInteger('id_user')->nullable()->index();
+            $table->dateTime('tgl_transaksi');
+        });
     }
 
     /**
@@ -239,6 +257,7 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::dropIfExists('Riwayat_Stok_Barang_Jadi');
         Schema::dropIfExists('QC');
         Schema::dropIfExists('Detail_Gelaran_Kain');
         Schema::dropIfExists('Detail_Pemotongan_Warna');

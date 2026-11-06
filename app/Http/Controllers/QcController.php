@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use App\Models\Qc;
 use App\Models\Pesanan;
 use App\Models\StokBarangJadi;
+use App\Models\RiwayatStokBarangJadi;
 use App\Models\SpesifikasiUkuran;
 use App\Models\User;
 
@@ -115,12 +117,32 @@ class QcController extends Controller
                             'nama_warna' => $warna,
                         ]);
 
-                        $stock->jumlah_stok_pcs = ($stock->jumlah_stok_pcs ?? 0) + $validated['jumlah_lolos'];
+                        $stokSebelum = (int) ($stock->jumlah_stok_pcs ?? 0);
+                        $stokSesudah = $stokSebelum + (int) $validated['jumlah_lolos'];
+                        $stock->jumlah_stok_pcs = $stokSesudah;
                         $stock->tgl_update_terakhir = now();
                         $stock->save();
 
+                        if (Schema::hasTable('Riwayat_Stok_Barang_Jadi')) {
+                            RiwayatStokBarangJadi::create([
+                                'id_stok' => $stock->id_stok,
+                                'id_pola' => $idPola,
+                                'id_spesifikasi' => $idSpec,
+                                'nama_warna' => $warna,
+                                'jenis_transaksi' => 'MASUK',
+                                'jumlah_pcs' => (int) $validated['jumlah_lolos'],
+                                'stok_sebelum' => $stokSebelum,
+                                'stok_sesudah' => $stokSesudah,
+                                'kategori_alasan' => 'Lolos QC Jahit Akhir (Pesanan #' . $order->id_pesanan . ')',
+                                'nama_mitra' => $order->nama_mitra ?: null,
+                                'keterangan' => 'Masuk otomatis dari hasil inspeksi QC #' . $qc->id_qc,
+                                'id_user' => $validated['id_user_qc'],
+                                'tgl_transaksi' => now(),
+                            ]);
+                        }
+
                         $specModel = SpesifikasiUkuran::find($idSpec);
-                        $allocatedStockInfo = "+{$validated['jumlah_lolos']} Pcs ke Stok_Barang_Jadi (Ukuran " . ($specModel->ukuran ?? 'S/M/L/XL') . ", Warna {$warna})";
+                        $allocatedStockInfo = "+{$validated['jumlah_lolos']} Pcs ke Stok_Barang_Jadi (Ukuran " . ($specModel->nama_ukuran ?? 'S/M/L/XL') . ", Warna {$warna})";
                     }
                 }
             }
