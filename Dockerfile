@@ -57,18 +57,32 @@ WORKDIR /var/www/html
 # Copy application files
 COPY . /var/www/html
 
-# Configure PHP-FPM and Nginx
+# Pre-install PHP dependencies so container boots ready even without manual composer install
+RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
+
+# Configure PHP-FPM (pass Docker environment variables to workers), Nginx, and Supervisor
+RUN sed -i 's/;clear_env = no/clear_env = no/g' /etc/php/8.4/fpm/pool.d/www.conf \
+    && (grep -q '^clear_env = no' /etc/php/8.4/fpm/pool.d/www.conf || echo 'clear_env = no' >> /etc/php/8.4/fpm/pool.d/www.conf)
 COPY docker/nginx/default.conf /etc/nginx/sites-available/default
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
-# Configure permissions for storage & bootstrap cache
-RUN mkdir -p /var/www/html/storage /var/www/html/bootstrap/cache /var/run/php \
+# Configure executable permissions & writable Laravel directories
+RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh /var/www/html/docker/entrypoint.sh \
+    && chmod +x /usr/local/bin/entrypoint.sh /var/www/html/docker/entrypoint.sh /var/www/html/artisan \
+    && mkdir -p /var/www/html/storage/framework/sessions \
+                /var/www/html/storage/framework/views \
+                /var/www/html/storage/framework/cache/data \
+                /var/www/html/storage/logs \
+                /var/www/html/bootstrap/cache \
+                /var/run/php \
     && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /var/run/php \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
 # Expose HTTP port
 EXPOSE 80
 
-# Start supervisord to manage Nginx and PHP-FPM
+# Run startup entrypoint before handing over to supervisord
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 
