@@ -52,22 +52,29 @@
 
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Nomor Nota / Surat Jalan <span class="text-rose-500">*</span></label>
-          <input type="text" name="no_nota" id="inp-no-nota" placeholder="Contoh: NOTA-2026-99" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="no_nota" id="inp-no-nota" placeholder="Contoh: 285/11/26" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
 
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Tanggal Nota <span class="text-rose-500">*</span></label>
-          <input type="date" name="tgl_nota" id="inp-tgl-nota" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <div class="relative flex items-center">
+            <input type="text" id="inp-tgl-nota-display" placeholder="dd / mm / yyyy" maxlength="14" required class="w-full text-xs p-2.5 pr-9 border border-slate-200 rounded-lg font-mono focus:ring-2 focus:ring-indigo-500">
+            <input type="hidden" name="tgl_nota" id="inp-tgl-nota">
+            <input type="date" id="inp-tgl-nota-picker" class="absolute right-2 bottom-0 w-px h-px opacity-0 pointer-events-none" tabindex="-1" aria-hidden="true">
+            <button type="button" id="btn-tgl-nota-picker" title="Pilih tanggal dari kalender" class="absolute right-2.5 text-slate-400 hover:text-indigo-600 p-0.5 rounded transition-colors">
+              <i data-lucide="calendar" class="w-4 h-4"></i>
+            </button>
+          </div>
         </div>
 
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Nama / Jenis Kain <span class="text-rose-500">*</span></label>
-          <input type="text" name="nama_kain" id="inp-nama-kain" placeholder="Contoh: Cotton Combed 30s Reaktif" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="nama_kain" id="inp-nama-kain" placeholder="Contoh: Baby Terry Salur" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
 
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Lebar / Gramasi</label>
-          <input type="text" name="lebar_gramasi" id="inp-lebar-gramasi" placeholder="Gramasi 145 / Lebar 42 inch" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="lebar_gramasi" id="inp-lebar-gramasi" placeholder="Contoh: 185 / 230-240" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
 
         <div>
@@ -193,11 +200,13 @@
     <div class="space-y-4">
       @forelse($penerimaan ?? [] as $pn)
       @php
-        $tglNotaFormatted = $pn->tgl_nota ? (is_string($pn->tgl_nota) ? substr($pn->tgl_nota, 0, 10) : $pn->tgl_nota->format('Y-m-d')) : '';
+        $tglNotaIso = $pn->tgl_nota ? (is_string($pn->tgl_nota) ? substr($pn->tgl_nota, 0, 10) : $pn->tgl_nota->format('Y-m-d')) : '';
+        $tglNotaFormatted = $tglNotaIso ? \Carbon\Carbon::parse($tglNotaIso)->format('d/m/Y') : '-';
       @endphp
       <div class="searchable-card p-4 bg-slate-50 rounded-xl border border-slate-200 transition-all">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div>
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-bold bg-indigo-100 text-indigo-700 mr-1.5">#{{ $pn->id_penerimaan }}</span>
             <span class="font-mono font-bold text-sm text-indigo-600">{{ $pn->no_nota }}</span>
             <span class="text-xs font-semibold text-slate-700 ml-2">{{ $pn->nama_kain }}</span>
             @if($pn->lebar_gramasi)
@@ -217,7 +226,7 @@
                 id_penerimaan: {{ $pn->id_penerimaan }},
                 id_supplier: {{ $pn->id_supplier }},
                 no_nota: '{{ addslashes($pn->no_nota) }}',
-                tgl_nota: '{{ $tglNotaFormatted }}',
+                tgl_nota: '{{ $tglNotaIso }}',
                 nama_kain: '{{ addslashes($pn->nama_kain) }}',
                 lebar_gramasi: '{{ addslashes($pn->lebar_gramasi ?? '') }}',
                 no_kendaraan: '{{ addslashes($pn->no_kendaraan ?? '') }}',
@@ -225,6 +234,11 @@
               })"
               class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-md text-xs font-semibold inline-flex items-center gap-1 transition-colors">
               <i data-lucide="edit-3" class="w-3.5 h-3.5"></i> Edit Nota
+            </button>
+            <button type="button"
+              onclick="deleteNotaPenerimaan({{ $pn->id_penerimaan }}, '{{ addslashes($pn->no_nota) }}')"
+              class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-md text-xs font-semibold inline-flex items-center gap-1 transition-colors" title="Hapus Nota Penerimaan">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus Nota
             </button>
           </div>
         </div>
@@ -256,16 +270,21 @@
                   class="px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[10px] font-semibold" title="Tambah roll ke warna ini">
                   + Roll
                 </button>
+                <button type="button"
+                  onclick="deleteWarnaPenerimaan({{ $bw->id_detail_warna }}, '{{ addslashes($bw->nama_warna) }}')"
+                  class="px-1.5 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-semibold" title="Hapus kelompok warna">
+                  Hapus
+                </button>
               </div>
             </div>
             <div class="mt-1.5 text-[11px] text-slate-500">
-              Total: {{ $bw->total_roll }} roll &bull; {{ $bw->total_ukuran }} {{ $bw->satuan_ukur }}
+              Total: {{ $bw->total_roll }} roll &bull; {{ number_format((float) $bw->total_ukuran, 2, '.', '') }} {{ $bw->satuan_ukur }}
             </div>
             <div class="mt-2 space-y-1">
               @foreach($bw->detailRollBahan ?? [] as $roll)
               <div class="flex items-center justify-between text-[10px] font-mono bg-slate-50 p-1.5 rounded border border-slate-100">
                 <span>Roll #{{ $roll->no_roll_ke }} (#{{ $roll->id_roll }})</span>
-                <span>Sisa: <b>{{ $roll->ukuran_sisa }}</b> / {{ $roll->ukuran_awal }} {{ $roll->satuan }}</span>
+                <span>Sisa: <b>{{ number_format((float) $roll->ukuran_sisa, 2, '.', '') }}</b> / {{ number_format((float) $roll->ukuran_awal, 2, '.', '') }} {{ $roll->satuan }}</span>
                 <div class="flex items-center gap-1">
                   <span class="px-1.5 py-0.5 rounded font-semibold {{ $roll->status_roll === 'Tersedia' ? 'bg-emerald-100 text-emerald-800' : ($roll->status_roll === 'Dipotong' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800') }}">
                     {{ $roll->status_roll }}
@@ -281,6 +300,11 @@
                     })"
                     class="px-1.5 py-0.5 bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-slate-200 rounded font-sans font-semibold" title="Edit Roll #{{ $roll->no_roll_ke }}">
                     Edit
+                  </button>
+                  <button type="button"
+                    onclick="deleteRollPenerimaan({{ $roll->id_roll }}, {{ $roll->no_roll_ke }})"
+                    class="px-1.5 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded font-sans font-semibold" title="Hapus Roll #{{ $roll->no_roll_ke }}">
+                    Hapus
                   </button>
                 </div>
               </div>
@@ -334,7 +358,14 @@
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Tanggal Nota <span class="text-rose-500">*</span></label>
-          <input type="date" id="edit-nota-tgl" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+          <div class="relative flex items-center">
+            <input type="text" id="edit-nota-tgl-display" placeholder="dd / mm / yyyy" maxlength="14" required class="w-full text-xs p-2.5 pr-9 border border-slate-200 rounded-lg font-mono focus:ring-2 focus:ring-indigo-500">
+            <input type="hidden" id="edit-nota-tgl">
+            <input type="date" id="edit-nota-tgl-picker" class="absolute right-2 bottom-0 w-px h-px opacity-0 pointer-events-none" tabindex="-1" aria-hidden="true">
+            <button type="button" id="btn-edit-nota-tgl-picker" title="Pilih tanggal dari kalender" class="absolute right-2.5 text-slate-400 hover:text-indigo-600 p-0.5 rounded transition-colors">
+              <i data-lucide="calendar" class="w-4 h-4"></i>
+            </button>
+          </div>
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Nama / Jenis Kain <span class="text-rose-500">*</span></label>
@@ -378,11 +409,11 @@
       <input type="hidden" id="edit-warna-id">
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Warna Kain <span class="text-rose-500">*</span></label>
-        <input type="text" id="edit-warna-nama" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+        <input type="text" id="edit-warna-nama" placeholder="Contoh: Hitam" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Lab / Lot Warna</label>
-        <input type="text" id="edit-warna-kode" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono uppercase">
+        <input type="text" id="edit-warna-kode" placeholder="Contoh: WD2605226" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono uppercase placeholder:normal-case">
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Satuan Ukur <span class="text-rose-500">*</span></label>
@@ -430,11 +461,11 @@
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Ukuran Awal <span class="text-rose-500">*</span></label>
-          <input type="number" step="0.01" min="0.1" id="edit-roll-awal" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+          <input type="number" step="0.01" min="0.1" lang="en-US" id="edit-roll-awal" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Ukuran Sisa Aktual <span class="text-rose-500">*</span></label>
-          <input type="number" step="0.01" min="0" id="edit-roll-sisa" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono font-bold text-indigo-700">
+          <input type="number" step="0.01" min="0" lang="en-US" id="edit-roll-sisa" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono font-bold text-indigo-700">
         </div>
         <div class="col-span-full">
           <label class="block text-xs font-semibold text-slate-700 mb-1">Status Roll <span class="text-rose-500">*</span></label>
@@ -470,7 +501,7 @@
       <input type="hidden" id="add-roll-warna-id">
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Ukuran Awal Roll Baru <span class="text-rose-500">*</span></label>
-        <input type="number" step="0.01" min="0.1" id="add-roll-ukuran-awal" value="25.00" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        <input type="number" step="0.01" min="0.1" lang="en-US" id="add-roll-ukuran-awal" value="25.00" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
       </div>
       <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
         <button type="button" onclick="closeModal('modal-add-roll-existing')" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>
@@ -625,11 +656,90 @@
     }
   }
 
+  function isoToDdMmYyyy(isoStr) {
+    if (!isoStr) return '';
+    const clean = String(isoStr).split('T')[0].split(' ')[0];
+    const m = clean.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return '';
+    return `${m[3]}/${m[2]}/${m[1]}`;
+  }
+
+  function ddMmYyyyToIso(dispStr) {
+    if (!dispStr) return '';
+    const trimmed = String(dispStr).trim();
+    const m = trimmed.match(/^(\d{1,2})\s*[\/\-]\s*(\d{1,2})\s*[\/\-]\s*(\d{4})$/);
+    if (!m) return '';
+    const day = Number(m[1]);
+    const month = Number(m[2]);
+    const year = Number(m[3]);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+    const dt = new Date(Date.UTC(year, month - 1, day));
+    if (dt.getUTCFullYear() !== year || dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) {
+      return '';
+    }
+    return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+
+  function setDdMmYyyyDateValue(displayId, hiddenIsoId, pickerId, isoStr) {
+    const cleanIso = isoStr ? String(isoStr).split('T')[0].split(' ')[0] : '';
+    const displayEl = document.getElementById(displayId);
+    const hiddenEl = document.getElementById(hiddenIsoId);
+    const pickerEl = document.getElementById(pickerId);
+    if (hiddenEl) hiddenEl.value = cleanIso;
+    if (pickerEl) pickerEl.value = cleanIso;
+    if (displayEl) displayEl.value = isoToDdMmYyyy(cleanIso);
+  }
+
+  function bindDdMmYyyyInput(displayId, hiddenIsoId, pickerId, btnId) {
+    const displayEl = document.getElementById(displayId);
+    const hiddenEl = document.getElementById(hiddenIsoId);
+    const pickerEl = document.getElementById(pickerId);
+    const btnEl = document.getElementById(btnId);
+    if (!displayEl || !hiddenEl) return;
+
+    displayEl.addEventListener('input', function (e) {
+      const isDelete = String(e.inputType || '').startsWith('delete');
+      if (!isDelete && displayEl.selectionStart === displayEl.value.length) {
+        if (/^\d{2}$/.test(displayEl.value) || /^\d{2}\/\d{2}$/.test(displayEl.value)) {
+          displayEl.value += '/';
+        }
+      }
+      const iso = ddMmYyyyToIso(displayEl.value);
+      hiddenEl.value = iso;
+      if (pickerEl && iso) pickerEl.value = iso;
+    });
+
+    displayEl.addEventListener('blur', function () {
+      const iso = ddMmYyyyToIso(displayEl.value);
+      if (iso) {
+        hiddenEl.value = iso;
+        if (pickerEl) pickerEl.value = iso;
+        displayEl.value = isoToDdMmYyyy(iso);
+      }
+    });
+
+    if (pickerEl) {
+      pickerEl.addEventListener('change', function () {
+        setDdMmYyyyDateValue(displayId, hiddenIsoId, pickerId, pickerEl.value);
+      });
+    }
+
+    if (btnEl && pickerEl) {
+      btnEl.addEventListener('click', function () {
+        if (typeof pickerEl.showPicker === 'function') {
+          try { pickerEl.showPicker(); } catch (_) { pickerEl.click(); }
+        } else {
+          pickerEl.click();
+        }
+      });
+    }
+  }
+
   function openEditNotaModal(nota) {
     document.getElementById('edit-nota-id').value = nota.id_penerimaan;
     document.getElementById('edit-nota-supplier').value = nota.id_supplier;
     document.getElementById('edit-nota-no').value = nota.no_nota || '';
-    document.getElementById('edit-nota-tgl').value = nota.tgl_nota ? String(nota.tgl_nota).split('T')[0].split(' ')[0] : '';
+    setDdMmYyyyDateValue('edit-nota-tgl-display', 'edit-nota-tgl', 'edit-nota-tgl-picker', nota.tgl_nota);
     document.getElementById('edit-nota-kain').value = nota.nama_kain || '';
     document.getElementById('edit-nota-gramasi').value = nota.lebar_gramasi || '';
     document.getElementById('edit-nota-kendaraan').value = nota.no_kendaraan || '';
@@ -643,7 +753,7 @@
     document.getElementById('edit-warna-id').value = warna.id_detail_warna;
     document.getElementById('edit-warna-nama').value = warna.nama_warna || '';
     document.getElementById('edit-warna-kode').value = warna.kode_warna || '';
-    document.getElementById('edit-warna-satuan').value = warna.satuan || 'Kg';
+    document.getElementById('edit-warna-satuan').value = warna.satuan_ukur || warna.satuan || 'Kg';
     const m = document.getElementById('modal-edit-warna');
     m.classList.remove('hidden');
     m.classList.add('flex');
@@ -669,14 +779,83 @@
     m.classList.add('flex');
   }
 
+  async function deleteNotaPenerimaan(id, noNota) {
+    if (!confirm(`Hapus nota penerimaan #${id} (${noNota}) beserta seluruh kelompok warna dan roll kain di dalamnya?`)) return;
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    try {
+      const res = await fetch(`/penerimaan/${id}/delete`, {
+        method: 'POST',
+        headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': token }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(data.message || 'Nota penerimaan berhasil dihapus.');
+        window.location.reload();
+      } else {
+        alert(data.message || 'Gagal menghapus nota penerimaan.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kesalahan saat menghapus nota penerimaan.');
+    }
+  }
+
+  async function deleteWarnaPenerimaan(id, namaWarna) {
+    if (!confirm(`Hapus kelompok warna "${namaWarna}" beserta seluruh roll kain di dalamnya?`)) return;
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    try {
+      const res = await fetch(`/penerimaan/warna/${id}/delete`, {
+        method: 'POST',
+        headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': token }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(data.message || 'Kelompok warna berhasil dihapus.');
+        window.location.reload();
+      } else {
+        alert(data.message || 'Gagal menghapus kelompok warna.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kesalahan saat menghapus kelompok warna.');
+    }
+  }
+
+  async function deleteRollPenerimaan(id, noRollKe) {
+    if (!confirm(`Hapus Roll #${noRollKe} (#${id})?`)) return;
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    try {
+      const res = await fetch(`/penerimaan/roll/${id}/delete`, {
+        method: 'POST',
+        headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': token }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(data.message || 'Roll berhasil dihapus.');
+        window.location.reload();
+      } else {
+        alert(data.message || 'Gagal menghapus roll.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kesalahan saat menghapus roll.');
+    }
+  }
+
   document.getElementById('form-edit-nota')?.addEventListener('submit', function(e) {
     e.preventDefault();
     const id = document.getElementById('edit-nota-id').value;
+    const tglDisp = document.getElementById('edit-nota-tgl-display').value;
+    const tglIso = ddMmYyyyToIso(tglDisp) || document.getElementById('edit-nota-tgl').value;
+    if (!tglIso) {
+      alert('Format Tanggal Nota tidak valid. Gunakan format dd/mm/yyyy (contoh: 14/11/2026).');
+      return;
+    }
     const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
     const payload = {
       id_supplier: Number(document.getElementById('edit-nota-supplier').value),
       no_nota: document.getElementById('edit-nota-no').value,
-      tgl_nota: document.getElementById('edit-nota-tgl').value,
+      tgl_nota: tglIso,
       nama_kain: document.getElementById('edit-nota-kain').value,
       lebar_gramasi: document.getElementById('edit-nota-gramasi').value || null,
       no_kendaraan: document.getElementById('edit-nota-kendaraan').value || null,
@@ -875,12 +1054,12 @@
 
   // Initial State for Color Groups & Draft Rolls
   let colorGroups = [
-    { id: 1, namaWarna: 'Hitam Reaktif', kodeWarna: 'BLK-30S-01', satuanUkur: 'Kg' }
+    { id: 1, namaWarna: '', kodeWarna: '', satuanUkur: 'Kg' }
   ];
   let nextColorGroupId = 2;
 
   let draftRolls = [
-    { colorGroupId: 1, berat: 24.50 },
+    { colorGroupId: 1, berat: 25.00 },
     { colorGroupId: 1, berat: 25.00 },
     { colorGroupId: 1, berat: 25.00 }
   ];
@@ -926,7 +1105,7 @@
         rollsInGroup.forEach(function (r) {
           totalSizeInGroup += (parseFloat(r.berat) || 0);
         });
-        badgeEl.textContent = `${rollsInGroup.length} Roll (${totalSizeInGroup.toFixed(1)} ${cg.satuanUkur || 'Kg'})`;
+        badgeEl.textContent = `${rollsInGroup.length} Roll (${totalSizeInGroup.toFixed(2)} ${cg.satuanUkur || 'Kg'})`;
       }
     });
   }
@@ -949,12 +1128,12 @@
         <div class="p-4 rounded-xl border border-slate-200 bg-white grid grid-cols-1 md:grid-cols-4 gap-4 items-end" data-cg-id="${cg.id}">
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Warna Kain <span class="text-rose-500">*</span></label>
-            <input type="text" value="${cg.namaWarna || ''}" class="inp-cg-nama w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="cth. Hitam Reaktif" data-cg-id="${cg.id}">
+            <input type="text" value="${cg.namaWarna || ''}" class="inp-cg-nama w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="Contoh: Hitam" data-cg-id="${cg.id}">
           </div>
 
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Lab / Lot Warna</label>
-            <input type="text" value="${cg.kodeWarna || ''}" class="inp-cg-kode w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono uppercase focus:ring-2 focus:ring-indigo-500" placeholder="cth. BLK-30S-01" data-cg-id="${cg.id}">
+            <input type="text" value="${cg.kodeWarna || ''}" class="inp-cg-kode w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono uppercase placeholder:normal-case focus:ring-2 focus:ring-indigo-500" placeholder="Contoh: WD2605226" data-cg-id="${cg.id}">
           </div>
 
           <div>
@@ -968,7 +1147,7 @@
 
           <div class="flex items-center justify-between gap-2">
             <span class="badge-cg-summary inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-mono font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100" data-cg-id="${cg.id}">
-              ${rollsInGroup.length} Roll (${totalSizeInGroup.toFixed(1)} ${cg.satuanUkur || 'Kg'})
+              ${rollsInGroup.length} Roll (${totalSizeInGroup.toFixed(2)} ${cg.satuanUkur || 'Kg'})
             </span>
             ${colorGroups.length > 1 ? `
               <button type="button" class="btn-remove-cg px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg inline-flex items-center gap-1 transition-colors" data-cg-id="${cg.id}">
@@ -1048,7 +1227,7 @@
           </td>
           <td class="px-3 py-2.5">
             <div class="flex items-stretch border border-slate-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 bg-white">
-              <input type="number" step="0.01" min="0.1" class="inp-roll-weight flex-1 min-w-0 h-8 text-xs font-mono px-2.5 py-1.5 border-0 focus:outline-none" data-roll-idx="${i}" value="${Number(r.berat).toFixed(2)}">
+              <input type="number" step="0.01" min="0.1" lang="en-US" class="inp-roll-weight flex-1 min-w-0 h-8 text-xs font-mono px-2.5 py-1.5 border-0 focus:outline-none" data-roll-idx="${i}" value="${Number(r.berat).toFixed(2)}">
               <span class="px-2.5 bg-slate-50 border-l border-slate-200 text-[11px] text-slate-600 font-mono font-semibold flex items-center select-none">${unitLabel}</span>
             </div>
           </td>
@@ -1082,7 +1261,16 @@
       inp.addEventListener('input', function () {
         const idx = Number(this.dataset.rollIdx);
         if (draftRolls[idx]) {
-          draftRolls[idx].berat = parseFloat(this.value) || 0;
+          draftRolls[idx].berat = parseFloat(String(this.value).replace(',', '.')) || 0;
+          updateDraftRollsSummary();
+        }
+      });
+      inp.addEventListener('blur', function () {
+        const idx = Number(this.dataset.rollIdx);
+        const val = parseFloat(String(this.value).replace(',', '.'));
+        if (!isNaN(val) && val > 0) {
+          if (draftRolls[idx]) draftRolls[idx].berat = val;
+          this.value = val.toFixed(2);
           updateDraftRollsSummary();
         }
       });
@@ -1160,34 +1348,34 @@
   // Reset Form
   function resetPenerimaanForm() {
     colorGroups = [
-      { id: 1, namaWarna: 'Hitam Reaktif', kodeWarna: 'BLK-30S-01', satuanUkur: 'Kg' }
+      { id: 1, namaWarna: '', kodeWarna: '', satuanUkur: 'Kg' }
     ];
     nextColorGroupId = 2;
     draftRolls = [
-      { colorGroupId: 1, berat: 24.50 },
+      { colorGroupId: 1, berat: 25.00 },
       { colorGroupId: 1, berat: 25.00 },
       { colorGroupId: 1, berat: 25.00 }
     ];
     document.getElementById('form-penerimaan').reset();
+    document.getElementById('inp-no-nota').value = '';
     setDefaultDateAndNota();
     renderColorGroups();
     renderDraftRollsTable();
   }
 
-  // Set Default Date and Auto-Suggested Nota
+  // Set Default Date (dd/mm/yyyy) without auto-filling Nomor Nota
   function setDefaultDateAndNota() {
     const tglInput = document.getElementById('inp-tgl-nota');
     if (tglInput && !tglInput.value) {
-      tglInput.value = new Date().toISOString().split('T')[0];
-    }
-    const notaInput = document.getElementById('inp-no-nota');
-    if (notaInput && !notaInput.value) {
-      notaInput.value = 'NOTA-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);
+      const todayIso = new Date().toISOString().split('T')[0];
+      setDdMmYyyyDateValue('inp-tgl-nota-display', 'inp-tgl-nota', 'inp-tgl-nota-picker', todayIso);
     }
   }
 
   // Initial Document Setup
   document.addEventListener('DOMContentLoaded', function () {
+    bindDdMmYyyyInput('inp-tgl-nota-display', 'inp-tgl-nota', 'inp-tgl-nota-picker', 'btn-tgl-nota-picker');
+    bindDdMmYyyyInput('edit-nota-tgl-display', 'edit-nota-tgl', 'edit-nota-tgl-picker', 'btn-edit-nota-tgl-picker');
     setDefaultDateAndNota();
     renderColorGroups();
     renderDraftRollsTable();
@@ -1208,14 +1396,20 @@
 
     const idSupplier = Number(formData.get('id_supplier'));
     const noNota = formData.get('no_nota');
-    const tglNota = formData.get('tgl_nota');
+    const tglDisplay = document.getElementById('inp-tgl-nota-display')?.value || '';
+    const tglNota = ddMmYyyyToIso(tglDisplay) || formData.get('tgl_nota');
     const namaKain = formData.get('nama_kain');
     const lebarGramasi = formData.get('lebar_gramasi') || null;
     const noKendaraan = formData.get('no_kendaraan') || null;
     const penerima = formData.get('penerima') || null;
 
-    if (!idSupplier || !noNota || !tglNota || !namaKain) {
+    if (!idSupplier || !noNota || !namaKain) {
       alert('Harap lengkapi semua kolom bertanda bintang (*) pada data nota.');
+      return;
+    }
+
+    if (!tglNota) {
+      alert('Tanggal Nota tidak valid. Gunakan format dd/mm/yyyy (contoh: 14/11/2026).');
       return;
     }
 

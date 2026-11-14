@@ -87,7 +87,7 @@
           <select name="id_penerimaan" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
             <option value="">-- Pilih Nota Kain (Opsional, Dapat Diisi Nanti Saat Kain Tiba) --</option>
             @foreach($penerimaan ?? [] as $pn)
-              <option value="{{ $pn->id_penerimaan }}">{{ $pn->no_nota }} - {{ $pn->nama_kain }} (Tgl: {{ $pn->tgl_nota }})</option>
+              <option value="{{ $pn->id_penerimaan }}">#{{ $pn->id_penerimaan }} - {{ $pn->no_nota }} - {{ $pn->nama_kain }} (Tgl: {{ $pn->tgl_nota }})</option>
             @endforeach
           </select>
         </div>
@@ -255,7 +255,7 @@
               @if($item->penerimaanBahan)
                 <div class="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                   <i data-lucide="file-text" class="w-3 h-3 text-indigo-500"></i>
-                  {{ $item->penerimaanBahan->no_nota }}
+                  #{{ $item->penerimaanBahan->id_penerimaan }} &bull; {{ $item->penerimaanBahan->no_nota }}
                 </div>
                 <span class="text-[10px] text-slate-400 block mt-0.5">{{ $item->penerimaanBahan->nama_kain }}</span>
               @else
@@ -463,7 +463,7 @@
           <select name="id_penerimaan" id="edit-id-penerimaan" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
             <option value="">-- Tanpa Nota / Belum Ada Bahan Kain (Menunggu Kedatangan) --</option>
             @foreach($penerimaan ?? [] as $pn)
-              <option value="{{ $pn->id_penerimaan }}">{{ $pn->no_nota }} - {{ $pn->nama_kain }} (Tgl: {{ $pn->tgl_nota }})</option>
+              <option value="{{ $pn->id_penerimaan }}">#{{ $pn->id_penerimaan }} - {{ $pn->no_nota }} - {{ $pn->nama_kain }} (Tgl: {{ $pn->tgl_nota }})</option>
             @endforeach
           </select>
         </div>

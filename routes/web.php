@@ -54,9 +54,12 @@ Route::prefix('penerimaan')->middleware(RoleMiddleware::class . ':Admin,Gudang')
     Route::get('/', [PenerimaanBahanController::class, 'index'])->name('penerimaan.index');
     Route::post('/', [PenerimaanBahanController::class, 'store'])->name('penerimaan.store');
     Route::post('/{id}/update', [PenerimaanBahanController::class, 'update'])->name('penerimaan.update');
+    Route::post('/{id}/delete', [PenerimaanBahanController::class, 'destroy'])->name('penerimaan.delete');
     Route::post('/warna/{id}/update', [PenerimaanBahanController::class, 'updateWarna'])->name('penerimaan.warna.update');
+    Route::post('/warna/{id}/delete', [PenerimaanBahanController::class, 'destroyWarna'])->name('penerimaan.warna.delete');
     Route::post('/warna/{id}/add-roll', [PenerimaanBahanController::class, 'addRollToWarna'])->name('penerimaan.warna.add_roll');
     Route::post('/roll/{id}/update', [PenerimaanBahanController::class, 'updateRoll'])->name('penerimaan.roll.update');
+    Route::post('/roll/{id}/delete', [PenerimaanBahanController::class, 'destroyRoll'])->name('penerimaan.roll.delete');
 });
 
 // Master Lookup & Supplier Management: Accessible to Admin, Gudang, and Pemotong directly from operational forms

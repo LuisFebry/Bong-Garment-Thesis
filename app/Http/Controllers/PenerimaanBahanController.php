@@ -237,6 +237,99 @@ class PenerimaanBahanController extends Controller
         ], 201);
     }
 
+    public function destroy(Request $request, $id)
+    {
+        $penerimaan = PenerimaanBahan::findOrFail($id);
+
+        $warnaIds = DetailBahanWarna::where('id_penerimaan', $penerimaan->id_penerimaan)->pluck('id_detail_warna');
+        $rollIds = DetailRollBahan::whereIn('id_detail_warna', $warnaIds)->pluck('id_roll');
+
+        $usedInPotongWarna = $warnaIds->isNotEmpty() && DB::table('Detail_Pemotongan_Warna')->whereIn('id_detail_warna', $warnaIds)->exists();
+        $usedInGelaran = $rollIds->isNotEmpty() && DB::table('Detail_Gelaran_Kain')->whereIn('id_roll', $rollIds)->exists();
+
+        if ($usedInPotongWarna || $usedInGelaran) {
+            return response()->json([
+                'success' => false,
+                'message' => "Nota #{$penerimaan->id_penerimaan} ({$penerimaan->no_nota}) tidak dapat dihapus karena kainnya sudah digunakan pada proses Pemotongan Seri.",
+            ], 422);
+        }
+
+        DB::transaction(function () use ($penerimaan, $warnaIds) {
+            DB::table('Pesanan')->where('id_penerimaan', $penerimaan->id_penerimaan)->update(['id_penerimaan' => null]);
+            if ($warnaIds->isNotEmpty()) {
+                DetailRollBahan::whereIn('id_detail_warna', $warnaIds)->delete();
+                DetailBahanWarna::where('id_penerimaan', $penerimaan->id_penerimaan)->delete();
+            }
+            $penerimaan->delete();
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => "Nota penerimaan #{$id} ({$penerimaan->no_nota}) beserta warna dan roll berhasil dihapus.",
+        ]);
+    }
+
+    public function destroyWarna(Request $request, $id)
+    {
+        $warna = DetailBahanWarna::findOrFail($id);
+        $rollIds = DetailRollBahan::where('id_detail_warna', $warna->id_detail_warna)->pluck('id_roll');
+
+        $usedInPotongWarna = DB::table('Detail_Pemotongan_Warna')->where('id_detail_warna', $warna->id_detail_warna)->exists();
+        $usedInGelaran = $rollIds->isNotEmpty() && DB::table('Detail_Gelaran_Kain')->whereIn('id_roll', $rollIds)->exists();
+
+        if ($usedInPotongWarna || $usedInGelaran) {
+            return response()->json([
+                'success' => false,
+                'message' => "Kelompok warna '{$warna->nama_warna}' tidak dapat dihapus karena sudah digunakan pada proses Pemotongan Seri.",
+            ], 422);
+        }
+
+        $namaWarna = $warna->nama_warna;
+        DB::transaction(function () use ($warna) {
+            DetailRollBahan::where('id_detail_warna', $warna->id_detail_warna)->delete();
+            $warna->delete();
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => "Kelompok warna '{$namaWarna}' beserta roll di dalamnya berhasil dihapus.",
+        ]);
+    }
+
+    public function destroyRoll(Request $request, $id)
+    {
+        $roll = DetailRollBahan::findOrFail($id);
+
+        if (DB::table('Detail_Gelaran_Kain')->where('id_roll', $roll->id_roll)->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => "Roll #{$roll->no_roll_ke} (#{$roll->id_roll}) tidak dapat dihapus karena sudah digunakan pada gelaran Pemotongan Seri.",
+            ], 422);
+        }
+
+        $noRollKe = $roll->no_roll_ke;
+        $idRoll = $roll->id_roll;
+
+        DB::transaction(function () use ($roll) {
+            $idDetailWarna = $roll->id_detail_warna;
+            $roll->delete();
+
+            $warna = DetailBahanWarna::find($idDetailWarna);
+            if ($warna) {
+                $rolls = DetailRollBahan::where('id_detail_warna', $idDetailWarna)->get();
+                $warna->update([
+                    'total_roll' => $rolls->count(),
+                    'total_ukuran' => $rolls->sum('ukuran_awal'),
+                ]);
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => "Roll #{$noRollKe} (#{$idRoll}) berhasil dihapus.",
+        ]);
+    }
+
     public function storeSupplier(Request $request)
     {
         $validated = $request->validate([
