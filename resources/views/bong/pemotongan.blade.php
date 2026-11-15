@@ -66,7 +66,7 @@
             </td>
             <td class="py-3 text-[11px] text-slate-600">
               @if($ord->penerimaanBahan)
-                <span class="font-mono font-semibold text-indigo-700">{{ $ord->penerimaanBahan->no_nota }}</span>
+                <span class="font-mono font-semibold text-indigo-700">#{{ $ord->penerimaanBahan->id_penerimaan }} &bull; {{ $ord->penerimaanBahan->no_nota }}</span>
                 <span class="block text-[10px] text-slate-400">
                   {{ $ord->penerimaanBahan->detailBahanWarna->pluck('nama_warna')->join(', ') ?: $ord->penerimaanBahan->nama_kain }}
                 </span>
@@ -74,9 +74,9 @@
                 <span class="text-slate-400 italic">Belum terhubung nota</span>
               @endif
             </td>
-            <td class="py-3 font-mono text-slate-500">{{ \Carbon\Carbon::parse($ord->deadline_awal)->format('Y-m-d') }}</td>
+            <td class="py-3 font-mono text-slate-500">{{ \Carbon\Carbon::parse($ord->deadline_awal)->format('d/m/Y') }}</td>
             <td class="py-3 font-mono font-bold text-amber-600">
-              {{ \Carbon\Carbon::parse($ord->deadline_terbaru ?? $ord->deadline_awal)->format('Y-m-d') }}
+              {{ \Carbon\Carbon::parse($ord->deadline_terbaru ?? $ord->deadline_awal)->format('d/m/Y') }}
               @if($ord->alasan_perubahan_deadline)
                 <span class="block text-[10px] font-sans font-normal text-slate-400">Revisi: {{ $ord->alasan_perubahan_deadline }}</span>
               @endif
@@ -156,7 +156,7 @@
           <select name="id_detail_warna" id="sel-warna-bahan" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
             @foreach($warnaList ?? [] as $w)
               <option value="{{ $w->id_detail_warna }}" data-penerimaan="{{ $w->id_penerimaan }}" data-satuan="{{ $w->satuan_ukur }}">
-                #{{ $w->id_detail_warna }} - {{ $w->nama_warna }} ({{ $w->penerimaanBahan->no_nota ?? 'Nota' }} · {{ $w->penerimaanBahan->nama_kain ?? '' }} · {{ $w->total_ukuran }} {{ $w->satuan_ukur }})
+                #{{ $w->id_detail_warna }} - {{ $w->nama_warna }} (#{{ $w->id_penerimaan }} - {{ $w->penerimaanBahan->no_nota ?? 'Nota' }} · {{ $w->penerimaanBahan->nama_kain ?? '' }} · {{ number_format((float)$w->total_ukuran, 2, '.', '') }} {{ $w->satuan_ukur }})
               </option>
             @endforeach
           </select>
@@ -233,7 +233,7 @@
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Kuantitas Kain Terpakai (<code class="font-mono">kain_terpakai</code>) <span class="text-rose-500">*</span></label>
           <div class="flex items-stretch border border-slate-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 bg-white">
-            <input type="number" step="0.01" min="0.01" name="kain_terpakai" id="inp-kain-terpakai" value="45.00" required class="flex-1 min-w-0 text-xs font-mono p-2.5 border-0 focus:outline-none">
+            <input type="number" step="0.01" min="0.01" lang="en-US" name="kain_terpakai" id="inp-kain-terpakai" value="45.00" required class="flex-1 min-w-0 text-xs font-mono p-2.5 border-0 focus:outline-none">
             <span id="badge-satuan-kain" class="px-3 bg-slate-50 border-l border-slate-200 text-xs font-mono font-semibold text-slate-600 flex items-center">Kg</span>
           </div>
           <p class="text-[10px] text-slate-400 mt-1">Otomatis memotong <code class="font-mono">ukuran_sisa</code> pada roll fisik yang dipilih.</p>
@@ -298,12 +298,12 @@
               <span class="text-slate-400">/</span>
               <span class="font-bold text-emerald-700">{{ number_format($pm->total_lembar_hasil) }} Pcs</span>
             </td>
-            <td class="py-3 font-mono text-slate-500">{{ $pm->tgl_potong }}</td>
+            <td class="py-3 font-mono text-slate-500">{{ $pm->tgl_potong ? \Carbon\Carbon::parse($pm->tgl_potong)->format('d/m/Y H:i') : '-' }}</td>
             <td class="py-3 text-[11px] text-slate-600">
               @foreach($pm->detailPemotonganWarna ?? [] as $pw)
                 <div>
                   <span class="font-semibold">{{ $pw->detailBahanWarna->nama_warna ?? '-' }}</span>:
-                  <span class="font-mono font-bold text-indigo-700">{{ $pw->kain_terpakai }} {{ $pw->detailBahanWarna->satuan_ukur ?? 'Kg' }}</span>
+                  <span class="font-mono font-bold text-indigo-700">{{ number_format((float)$pw->kain_terpakai, 2, '.', '') }} {{ $pw->detailBahanWarna->satuan_ukur ?? 'Kg' }}</span>
                 </div>
               @endforeach
             </td>
@@ -312,12 +312,12 @@
                 @foreach($pw->detailGelaranKain ?? [] as $gk)
                   <div class="bg-slate-50 border border-slate-200 rounded px-2 py-1 font-mono text-[10px]">
                     <span class="font-bold text-indigo-700">Roll #{{ $gk->detailRollBahan->no_roll_ke ?? '?' }} (#{{ $gk->id_roll }})</span>
-                    &bull; Gelar: <b>{{ $gk->panjang_gelar }}m</b>
+                    &bull; Gelar: <b>{{ number_format((float)$gk->panjang_gelar, 2, '.', '') }}m</b>
                     &bull; Ply: <b>{{ $gk->jumlah_tumpuk }} lapis</b>
                     &bull; Hasil: <b>{{ $gk->total_lembar_gelar }} lbr</b>
                     @if($gk->detailRollBahan)
                       <span class="ml-1 px-1.5 py-0.2 rounded {{ $gk->detailRollBahan->status_roll === 'Habis' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-800' }}">
-                        {{ $gk->detailRollBahan->status_roll }} (Sisa: {{ $gk->detailRollBahan->ukuran_sisa }})
+                        {{ $gk->detailRollBahan->status_roll }} (Sisa: {{ number_format((float)$gk->detailRollBahan->ukuran_sisa, 2, '.', '') }})
                       </span>
                     @endif
                   </div>
@@ -407,7 +407,7 @@
           <label class="block text-xs font-semibold text-slate-700 mb-1">Warna Bahan Kain (<code class="font-mono">id_detail_warna</code>)</label>
           <select id="edit-pm-warna" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white">
             @foreach($warnaList ?? [] as $w)
-              <option value="{{ $w->id_detail_warna }}">#{{ $w->id_detail_warna }} - {{ $w->nama_warna }} ({{ $w->penerimaanBahan->no_nota ?? 'Nota' }} · {{ $w->satuan_ukur }})</option>
+              <option value="{{ $w->id_detail_warna }}">#{{ $w->id_detail_warna }} - {{ $w->nama_warna }} (#{{ $w->id_penerimaan }} - {{ $w->penerimaanBahan->no_nota ?? 'Nota' }} · {{ $w->satuan_ukur }})</option>
             @endforeach
           </select>
         </div>
@@ -421,19 +421,19 @@
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Kuantitas Kain Terpakai (<code class="font-mono">kain_terpakai</code>) <span class="text-rose-500">*</span></label>
-          <input type="number" step="0.01" min="0.01" id="edit-pm-kain" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+          <input type="number" step="0.01" min="0.01" lang="en-US" id="edit-pm-kain" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Roll Fisik Utama (<code class="font-mono">id_roll</code>)</label>
           <select id="edit-pm-roll" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white font-mono">
             @foreach(($allRolls ?? $rolls ?? []) as $r)
-              <option value="{{ $r->id_roll }}">#id_roll: {{ $r->id_roll }} - Roll #{{ $r->no_roll_ke }} ({{ $r->detailBahanWarna->nama_warna ?? '-' }} · Sisa: {{ $r->ukuran_sisa }} {{ $r->satuan }})</option>
+              <option value="{{ $r->id_roll }}">#id_roll: {{ $r->id_roll }} - Roll #{{ $r->no_roll_ke }} ({{ $r->detailBahanWarna->nama_warna ?? '-' }} · Sisa: {{ number_format((float)$r->ukuran_sisa, 2, '.', '') }} {{ $r->satuan }})</option>
             @endforeach
           </select>
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Panjang Gelaran (m/yd)</label>
-          <input type="number" step="0.01" min="0.1" id="edit-pm-panjang" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+          <input type="number" step="0.01" min="0.1" lang="en-US" id="edit-pm-panjang" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Jumlah Tumpukan / Ply</label>
@@ -463,8 +463,8 @@
       'id_roll' => $r->id_roll,
       'id_detail_warna' => $r->id_detail_warna,
       'no_roll_ke' => $r->no_roll_ke,
-      'ukuran_awal' => $r->ukuran_awal,
-      'ukuran_sisa' => $r->ukuran_sisa,
+      'ukuran_awal' => number_format((float)$r->ukuran_awal, 2, '.', ''),
+      'ukuran_sisa' => number_format((float)$r->ukuran_sisa, 2, '.', ''),
       'satuan' => $r->satuan,
       'status_roll' => $r->status_roll,
       'nama_warna' => $r->detailBahanWarna->nama_warna ?? '-',
@@ -516,7 +516,7 @@
           </td>
           <td class="py-2.5 px-3">
             <div class="flex items-stretch border border-slate-200 rounded-lg overflow-hidden bg-white">
-              <input type="number" step="0.01" min="0.1" class="inp-panjang-gelar flex-1 min-w-0 text-xs font-mono p-2 border-0 focus:outline-none" data-idx="${idx}" value="${row.panjang_gelar}">
+              <input type="number" step="0.01" min="0.1" lang="en-US" class="inp-panjang-gelar flex-1 min-w-0 text-xs font-mono p-2 border-0 focus:outline-none" data-idx="${idx}" value="${Number(row.panjang_gelar).toFixed(2)}">
               <span class="px-2 bg-slate-50 border-l border-slate-200 text-[10px] font-mono text-slate-500 flex items-center">m/yd</span>
             </div>
           </td>
@@ -665,11 +665,6 @@
       const now = new Date();
       now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
       dtInput.value = now.toISOString().slice(0, 16);
-    }
-
-    const seriInput = document.getElementById('inp-kode-seri');
-    if (seriInput && !seriInput.value) {
-      seriInput.value = 'SERI-' + new Date().getFullYear() + '-' + Math.floor(100 + Math.random() * 900);
     }
 
     document.getElementById('sel-pesanan')?.addEventListener('change', function () {

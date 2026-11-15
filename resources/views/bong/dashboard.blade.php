@@ -105,8 +105,8 @@
               <td class="py-3 text-slate-600">{{ $q->pola->nama_pola ?? '-' }}</td>
               <td class="py-3 font-mono">
                 @php
-                  $dAwal = $q->deadline_awal ? (is_string($q->deadline_awal) ? substr($q->deadline_awal, 0, 10) : $q->deadline_awal->format('Y-m-d')) : '-';
-                  $dBaru = $q->deadline_terbaru ? (is_string($q->deadline_terbaru) ? substr($q->deadline_terbaru, 0, 10) : $q->deadline_terbaru->format('Y-m-d')) : $dAwal;
+                  $dAwal = $q->deadline_awal ? \Carbon\Carbon::parse($q->deadline_awal)->format('d/m/Y') : '-';
+                  $dBaru = $q->deadline_terbaru ? \Carbon\Carbon::parse($q->deadline_terbaru)->format('d/m/Y') : $dAwal;
                 @endphp
                 @if($dBaru !== $dAwal)
                   <span class="text-amber-600 font-semibold">{{ $dBaru }}</span>
@@ -149,7 +149,7 @@
           </div>
           <div class="flex items-center justify-between mt-2 text-slate-500 text-[11px]">
             <span>Lolos: <b class="text-slate-700">{{ $qc->jumlah_lolos }}</b> / Cacat: <b class="text-rose-600">{{ $qc->jumlah_cacat }}</b></span>
-            <span class="font-mono text-[10px]">{{ substr($qc->tgl_pemeriksaan, 0, 10) }}</span>
+            <span class="font-mono text-[10px]">{{ $qc->tgl_pemeriksaan ? \Carbon\Carbon::parse($qc->tgl_pemeriksaan)->format('d/m/Y') : '-' }}</span>
           </div>
         </div>
         @empty

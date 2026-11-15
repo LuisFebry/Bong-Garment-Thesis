@@ -327,13 +327,195 @@
       const csrfMeta = document.querySelector('meta[name="csrf-token"]');
       const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
 
+      // Global dd/mm/yyyy date & datetime-local input enhancer
+      function isoToDisplayDate(iso, isDateTime) {
+        if (!iso) return '';
+        const str = String(iso).trim();
+        const m = str.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
+        if (!m) return '';
+        const datePart = `${m[3]}/${m[2]}/${m[1]}`;
+        if (!isDateTime) return datePart;
+        return `${datePart} ${m[4] || '00'}:${m[5] || '00'}`;
+      }
+
+      function normalizeIsoValue(val, isDateTime) {
+        if (!val) return '';
+        const str = String(val).trim();
+        const m = str.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
+        if (!m) return '';
+        if (!isDateTime) return `${m[1]}-${m[2]}-${m[3]}`;
+        return `${m[1]}-${m[2]}-${m[3]}T${m[4] || '00'}:${m[5] || '00'}`;
+      }
+
+      function isValidYmd(year, month, day) {
+        if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+        const dt = new Date(Date.UTC(year, month - 1, day));
+        return dt.getUTCFullYear() === year && dt.getUTCMonth() === month - 1 && dt.getUTCDate() === day;
+      }
+
+      function displayToIsoDate(disp, isDateTime) {
+        if (!disp) return '';
+        const trimmed = String(disp).trim();
+        const isoDirect = normalizeIsoValue(trimmed, isDateTime);
+        if (isoDirect) {
+          const p = isoDirect.slice(0, 10).split('-').map(Number);
+          return isValidYmd(p[0], p[1], p[2]) ? isoDirect : '';
+        }
+        const m = trimmed.match(/^(\d{1,2})\s*[\/\-]\s*(\d{1,2})\s*[\/\-]\s*(\d{4})(?:[\sT]+(\d{1,2}):(\d{2}))?$/);
+        if (!m) return '';
+        const day = Number(m[1]);
+        const month = Number(m[2]);
+        const year = Number(m[3]);
+        if (!isValidYmd(year, month, day)) return '';
+        const yyyy = String(year).padStart(4, '0');
+        const mm = String(month).padStart(2, '0');
+        const dd = String(day).padStart(2, '0');
+        if (!isDateTime) return `${yyyy}-${mm}-${dd}`;
+        if (m[4] === undefined || m[5] === undefined) return '';
+        const hour = Number(m[4]);
+        const minute = Number(m[5]);
+        if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return '';
+        return `${yyyy}-${mm}-${dd}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+      }
+
+      const nativeValueDesc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+      let enhancedAnyDate = false;
+
+      document.querySelectorAll('input[type="date"], input[type="datetime-local"]').forEach(function (origInput) {
+        if (origInput.classList.contains('pointer-events-none') || origInput.dataset.ddmmyyyyEnhanced) return;
+        origInput.dataset.ddmmyyyyEnhanced = '1';
+        enhancedAnyDate = true;
+
+        const isDateTime = origInput.type === 'datetime-local';
+        const initialIso = normalizeIsoValue(nativeValueDesc.get.call(origInput), isDateTime);
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'relative flex items-center w-full';
+        origInput.parentNode.insertBefore(wrapper, origInput);
+
+        const dispInput = document.createElement('input');
+        dispInput.type = 'text';
+        dispInput.className = origInput.className + ' pr-9 font-mono';
+        dispInput.placeholder = isDateTime ? 'dd / mm / yyyy hh:mm' : 'dd / mm / yyyy';
+        dispInput.maxLength = isDateTime ? 19 : 14;
+        dispInput.autocomplete = 'off';
+        if (origInput.required) {
+          dispInput.required = true;
+          origInput.required = false;
+        }
+        dispInput.value = isoToDisplayDate(initialIso, isDateTime);
+
+        origInput.className = 'absolute right-2 bottom-0 w-px h-px opacity-0 pointer-events-none';
+        origInput.tabIndex = -1;
+        origInput.setAttribute('aria-hidden', 'true');
+        if (initialIso) {
+          nativeValueDesc.set.call(origInput, initialIso);
+        }
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.title = 'Pilih tanggal dari kalender';
+        btn.className = 'absolute right-2.5 text-slate-400 hover:text-indigo-600 p-0.5 rounded transition-colors';
+        btn.innerHTML = '<i data-lucide="calendar" class="w-4 h-4"></i>';
+
+        wrapper.appendChild(dispInput);
+        wrapper.appendChild(origInput);
+        wrapper.appendChild(btn);
+
+        Object.defineProperty(origInput, 'value', {
+          configurable: true,
+          enumerable: true,
+          get: function () {
+            const raw = nativeValueDesc.get.call(origInput);
+            if (raw) return raw;
+            return displayToIsoDate(dispInput.value, isDateTime);
+          },
+          set: function (val) {
+            const norm = normalizeIsoValue(val, isDateTime);
+            nativeValueDesc.set.call(origInput, norm);
+            dispInput.value = isoToDisplayDate(norm, isDateTime);
+            dispInput.setCustomValidity('');
+          }
+        });
+
+        dispInput.addEventListener('input', function (e) {
+          const isDelete = String(e.inputType || '').startsWith('delete');
+          if (!isDelete && dispInput.selectionStart === dispInput.value.length) {
+            if (/^\d{2}$/.test(dispInput.value) || /^\d{2}\/\d{2}$/.test(dispInput.value)) {
+              dispInput.value += '/';
+            } else if (isDateTime && /^\d{2}\/\d{2}\/\d{4}$/.test(dispInput.value)) {
+              dispInput.value += ' ';
+            } else if (isDateTime && /^\d{2}\/\d{2}\/\d{4}\s\d{2}$/.test(dispInput.value)) {
+              dispInput.value += ':';
+            }
+          }
+          const rawDisp = dispInput.value.trim();
+          const iso = displayToIsoDate(rawDisp, isDateTime);
+          nativeValueDesc.set.call(origInput, iso);
+          if (rawDisp === '' || iso) {
+            dispInput.setCustomValidity('');
+          } else {
+            dispInput.setCustomValidity(isDateTime ? 'Gunakan format dd/mm/yyyy hh:mm yang valid' : 'Gunakan format dd/mm/yyyy yang valid');
+          }
+        });
+
+        dispInput.addEventListener('blur', function () {
+          let rawDisp = dispInput.value.trim();
+          if (isDateTime && /^\d{1,2}\s*[\/\-]\s*\d{1,2}\s*[\/\-]\s*\d{4}$/.test(rawDisp)) {
+            rawDisp = rawDisp + ' 00:00';
+          }
+          const iso = displayToIsoDate(rawDisp, isDateTime);
+          if (iso) {
+            nativeValueDesc.set.call(origInput, iso);
+            dispInput.value = isoToDisplayDate(iso, isDateTime);
+            dispInput.setCustomValidity('');
+          }
+        });
+
+        origInput.addEventListener('change', function () {
+          const picked = nativeValueDesc.get.call(origInput);
+          dispInput.value = isoToDisplayDate(picked, isDateTime);
+          dispInput.setCustomValidity('');
+        });
+
+        btn.addEventListener('click', function () {
+          if (typeof origInput.showPicker === 'function') {
+            try { origInput.showPicker(); } catch (_) { origInput.focus(); origInput.click(); }
+          } else {
+            origInput.focus();
+            origInput.click();
+          }
+        });
+
+        if (origInput.form) {
+          origInput.form.addEventListener('reset', function () {
+            setTimeout(function () {
+              const resetVal = nativeValueDesc.get.call(origInput);
+              dispInput.value = isoToDisplayDate(resetVal, isDateTime);
+              dispInput.setCustomValidity('');
+            }, 0);
+          });
+        }
+      });
+
+      if (enhancedAnyDate && window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+      }
+
       // Window helper: Revise Deadline
       window.openReviseDeadlineModal = function (id, dlAwal, dlTerbaru) {
-        const currentTarget = dlTerbaru || dlAwal || new Date().toISOString().split('T')[0];
-        const newDeadline = prompt('Masukkan Deadline Terbaru (YYYY-MM-DD):', currentTarget);
-        if (!newDeadline) return;
+        const currentTargetIso = dlTerbaru || dlAwal || new Date().toISOString().split('T')[0];
+        const currentTargetDisp = isoToDisplayDate(currentTargetIso, false) || currentTargetIso;
+        const inputDeadline = prompt('Masukkan Deadline Terbaru (dd/mm/yyyy):', currentTargetDisp);
+        if (!inputDeadline) return;
 
-        const reason = prompt('Alasan Revisi Deadline (Contoh: Permintaan percepatan mitra / antrean meja potong):', 'Penyesuaian Antrean Pemotongan');
+        const newDeadline = displayToIsoDate(inputDeadline, false);
+        if (!newDeadline) {
+          alert('Format tanggal tidak valid. Gunakan format dd/mm/yyyy (contoh: 15/11/2026).');
+          return;
+        }
+
+        const reason = prompt('Alasan Revisi Deadline:', 'Penyesuaian Antrean Pemotongan');
         if (!reason) return;
 
         fetch('/pesanan/' + id + '/revise-deadline', {
@@ -365,9 +547,18 @@
 
       // Window helper: Complete QC Rework with actual completion date/time
       window.completeRework = function (id) {
-        const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
-        const tglSelesai = prompt('Masukkan Tanggal & Waktu Aktual Selesai Perbaikan Rework (YYYY-MM-DD HH:MM):', nowStr);
-        if (!tglSelesai) return;
+        const nowLocal = new Date();
+        nowLocal.setMinutes(nowLocal.getMinutes() - nowLocal.getTimezoneOffset());
+        const nowDisp = isoToDisplayDate(nowLocal.toISOString().slice(0, 16), true);
+        const inputTglSelesai = prompt('Masukkan Tanggal & Waktu Aktual Selesai Perbaikan Rework (dd/mm/yyyy hh:mm):', nowDisp);
+        if (!inputTglSelesai) return;
+
+        const isoSelesai = displayToIsoDate(inputTglSelesai, true);
+        if (!isoSelesai) {
+          alert('Format tanggal & waktu tidak valid. Gunakan format dd/mm/yyyy hh:mm.');
+          return;
+        }
+        const tglSelesai = isoSelesai.replace('T', ' ');
 
         fetch('/qc/' + id + '/complete-rework', {
           method: 'POST',

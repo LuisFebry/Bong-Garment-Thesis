@@ -107,7 +107,7 @@
                   <span class="ml-1 px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-300 text-[9px] font-sans uppercase">RENDAH</span>
                 @endif
               </td>
-              <td class="py-3 font-mono text-[10px] text-slate-400">{{ substr($st->tgl_update_terakhir, 0, 16) }}</td>
+              <td class="py-3 font-mono text-[10px] text-slate-400">{{ $st->tgl_update_terakhir ? \Carbon\Carbon::parse($st->tgl_update_terakhir)->format('d/m/Y H:i') : '-' }}</td>
               <td class="py-3 text-right">
                 <div class="inline-flex items-center justify-end gap-1">
                   <button type="button"
@@ -335,7 +335,7 @@
           @forelse($riwayatStok ?? [] as $rw)
           <tr class="hover:bg-slate-50 transition-colors">
             <td class="py-3 font-mono text-[11px] text-slate-500 whitespace-nowrap">
-              {{ $rw->tgl_transaksi ? $rw->tgl_transaksi->format('Y-m-d H:i') : '-' }}
+              {{ $rw->tgl_transaksi ? $rw->tgl_transaksi->format('d/m/Y H:i') : '-' }}
             </td>
             <td class="py-3">
               <span class="font-semibold text-slate-800 block">{{ $rw->pola->nama_pola ?? ('Pola #'.$rw->id_pola) }}</span>

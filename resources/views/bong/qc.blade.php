@@ -213,7 +213,7 @@
           <tr class="hover:bg-slate-50">
             <td class="py-3 font-mono font-semibold text-indigo-600">#{{ $qc->id_qc }}</td>
             <td class="py-3">
-              <span class="font-mono text-slate-700 block">{{ $qc->tgl_pemeriksaan }}</span>
+              <span class="font-mono text-slate-700 block">{{ $qc->tgl_pemeriksaan ? \Carbon\Carbon::parse($qc->tgl_pemeriksaan)->format('d/m/Y H:i') : '-' }}</span>
               <span class="text-[10px] text-slate-500 font-semibold">Oleh: {{ $qc->userQc->nama_user ?? ('User #' . $qc->id_user_qc) }}</span>
             </td>
             <td class="py-3">
@@ -245,9 +245,9 @@
               </span>
             </td>
             <td class="py-3 font-mono text-[11px]">
-              <div class="text-slate-500">Target: {{ $qc->tgl_target_perbaikan ?? '-' }}</div>
+              <div class="text-slate-500">Target: {{ $qc->tgl_target_perbaikan ? \Carbon\Carbon::parse($qc->tgl_target_perbaikan)->format('d/m/Y') : '-' }}</div>
               @if($qc->tgl_selesai_perbaikan)
-                <div class="text-emerald-700 font-bold mt-0.5">Selesai: {{ $qc->tgl_selesai_perbaikan }}</div>
+                <div class="text-emerald-700 font-bold mt-0.5">Selesai: {{ \Carbon\Carbon::parse($qc->tgl_selesai_perbaikan)->format('d/m/Y H:i') }}</div>
               @endif
             </td>
             <td class="py-3 text-right">

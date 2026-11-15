@@ -87,7 +87,7 @@
           <select name="id_penerimaan" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
             <option value="">-- Pilih Nota Kain (Opsional, Dapat Diisi Nanti Saat Kain Tiba) --</option>
             @foreach($penerimaan ?? [] as $pn)
-              <option value="{{ $pn->id_penerimaan }}">#{{ $pn->id_penerimaan }} - {{ $pn->no_nota }} - {{ $pn->nama_kain }} (Tgl: {{ $pn->tgl_nota }})</option>
+              <option value="{{ $pn->id_penerimaan }}">#{{ $pn->id_penerimaan }} - {{ $pn->no_nota }} - {{ $pn->nama_kain }} (Tgl: {{ $pn->tgl_nota ? \Carbon\Carbon::parse($pn->tgl_nota)->format('d/m/Y') : '-' }})</option>
             @endforeach
           </select>
         </div>
@@ -141,7 +141,7 @@
 
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Pola Unik <span class="text-rose-500">*</span></label>
-            <input type="text" id="new-pola-kode" value="POLA-NEW-0{{ count($pola ?? []) + 1 }}" placeholder="POLA-FLN-05" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white font-mono uppercase focus:ring-2 focus:ring-indigo-500">
+            <input type="text" id="new-pola-kode" placeholder="POLA-FLN-05" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white font-mono uppercase focus:ring-2 focus:ring-indigo-500">
           </div>
 
           <div>
@@ -237,9 +237,12 @@
         <tbody class="divide-y divide-slate-100">
           @forelse($pesanan ?? [] as $item)
           @php
-            $dlAwalFormatted = $item->deadline_awal ? (is_string($item->deadline_awal) ? substr($item->deadline_awal, 0, 10) : $item->deadline_awal->format('Y-m-d')) : '-';
-            $dlTerbaruFormatted = $item->deadline_terbaru ? (is_string($item->deadline_terbaru) ? substr($item->deadline_terbaru, 0, 10) : $item->deadline_terbaru->format('Y-m-d')) : $dlAwalFormatted;
-            $isRevised = ($dlTerbaruFormatted !== '-' && $dlAwalFormatted !== '-' && $dlTerbaruFormatted !== $dlAwalFormatted);
+            $dlAwalIso = $item->deadline_awal ? (is_string($item->deadline_awal) ? substr($item->deadline_awal, 0, 10) : $item->deadline_awal->format('Y-m-d')) : '';
+            $dlTerbaruIso = $item->deadline_terbaru ? (is_string($item->deadline_terbaru) ? substr($item->deadline_terbaru, 0, 10) : $item->deadline_terbaru->format('Y-m-d')) : $dlAwalIso;
+            $dlAwalFormatted = $dlAwalIso ? \Carbon\Carbon::parse($dlAwalIso)->format('d/m/Y') : '-';
+            $dlTerbaruFormatted = $dlTerbaruIso ? \Carbon\Carbon::parse($dlTerbaruIso)->format('d/m/Y') : $dlAwalFormatted;
+            $tglOrderFormatted = $item->tgl_order ? \Carbon\Carbon::parse($item->tgl_order)->format('d/m/Y') : '-';
+            $isRevised = ($dlTerbaruIso !== '' && $dlAwalIso !== '' && $dlTerbaruIso !== $dlAwalIso);
           @endphp
           <tr class="hover:bg-slate-50">
             <td class="py-3 font-mono font-semibold text-indigo-600">#{{ $item->id_pesanan }}</td>
@@ -265,7 +268,7 @@
               @endif
             </td>
             <td class="py-3 font-mono text-slate-500">
-              {{ $item->tgl_order ? (is_string($item->tgl_order) ? substr($item->tgl_order, 0, 10) : $item->tgl_order->format('Y-m-d')) : '-' }}
+              {{ $tglOrderFormatted }}
             </td>
             <td class="py-3 font-mono text-slate-500">{{ $dlAwalFormatted }}</td>
             <td class="py-3 font-mono">
@@ -298,7 +301,7 @@
                 <button type="button" onclick='openEditPesananModal(@json($item))' class="px-2.5 py-1 text-[11px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-md font-semibold inline-flex items-center gap-1 transition-colors">
                   <i data-lucide="edit-3" class="w-3 h-3"></i> Edit
                 </button>
-                <button type="button" onclick="openReviseDeadlineModal({{ $item->id_pesanan }}, '{{ $dlAwalFormatted }}', '{{ $dlTerbaruFormatted }}')" class="px-2.5 py-1 text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-medium transition-colors">
+                <button type="button" onclick="openReviseDeadlineModal({{ $item->id_pesanan }}, '{{ $dlAwalIso }}', '{{ $dlTerbaruIso }}')" class="px-2.5 py-1 text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-medium transition-colors">
                   Revisi
                 </button>
               </div>
@@ -463,7 +466,7 @@
           <select name="id_penerimaan" id="edit-id-penerimaan" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
             <option value="">-- Tanpa Nota / Belum Ada Bahan Kain (Menunggu Kedatangan) --</option>
             @foreach($penerimaan ?? [] as $pn)
-              <option value="{{ $pn->id_penerimaan }}">#{{ $pn->id_penerimaan }} - {{ $pn->no_nota }} - {{ $pn->nama_kain }} (Tgl: {{ $pn->tgl_nota }})</option>
+              <option value="{{ $pn->id_penerimaan }}">#{{ $pn->id_penerimaan }} - {{ $pn->no_nota }} - {{ $pn->nama_kain }} (Tgl: {{ $pn->tgl_nota ? \Carbon\Carbon::parse($pn->tgl_nota)->format('d/m/Y') : '-' }})</option>
             @endforeach
           </select>
         </div>
@@ -559,15 +562,15 @@
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Lingkar Dada (cm)</label>
-          <input type="number" step="0.1" id="edit-pola-dada" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+          <input type="number" step="0.1" lang="en-US" id="edit-pola-dada" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Panjang Baju / Celana (cm)</label>
-          <input type="number" step="0.1" id="edit-pola-panjang" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+          <input type="number" step="0.1" lang="en-US" id="edit-pola-panjang" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Panjang Pundak (cm)</label>
-          <input type="number" step="0.1" id="edit-pola-pundak" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+          <input type="number" step="0.1" lang="en-US" id="edit-pola-pundak" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
         </div>
       </div>
 
@@ -967,7 +970,7 @@
 
     tbody.innerHTML = newPolaSpecs.map(function (sp, idx) {
       const metricInputs = fields.map(function (f) {
-        return `<td class="p-1"><input type="number" step="0.1" value="${sp[f] !== undefined && sp[f] !== null ? sp[f] : ''}" data-idx="${idx}" data-field="${f}" class="inp-spec-metric w-14 text-center font-mono text-[11px] p-1 border border-slate-200 rounded focus:ring-1 focus:ring-indigo-500" placeholder="-"></td>`;
+        return `<td class="p-1"><input type="number" step="0.1" lang="en-US" value="${sp[f] !== undefined && sp[f] !== null ? sp[f] : ''}" data-idx="${idx}" data-field="${f}" class="inp-spec-metric w-14 text-center font-mono text-[11px] p-1 border border-slate-200 rounded focus:ring-1 focus:ring-indigo-500" placeholder="-"></td>`;
       }).join('');
 
       return `

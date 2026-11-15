@@ -96,7 +96,7 @@
       </div>
       <p class="text-2xl font-bold text-indigo-700 mt-2">{{ $summary['total_roll_dikonsumsi'] ?? 0 }} Roll Fisik</p>
       <p class="text-[11px] text-slate-500 mt-1">
-        Total kain terpakai: <b class="font-mono text-slate-800">{{ number_format($summary['total_kain_terpakai'] ?? 0, 2) }} Kg/Yd</b>
+        Total kain terpakai: <b class="font-mono text-slate-800">{{ number_format((float)($summary['total_kain_terpakai'] ?? 0), 2, '.', '') }} Kg/Yd</b>
       </p>
     </div>
 
@@ -233,13 +233,13 @@
               <span class="block text-[11px] text-slate-600 font-medium mt-0.5">{{ $row->nama_mitra }}</span>
             </td>
             <td class="py-3 px-3 font-mono text-[11px]">
-              <div class="text-slate-600">Order: {{ \Carbon\Carbon::parse($row->tgl_order)->format('Y-m-d') }}</div>
-              <div class="text-amber-600 font-bold">EDF: {{ \Carbon\Carbon::parse($row->deadline_terbaru)->format('Y-m-d') }}</div>
+              <div class="text-slate-600">Order: {{ $row->tgl_order ? \Carbon\Carbon::parse($row->tgl_order)->format('d/m/Y') : '-' }}</div>
+              <div class="text-amber-600 font-bold">EDF: {{ $row->deadline_terbaru ? \Carbon\Carbon::parse($row->deadline_terbaru)->format('d/m/Y') : '-' }}</div>
             </td>
             <td class="py-3 px-3 font-mono text-xs">
               <span class="font-semibold text-slate-800">{{ $row->rolls_used }}</span>
               @if($row->kain_terpakai > 0)
-                <span class="block text-[10px] text-slate-500">{{ number_format($row->kain_terpakai, 2) }} Kg/Yd ({{ $row->rolls_count }} Roll)</span>
+                <span class="block text-[10px] text-slate-500">{{ number_format((float)$row->kain_terpakai, 2, '.', '') }} Kg/Yd ({{ $row->rolls_count }} Roll)</span>
               @endif
             </td>
             <td class="py-3 px-3 font-mono font-bold text-indigo-700">
@@ -277,10 +277,10 @@
       'Nama Pola' => $r->nama_pola,
       'Sumber Inisiasi' => $r->nama_sumber,
       'Mitra' => $r->nama_mitra,
-      'Tgl Order' => \Carbon\Carbon::parse($r->tgl_order)->format('Y-m-d'),
-      'Deadline EDF' => \Carbon\Carbon::parse($r->deadline_terbaru)->format('Y-m-d'),
+      'Tgl Order' => $r->tgl_order ? \Carbon\Carbon::parse($r->tgl_order)->format('d/m/Y') : '-',
+      'Deadline EDF' => $r->deadline_terbaru ? \Carbon\Carbon::parse($r->deadline_terbaru)->format('d/m/Y') : '-',
       'Roll Terpakai' => $r->rolls_used,
-      'Kain Terpakai' => $r->kain_terpakai,
+      'Kain Terpakai' => number_format((float)$r->kain_terpakai, 2, '.', ''),
       'Actual Yield (Lembar)' => $r->actual_yield,
       'QC Lolos (Pcs)' => $r->qc_lolos,
       'QC Cacat (Pcs)' => $r->qc_cacat,
