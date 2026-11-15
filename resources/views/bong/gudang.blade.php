@@ -425,7 +425,7 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">3. Variasi Warna (<code class="font-mono">nama_warna</code>) <span class="text-rose-500">*</span></label>
-          <input type="text" id="adj-nama-warna" value="Hitam Reaktif" required placeholder="Contoh: Hitam Reaktif" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" id="adj-nama-warna" value="Hitam" required placeholder="Hitam" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
 
         <div>
@@ -459,7 +459,7 @@
           <label id="adj-mitra-label" class="block text-xs font-semibold text-slate-700 mb-1">
             7. Nama Mitra Pengambil Barang (<code class="font-mono">nama_mitra</code>) <span id="adj-mitra-req" class="text-rose-500">*</span>
           </label>
-          <input type="text" id="adj-nama-mitra" list="mitra-datalist" required placeholder="Ketik atau pilih Nama Mitra..." class="w-full text-xs p-2.5 border border-indigo-200 bg-indigo-50/30 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" id="adj-nama-mitra" list="mitra-datalist" required placeholder="Toko Busana Jaya" class="w-full text-xs p-2.5 border border-indigo-200 bg-indigo-50/30 rounded-lg focus:ring-2 focus:ring-indigo-500">
           <datalist id="mitra-datalist">
             @foreach($mitraList ?? [] as $mName)
               <option value="{{ $mName }}"></option>
@@ -471,7 +471,7 @@
           <label class="block text-xs font-semibold text-slate-700 mb-1">
             8. No. Surat Jalan / Catatan (<code class="font-mono">keterangan</code>)
           </label>
-          <input type="text" id="adj-keterangan" placeholder="Contoh: SJ-OUT-01 / Diambil kurir" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" id="adj-keterangan" placeholder="SJ-OUT-01 / Diambil kurir" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
       </div>
 
@@ -500,13 +500,13 @@
     <form id="form-add-aksesoris" class="space-y-4 mt-4">
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Aksesoris <span class="text-rose-500">*</span></label>
-        <input type="text" name="nama_aksesoris" placeholder="Contoh: Kancing Kemeja 4 Lubang" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+        <input type="text" name="nama_aksesoris" placeholder="Kancing Kemeja 4 Lubang" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
       </div>
 
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Ukuran / Spesifikasi</label>
-          <input type="text" name="ukuran" placeholder="Contoh: 18L, No. 5" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="ukuran" placeholder="18L, No. 5" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Satuan</label>
@@ -566,17 +566,17 @@
       <input type="hidden" id="edit-acc-id">
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Aksesoris <span class="text-rose-500">*</span></label>
-        <input type="text" id="edit-acc-nama" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+        <input type="text" id="edit-acc-nama" placeholder="Kancing Kemeja 4 Lubang" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
       </div>
 
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Ukuran / Spesifikasi</label>
-          <input type="text" id="edit-acc-ukuran" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" id="edit-acc-ukuran" placeholder="18L, No. 5" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Satuan</label>
-          <input type="text" id="edit-acc-satuan" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" id="edit-acc-satuan" placeholder="Pcs" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
       </div>
 
@@ -644,7 +644,7 @@
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Jumlah Digunakan per 1 Pakaian (<code class="font-mono">jumlah_digunakan</code>) <span class="text-rose-500">*</span></label>
         <input type="number" id="map-jumlah-digunakan" min="1" value="1" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono focus:ring-2 focus:ring-indigo-500">
-        <p class="text-[10px] text-slate-400 mt-1">Misal: Kemeja membutuhkan 7 pcs kancing per 1 baju jadi.</p>
+        <p class="text-[10px] text-slate-400 mt-1">Contoh: Kemeja membutuhkan 7 pcs kancing per 1 baju jadi.</p>
       </div>
 
       <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
@@ -689,7 +689,7 @@
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Variasi Warna (<code class="font-mono">nama_warna</code>) <span class="text-rose-500">*</span></label>
-        <input type="text" id="edit-stok-warna" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+        <input type="text" id="edit-stok-warna" placeholder="Hitam" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Jumlah Stok Aktual (Pcs) (<code class="font-mono">jumlah_stok_pcs</code>) <span class="text-rose-500">*</span></label>
@@ -721,16 +721,16 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label id="gud-sup-nama-label" class="block text-xs font-semibold text-slate-700 mb-1">Nama Supplier <span class="text-rose-500">*</span></label>
-          <input type="text" id="gud-sup-nama" required placeholder="Contoh: CV Aksesoris Garment Harapan" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" id="gud-sup-nama" required placeholder="CV Aksesoris Garment Harapan" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Kontak / No. Telepon</label>
-          <input type="text" id="gud-sup-kontak" placeholder="Contoh: 021-6901234" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" id="gud-sup-kontak" placeholder="021-6901234" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Alamat Supplier</label>
-        <textarea id="gud-sup-alamat" rows="2" placeholder="Contoh: Pasar Pagi Asemka Blok B No. 12, Jakarta" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500"></textarea>
+        <textarea id="gud-sup-alamat" rows="2" placeholder="Pasar Pagi Asemka Blok B No. 12, Jakarta" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500"></textarea>
       </div>
       <div class="flex items-center justify-end gap-2 pt-2">
         <button type="button" id="gud-sup-cancel-btn" onclick="resetGudangSupplierForm()" class="hidden px-3 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg">Batal Edit</button>
@@ -922,12 +922,12 @@
 
     if (alasan.toLowerCase().includes('mitra')) {
       mitraInp.required = true;
-      mitraInp.placeholder = 'Ketik atau pilih Nama Mitra pengambil barang...';
+      mitraInp.placeholder = 'Toko Busana Jaya';
       mitraInp.className = 'w-full text-xs p-2.5 border border-indigo-200 bg-indigo-50/30 rounded-lg focus:ring-2 focus:ring-indigo-500';
       mitraLabel.innerHTML = '7. Nama Mitra Pengambil Barang (<code class="font-mono">nama_mitra</code>) <span class="text-rose-500">*</span>';
     } else {
       mitraInp.required = false;
-      mitraInp.placeholder = 'Opsional (Nama pembeli / penerima barang)';
+      mitraInp.placeholder = 'Pembeli Retail (Opsional)';
       mitraInp.className = 'w-full text-xs p-2.5 border border-slate-200 bg-white rounded-lg focus:ring-2 focus:ring-indigo-500';
       mitraLabel.innerHTML = '7. Nama Mitra / Penerima (<code class="font-mono">nama_mitra</code>) <span class="text-slate-400 font-normal">(Opsional)</span>';
     }

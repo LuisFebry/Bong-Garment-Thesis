@@ -207,7 +207,7 @@
         </div>
       </div>
       <form id="form-add-kategori" class="flex gap-2 mb-3">
-        <input type="text" id="inp-new-kategori" required placeholder="Tambah kategori baru..." class="flex-1 text-xs p-2 border border-slate-200 rounded-lg">
+        <input type="text" id="inp-new-kategori" required placeholder="Jaket & Outerwear" class="flex-1 text-xs p-2 border border-slate-200 rounded-lg">
         <button type="submit" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg">+ Tambah</button>
       </form>
       <div class="divide-y divide-slate-100 text-xs">
@@ -232,7 +232,7 @@
         </div>
       </div>
       <form id="form-add-sumber" class="flex gap-2 mb-3">
-        <input type="text" id="inp-new-sumber" required placeholder="Tambah sumber baru..." class="flex-1 text-xs p-2 border border-slate-200 rounded-lg">
+        <input type="text" id="inp-new-sumber" required placeholder="Request Mitra" class="flex-1 text-xs p-2 border border-slate-200 rounded-lg">
         <button type="submit" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg">+ Tambah</button>
       </form>
       <div class="divide-y divide-slate-100 text-xs">
@@ -289,11 +289,11 @@
     <form id="form-add-user" class="space-y-4">
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Lengkap / Jabatan <span class="text-rose-500">*</span></label>
-        <input type="text" id="add-user-nama" required placeholder="Contoh: Hendra Wijaya (Admin Produksi)" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+        <input type="text" id="add-user-nama" required placeholder="Luis (Admin Produksi)" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Username Login <span class="text-rose-500">*</span></label>
-        <input type="text" id="add-user-username" required placeholder="Contoh: hendra" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        <input type="text" id="add-user-username" required placeholder="luis" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Password <span class="text-rose-500">*</span></label>
@@ -331,11 +331,11 @@
       <input type="hidden" id="edit-user-id">
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Lengkap / Jabatan <span class="text-rose-500">*</span></label>
-        <input type="text" id="edit-user-nama" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+        <input type="text" id="edit-user-nama" placeholder="Luis (Admin Produksi)" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Username Login <span class="text-rose-500">*</span></label>
-        <input type="text" id="edit-user-username" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+        <input type="text" id="edit-user-username" placeholder="luis" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Password Baru <span class="text-slate-400 font-normal">(Kosongkan jika tidak ingin mengubah password)</span></label>

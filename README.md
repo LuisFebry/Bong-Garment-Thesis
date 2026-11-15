@@ -4,7 +4,7 @@ A full-stack, enterprise-grade production and inventory management web applicati
 
 This repository contains the software implementation for an undergraduate thesis at **Universitas Tarumanagara (UNTAR)**, Faculty of Information Technology, Department of Information Systems.
 
-- **Live App Demo:** [https://thesis.megumin.me](https://thesis.megumin.me)
+- **Live App Demo:** [https://thesis.megumin.me](https://thesis.megumin.me) / [https://thesis1.megumin.me](https://thesis1.megumin.me) / [https://thesis2.megumin.me](https://thesis2.megumin.me)
 - **Author & Project Lead:** Luis Febry (NIM: 825220088)
 - **Institution:** Universitas Tarumanagara, Jakarta (2026)
 
@@ -359,23 +359,20 @@ php artisan serve
 ```
 
 ### Option 2: Docker Setup
-The repository includes a containerized stack bundling PHP 8.4-FPM, internal Nginx, and a MySQL 8.0 container pre-configured with the canonical 18-table schema:
+The repository includes a containerized stack bundling the `app` service (Ubuntu 24.04 + PHP 8.4-FPM + internal Nginx on port `8000:80`) and the `mysql` service (MySQL 8.0 on port `3306:3306`, pre-initialized with the canonical 18-table schema from `database/sql/bong_garment_18_tables.sql`).
+
+On startup, `docker/entrypoint.sh` automatically initializes writable `storage` and `bootstrap/cache` directories with `www-data` permissions, copies `.env.example` to `.env` if missing, installs Composer dependencies when `vendor/` is empty, generates `APP_KEY` if unset, and runs `php artisan optimize:clear`:
 
 ```bash
-# 1. Prepare environment & boot containers
-cp .env.example .env
+# 1. Build and boot containers (entrypoint handles .env, APP_KEY, vendor, and permissions)
 docker compose up -d --build
 
-# 2. Install dependencies & initialize encryption key
-docker compose exec app composer install --no-dev --optimize-autoloader
-docker compose exec app php artisan key:generate --force
-
-# 3. Seed production admin account (MySQL boots with all 18 tables automatically)
+# 2. Seed initial lookup data & default accounts (choose clean production OR full 18-table sample data)
 docker compose exec app php artisan db:seed --class=Database\\Seeders\\ProductionBootstrapSeeder --force
+# OR for the full 18-table sample dataset:
+# docker compose exec app php artisan db:seed --class=Database\\Seeders\\BongGarment18TableSeeder --force
 
-# 4. Set storage permissions & build production caches
-docker compose exec app chown -R www-data:www-data storage bootstrap/cache
-docker compose exec app chmod -R 775 storage bootstrap/cache
+# 3. Optional: build production Laravel caches
 docker compose exec app php artisan config:cache
 docker compose exec app php artisan route:cache
 docker compose exec app php artisan view:cache
@@ -465,9 +462,12 @@ In your OpenResty/Nginx server block, point `root` to `/path/to/project/public`,
 | `GET` | `/penerimaan` | `PenerimaanBahanController@index` | Admin, Gudang | Fabric receipt notes, color batches, and individual roll inventory |
 | `POST` | `/penerimaan` | `PenerimaanBahanController@store` | Admin, Gudang | Record supplier delivery note, color groups, and roll metrics |
 | `POST` | `/penerimaan/{id}/update` | `PenerimaanBahanController@update` | Admin, Gudang | Edit receipt note details (supplier, delivery date, fabric name) |
+| `POST` | `/penerimaan/{id}/delete` | `PenerimaanBahanController@destroy` | Admin, Gudang | Delete receipt note and cascade-delete its color lots and rolls (guarded against active orders/cuts) |
 | `POST` | `/penerimaan/warna/{id}/update` | `PenerimaanBahanController@updateWarna` | Admin, Gudang | Edit color lot name, code, or unit (`Kg`/`Yard`/`Meter`) |
+| `POST` | `/penerimaan/warna/{id}/delete` | `PenerimaanBahanController@destroyWarna` | Admin, Gudang | Delete color lot and its rolls (guarded against active cutting series) |
 | `POST` | `/penerimaan/warna/{id}/add-roll` | `PenerimaanBahanController@addRollToWarna` | Admin, Gudang | Add new physical rolls to an existing color lot |
 | `POST` | `/penerimaan/roll/{id}/update` | `PenerimaanBahanController@updateRoll` | Admin, Gudang | Edit roll initial/remaining size, unit, or status (`Tersedia`/`Dipotong`/`Habis`) |
+| `POST` | `/penerimaan/roll/{id}/delete` | `PenerimaanBahanController@destroyRoll` | Admin, Gudang | Delete physical roll and recalculate parent color lot totals |
 | **Master Lookups (Operational Direct Access)** | | | | |
 | `POST` | `/supplier` | `PenerimaanBahanController@storeSupplier` | Admin, Gudang, Pemotong | Register new fabric or trims supplier directly from input forms |
 | `POST` | `/supplier/{id}/update` | `PengaturanController@updateSupplier` | Admin, Gudang, Pemotong | Edit supplier business name, contact info, and address |
@@ -486,7 +486,7 @@ In your OpenResty/Nginx server block, point `root` to `/path/to/project/public`,
 | `GET` | `/qc` | `QcController@index` | Admin, QC | Multi-stage inspection queue (`Prototipe`, `Potong`, `Jahit Akhir`) |
 | `POST` | `/qc` | `QcController@store` | Admin, QC | Record QC inspection batch (passed count, defects, rework PIC) |
 | `POST` | `/qc/{id}/update` | `QcController@update` | Admin, QC | Edit QC log quantities, defect type, and status |
-| `POST` | `/qc/{id}/complete-rework` | `QcController@completeRework` | Admin, QC | Selesaikan rework dengan timestamp penyelesaian aktual |
+| `POST` | `/qc/{id}/complete-rework` | `QcController@completeRework` | Admin, QC | Mark rework as completed with actual completion timestamp |
 | **Stok Barang Jadi & Riwayat Transaksi Mitra** | | | | |
 | `GET` | `/stok` | `StokBarangJadiController@index` | Admin, Gudang, Pemilik | Monitor perpetual finished stock & immutable transaction history |
 | `POST` | `/stok/adjust` | `StokBarangJadiController@adjustStock` | Admin, Gudang | Process outbound shipment with `nama_mitra` tracking & audit trail |

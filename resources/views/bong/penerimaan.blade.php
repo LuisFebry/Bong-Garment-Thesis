@@ -52,7 +52,7 @@
 
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Nomor Nota / Surat Jalan <span class="text-rose-500">*</span></label>
-          <input type="text" name="no_nota" id="inp-no-nota" placeholder="Contoh: 285/11/26" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="no_nota" id="inp-no-nota" placeholder="285/11/26" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
 
         <div>
@@ -69,22 +69,22 @@
 
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Nama / Jenis Kain <span class="text-rose-500">*</span></label>
-          <input type="text" name="nama_kain" id="inp-nama-kain" placeholder="Contoh: Baby Terry Salur" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="nama_kain" id="inp-nama-kain" placeholder="Baby Terry Salur" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
 
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Lebar / Gramasi</label>
-          <input type="text" name="lebar_gramasi" id="inp-lebar-gramasi" placeholder="Contoh: 185 / 230-240" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="lebar_gramasi" id="inp-lebar-gramasi" placeholder="185 / 230-240" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
 
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Nomor Kendaraan</label>
-          <input type="text" name="no_kendaraan" id="inp-no-kendaraan" placeholder="B 1234 XYZ" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="no_kendaraan" id="inp-no-kendaraan" placeholder="B 9725 PCI" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
 
         <div class="col-span-full md:col-span-1">
           <label class="block text-xs font-semibold text-slate-700 mb-1">Petugas Penerima Gudang</label>
-          <input type="text" name="penerima" id="inp-penerima" placeholder="Contoh: Dedi Kurniawan" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="penerima" id="inp-penerima" placeholder="Luis" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
       </div>
     </div>
@@ -354,7 +354,7 @@
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Nomor Nota / Surat Jalan <span class="text-rose-500">*</span></label>
-          <input type="text" id="edit-nota-no" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+          <input type="text" id="edit-nota-no" placeholder="285/11/26" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Tanggal Nota <span class="text-rose-500">*</span></label>
@@ -369,19 +369,19 @@
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Nama / Jenis Kain <span class="text-rose-500">*</span></label>
-          <input type="text" id="edit-nota-kain" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+          <input type="text" id="edit-nota-kain" placeholder="Baby Terry Salur" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Lebar / Gramasi</label>
-          <input type="text" id="edit-nota-gramasi" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+          <input type="text" id="edit-nota-gramasi" placeholder="185 / 230-240" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Nomor Kendaraan</label>
-          <input type="text" id="edit-nota-kendaraan" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+          <input type="text" id="edit-nota-kendaraan" placeholder="B 9725 PCI" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
         </div>
         <div class="col-span-full">
           <label class="block text-xs font-semibold text-slate-700 mb-1">Petugas Penerima Gudang</label>
-          <input type="text" id="edit-nota-penerima" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+          <input type="text" id="edit-nota-penerima" placeholder="Luis" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
         </div>
       </div>
       <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
@@ -409,11 +409,11 @@
       <input type="hidden" id="edit-warna-id">
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Warna Kain <span class="text-rose-500">*</span></label>
-        <input type="text" id="edit-warna-nama" placeholder="Contoh: Hitam" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+        <input type="text" id="edit-warna-nama" placeholder="Hitam" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Lab / Lot Warna</label>
-        <input type="text" id="edit-warna-kode" placeholder="Contoh: WD2605226" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono uppercase placeholder:normal-case">
+        <input type="text" id="edit-warna-kode" placeholder="WD2605226" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono uppercase placeholder:normal-case">
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Satuan Ukur <span class="text-rose-500">*</span></label>
@@ -529,16 +529,16 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label id="sup-nama-label" class="block text-xs font-semibold text-slate-700 mb-1">Nama Supplier <span class="text-rose-500">*</span></label>
-          <input type="text" id="sup-nama" required placeholder="Contoh: PT Kahatex Tekstil Prima" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" id="sup-nama" required placeholder="PT Vista Indah Sandang" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Kontak / No. Telepon</label>
-          <input type="text" id="sup-kontak" placeholder="Contoh: 021-5551234 / 08123456789" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" id="sup-kontak" placeholder="021-5551234 / 08123456789" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">Alamat Supplier</label>
-        <textarea id="sup-alamat" rows="2" placeholder="Contoh: Jl. Raya Rancaekek KM 23, Bandung" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500"></textarea>
+        <textarea id="sup-alamat" rows="2" placeholder="Jl. Raya Rancaekek KM 23, Bandung" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500"></textarea>
       </div>
       <div class="flex items-center justify-end gap-2 pt-2">
         <button type="button" id="sup-cancel-edit-btn" onclick="resetSupplierForm()" class="hidden px-3 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg">Batal Edit</button>
@@ -1128,12 +1128,12 @@
         <div class="p-4 rounded-xl border border-slate-200 bg-white grid grid-cols-1 md:grid-cols-4 gap-4 items-end" data-cg-id="${cg.id}">
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Warna Kain <span class="text-rose-500">*</span></label>
-            <input type="text" value="${cg.namaWarna || ''}" class="inp-cg-nama w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="Contoh: Hitam" data-cg-id="${cg.id}">
+            <input type="text" value="${cg.namaWarna || ''}" class="inp-cg-nama w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="Hitam" data-cg-id="${cg.id}">
           </div>
 
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Lab / Lot Warna</label>
-            <input type="text" value="${cg.kodeWarna || ''}" class="inp-cg-kode w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono uppercase placeholder:normal-case focus:ring-2 focus:ring-indigo-500" placeholder="Contoh: WD2605226" data-cg-id="${cg.id}">
+            <input type="text" value="${cg.kodeWarna || ''}" class="inp-cg-kode w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono uppercase placeholder:normal-case focus:ring-2 focus:ring-indigo-500" placeholder="WD2605226" data-cg-id="${cg.id}">
           </div>
 
           <div>

@@ -57,7 +57,7 @@
 
         <div id="field-nama-mitra">
           <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Mitra / Klien</label>
-          <input type="text" name="nama_mitra" id="input-nama-mitra" placeholder="Contoh: PT Busana Mandiri" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="nama_mitra" id="input-nama-mitra" placeholder="Toko Busana Jaya" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
 
         <div>
@@ -79,7 +79,7 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Jenis / Keterangan Pesanan <span class="text-rose-500">*</span></label>
-          <input type="text" name="jenis_pesanan" id="inp-jenis-pesanan" placeholder="Misal: Kaos Event Sablon Depan Belakang 200 Pcs" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="jenis_pesanan" id="inp-jenis-pesanan" placeholder="Kaos Baby Terry Salur 200 Pcs" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
 
         <div>
@@ -141,12 +141,12 @@
 
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Pola Unik <span class="text-rose-500">*</span></label>
-            <input type="text" id="new-pola-kode" value="POLA-NEW-0{{ count($pola ?? []) + 1 }}" placeholder="Contoh: POLA-FLN-05" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white font-mono uppercase focus:ring-2 focus:ring-indigo-500">
+            <input type="text" id="new-pola-kode" value="POLA-NEW-0{{ count($pola ?? []) + 1 }}" placeholder="POLA-FLN-05" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white font-mono uppercase focus:ring-2 focus:ring-indigo-500">
           </div>
 
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Master Pola Pakaian <span class="text-rose-500">*</span></label>
-            <input type="text" id="new-pola-nama" placeholder="Contoh: Kemeja Flanel Lengan Panjang" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+            <input type="text" id="new-pola-nama" placeholder="Kemeja Flanel Lengan Panjang" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
           </div>
         </div>
 
@@ -438,7 +438,7 @@
 
         <div id="edit-field-nama-mitra">
           <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Mitra / Klien</label>
-          <input type="text" name="nama_mitra" id="edit-nama-mitra" placeholder="Contoh: PT Busana Mandiri" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="nama_mitra" id="edit-nama-mitra" placeholder="Toko Busana Jaya" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
 
         <div>
@@ -452,7 +452,7 @@
 
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Jenis / Keterangan Pesanan</label>
-          <input type="text" name="jenis_pesanan" id="edit-jenis-pesanan" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="jenis_pesanan" id="edit-jenis-pesanan" placeholder="Kaos Baby Terry Salur 200 Pcs" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
 
         <div class="col-span-full">
@@ -504,7 +504,7 @@
 
         <div class="col-span-full">
           <label class="block text-xs font-semibold text-slate-700 mb-1">Alasan Perubahan Deadline (Opsional)</label>
-          <input type="text" name="alasan_perubahan_deadline" id="edit-alasan-perubahan" placeholder="Contoh: Percepatan jadwal mitra" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="alasan_perubahan_deadline" id="edit-alasan-perubahan" placeholder="Percepatan jadwal mitra" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
       </div>
 
@@ -547,15 +547,15 @@
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Pola Unik <span class="text-rose-500">*</span></label>
-          <input type="text" id="edit-pola-kode" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono uppercase">
+          <input type="text" id="edit-pola-kode" placeholder="POLA-FLN-05" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono uppercase">
         </div>
         <div class="col-span-full">
           <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Master Pola Pakaian <span class="text-rose-500">*</span></label>
-          <input type="text" id="edit-pola-nama" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+          <input type="text" id="edit-pola-nama" placeholder="Kemeja Flanel Lengan Panjang" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Ukuran Utama (S/M/L/XL)</label>
-          <input type="text" id="edit-pola-ukuran" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono font-bold text-indigo-700">
+          <input type="text" id="edit-pola-ukuran" placeholder="L" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono font-bold text-indigo-700">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Lingkar Dada (cm)</label>
@@ -595,7 +595,7 @@
       <div>
         <label id="kat-form-label" class="block text-xs font-semibold text-slate-700 mb-1">Nama Kategori Pola Baru <span class="text-rose-500">*</span></label>
         <div class="flex gap-2">
-          <input type="text" id="kat-nama-input" required maxlength="50" placeholder="Contoh: Jaket & Outerwear, Seragam, Gamis..." class="flex-1 text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" id="kat-nama-input" required maxlength="50" placeholder="Jaket & Outerwear" class="flex-1 text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
           <button type="submit" id="kat-submit-btn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm whitespace-nowrap">+ Tambah</button>
           <button type="button" id="kat-cancel-edit-btn" onclick="resetKategoriForm()" class="hidden px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold rounded-lg">Batal</button>
         </div>
@@ -642,7 +642,7 @@
       <div>
         <label id="sum-form-label" class="block text-xs font-semibold text-slate-700 mb-1">Nama Sumber Inisiasi Baru <span class="text-rose-500">*</span></label>
         <div class="flex gap-2">
-          <input type="text" id="sum-nama-input" required maxlength="50" placeholder="Contoh: Request Mitra, Produk Abadi, Pre-Order..." class="flex-1 text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" id="sum-nama-input" required maxlength="50" placeholder="Request Mitra" class="flex-1 text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
           <button type="submit" id="sum-submit-btn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm whitespace-nowrap">+ Tambah</button>
           <button type="button" id="sum-cancel-edit-btn" onclick="resetSumberForm()" class="hidden px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold rounded-lg">Batal</button>
         </div>

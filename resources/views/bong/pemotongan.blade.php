@@ -148,7 +148,7 @@
 
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Seri Potong <span class="text-rose-500">*</span></label>
-          <input type="text" name="kode_seri" id="inp-kode-seri" placeholder="Contoh: SERI-2026-002" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="kode_seri" id="inp-kode-seri" placeholder="SERI-2026-002" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono focus:ring-2 focus:ring-indigo-500">
         </div>
 
         <div>
@@ -169,7 +169,7 @@
 
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Jenis Variasi Potongan</label>
-          <input type="text" name="jenis_variasi" id="inp-jenis-variasi" placeholder="Misal: Badan Utama + Lengan Pendek + Rib Leher" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="jenis_variasi" id="inp-jenis-variasi" placeholder="Badan Utama + Lengan Pendek + Rib Leher" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
       </div>
     </div>
@@ -393,11 +393,11 @@
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Seri Potong <span class="text-rose-500">*</span></label>
-          <input type="text" id="edit-pm-kode" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
+          <input type="text" id="edit-pm-kode" placeholder="SERI-2026-002" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Jenis Variasi Potongan</label>
-          <input type="text" id="edit-pm-variasi" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+          <input type="text" id="edit-pm-variasi" placeholder="Badan Utama + Lengan Pendek + Rib Leher" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Waktu Potong (<code class="font-mono">tgl_potong</code>) <span class="text-rose-500">*</span></label>

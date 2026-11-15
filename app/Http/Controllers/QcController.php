@@ -108,7 +108,7 @@ class QcController extends Controller
                 if ($order) {
                     $idPola = $order->id_pola;
                     $idSpec = $validated['id_spesifikasi'] ?? SpesifikasiUkuran::where('id_pola', $idPola)->value('id_spesifikasi');
-                    $warna = !empty($validated['nama_warna']) ? $validated['nama_warna'] : 'Hitam Reaktif';
+                    $warna = !empty($validated['nama_warna']) ? $validated['nama_warna'] : 'Hitam';
 
                     if ($idSpec) {
                         $stock = StokBarangJadi::firstOrNew([
@@ -263,7 +263,7 @@ class QcController extends Controller
                             StokBarangJadi::create([
                                 'id_pola' => $order->id_pola,
                                 'id_spesifikasi' => $idSpec,
-                                'nama_warna' => 'Hitam Reaktif',
+                                'nama_warna' => 'Hitam',
                                 'jumlah_stok_pcs' => $deltaStok,
                                 'tgl_update_terakhir' => now(),
                             ]);

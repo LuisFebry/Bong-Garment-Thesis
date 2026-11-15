@@ -34,7 +34,7 @@
             <option value="" disabled selected>-- Pilih Pesanan Produksi --</option>
             @foreach($orders ?? [] as $ord)
               @php
-                $defaultWarna = $ord->penerimaanBahan?->detailBahanWarna?->first()?->nama_warna ?? 'Hitam Reaktif';
+                $defaultWarna = $ord->penerimaanBahan?->detailBahanWarna?->first()?->nama_warna ?? 'Hitam';
               @endphp
               <option value="{{ $ord->id_pesanan }}" data-pola-id="{{ $ord->id_pola }}" data-pola-nama="{{ $ord->pola->nama_pola ?? '-' }}" data-warna="{{ $defaultWarna }}">
                 Pesanan #{{ $ord->id_pesanan }} - {{ $ord->pola->nama_pola ?? $ord->jenis_pesanan }} ({{ $ord->nama_mitra ?? 'Internal Produk Abadi' }} · Status: {{ $ord->status_pesanan }})
@@ -139,7 +139,7 @@
 
         <div class="col-span-full">
           <label class="block text-xs font-semibold text-slate-700 mb-1">Catatan / Keterangan Inspeksi (<code class="font-mono">catatan_qc</code>)</label>
-          <input type="text" name="catatan_qc" placeholder="Detail temuan cacat, instruksi perbaikan untuk PIC, atau nomor klaim retur bahan" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="catatan_qc" placeholder="Jahitan samping kurang rapi, perlu perbaikan oleh PIC" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
       </div>
     </div>
@@ -177,7 +177,7 @@
 
         <div>
           <label class="block text-xs font-semibold text-emerald-900 mb-1">Variasi Warna Barang Jadi (<code class="font-mono">nama_warna</code>)</label>
-          <input type="text" name="nama_warna" id="inp-qc-warna" value="Hitam Reaktif" placeholder="Contoh: Hitam Reaktif" class="w-full text-xs p-2.5 border border-emerald-300 rounded-lg bg-white font-semibold focus:ring-2 focus:ring-emerald-500">
+          <input type="text" name="nama_warna" id="inp-qc-warna" value="Hitam" placeholder="Hitam" class="w-full text-xs p-2.5 border border-emerald-300 rounded-lg bg-white font-semibold focus:ring-2 focus:ring-emerald-500">
         </div>
       </div>
 
@@ -376,7 +376,7 @@
         </div>
         <div class="col-span-full">
           <label class="block text-xs font-semibold text-slate-700 mb-1">Catatan / Disposisi PIC (<code class="font-mono">catatan_qc</code>)</label>
-          <input type="text" id="edit-qc-catatan" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+          <input type="text" id="edit-qc-catatan" placeholder="Jahitan samping kurang rapi, perlu perbaikan oleh PIC" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
         </div>
       </div>
 
@@ -420,7 +420,7 @@
   foreach (($orders ?? []) as $o) {
     $ordersSpecsMap[$o->id_pesanan] = [
       'nama_pola' => $o->pola->nama_pola ?? '-',
-      'warna' => $o->penerimaanBahan?->detailBahanWarna?->first()?->nama_warna ?? 'Hitam Reaktif',
+      'warna' => $o->penerimaanBahan?->detailBahanWarna?->first()?->nama_warna ?? 'Hitam',
       'specs' => ($o->pola->spesifikasiUkuran ?? collect())->map(function($s) {
         return [
           'id_spesifikasi' => $s->id_spesifikasi,
@@ -489,7 +489,7 @@
     const tahap = document.getElementById('sel-tahap-qc')?.value;
     const lolos = parseInt(document.getElementById('inp-qc-lolos')?.value, 10) || 0;
     const badge = document.getElementById('badge-indikator-stok');
-    const warna = document.getElementById('inp-qc-warna')?.value || 'Hitam Reaktif';
+    const warna = document.getElementById('inp-qc-warna')?.value || 'Hitam';
     const specSel = document.getElementById('sel-qc-spesifikasi');
     const specText = specSel?.options[specSel.selectedIndex]?.text || 'Ukuran Default';
 
