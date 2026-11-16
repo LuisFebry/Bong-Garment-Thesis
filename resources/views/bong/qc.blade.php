@@ -27,7 +27,7 @@
         </div>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
         <div class="lg:col-span-2">
           <label class="block text-xs font-semibold text-slate-700 mb-1">Pemilihan Pesanan Target (<code class="font-mono">id_pesanan</code>) <span class="text-rose-500">*</span></label>
           <select name="id_pesanan" id="sel-qc-pesanan" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
@@ -46,7 +46,7 @@
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Tanggal & Waktu Pemeriksaan (<code class="font-mono">tgl_pemeriksaan</code>) <span class="text-rose-500">*</span></label>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Tanggal & Waktu Pemeriksaan <span class="text-rose-500">*</span></label>
           <input type="datetime-local" name="tgl_pemeriksaan" id="inp-tgl-pemeriksaan" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono focus:ring-2 focus:ring-indigo-500">
         </div>
 
@@ -102,7 +102,7 @@
         </div>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Jenis Cacat</label>
           <select name="jenis_cacat" id="sel-jenis-cacat" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white">
@@ -135,7 +135,7 @@
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Target Tenggat Perbaikan (<code class="font-mono">tgl_target_perbaikan</code>)</label>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Target Tenggat Perbaikan</label>
           <input type="date" name="tgl_target_perbaikan" id="inp-target-perbaikan" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono focus:ring-2 focus:ring-indigo-500">
         </div>
 
