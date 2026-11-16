@@ -14,14 +14,28 @@ use App\Models\User;
 
 class QcController extends Controller
 {
+    private function isProdukAbadi(?Pesanan $order): bool
+    {
+        if (!$order) {
+            return false;
+        }
+        $order->loadMissing('sumberInisiasi');
+        $sumberName = $order->sumberInisiasi->nama_sumber ?? '';
+        if ($sumberName !== '') {
+            return stripos($sumberName, 'Produk Abadi') !== false;
+        }
+        return (int) $order->id_sumber === 2;
+    }
+
     public function index(Request $request)
     {
-        $qcRecords = Qc::with(['pesanan.pola', 'userQc'])
+        $qcRecords = Qc::with(['pesanan.pola', 'pesanan.sumberInisiasi', 'userQc'])
             ->orderBy('tgl_pemeriksaan', 'desc')
             ->get();
 
         $orders = Pesanan::with([
             'pola.spesifikasiUkuran',
+            'sumberInisiasi',
             'penerimaanBahan.detailBahanWarna',
         ])->orderBy('id_pesanan', 'desc')->get();
 
@@ -101,49 +115,47 @@ class QcController extends Controller
             ]);
 
             // Perpetual Inventory Integration:
-            // When Jahit Akhir has passed units (jumlah_lolos > 0), increment finished goods inventory
-            $order = Pesanan::find($validated['id_pesanan']);
+            // Only Produk Abadi orders automatically add passed Jahit Akhir units to Stok_Barang_Jadi
+            $order = Pesanan::with('sumberInisiasi')->find($validated['id_pesanan']);
             $allocatedStockInfo = null;
-            if ($validated['tahap_qc'] === 'Jahit Akhir' && $validated['jumlah_lolos'] > 0) {
-                if ($order) {
-                    $idPola = $order->id_pola;
-                    $idSpec = $validated['id_spesifikasi'] ?? SpesifikasiUkuran::where('id_pola', $idPola)->value('id_spesifikasi');
-                    $warna = !empty($validated['nama_warna']) ? $validated['nama_warna'] : 'Hitam';
+            if ($this->isProdukAbadi($order) && $validated['tahap_qc'] === 'Jahit Akhir' && $validated['jumlah_lolos'] > 0) {
+                $idPola = $order->id_pola;
+                $idSpec = $validated['id_spesifikasi'] ?? SpesifikasiUkuran::where('id_pola', $idPola)->value('id_spesifikasi');
+                $warna = !empty($validated['nama_warna']) ? $validated['nama_warna'] : 'Hitam';
 
-                    if ($idSpec) {
-                        $stock = StokBarangJadi::firstOrNew([
+                if ($idSpec) {
+                    $stock = StokBarangJadi::firstOrNew([
+                        'id_pola' => $idPola,
+                        'id_spesifikasi' => $idSpec,
+                        'nama_warna' => $warna,
+                    ]);
+
+                    $stokSebelum = (int) ($stock->jumlah_stok_pcs ?? 0);
+                    $stokSesudah = $stokSebelum + (int) $validated['jumlah_lolos'];
+                    $stock->jumlah_stok_pcs = $stokSesudah;
+                    $stock->tgl_update_terakhir = now();
+                    $stock->save();
+
+                    if (Schema::hasTable('Riwayat_Stok_Barang_Jadi')) {
+                        RiwayatStokBarangJadi::create([
+                            'id_stok' => $stock->id_stok,
                             'id_pola' => $idPola,
                             'id_spesifikasi' => $idSpec,
                             'nama_warna' => $warna,
+                            'jenis_transaksi' => 'MASUK',
+                            'jumlah_pcs' => (int) $validated['jumlah_lolos'],
+                            'stok_sebelum' => $stokSebelum,
+                            'stok_sesudah' => $stokSesudah,
+                            'kategori_alasan' => 'Lolos QC Jahit Akhir (Pesanan #' . $order->id_pesanan . ')',
+                            'nama_mitra' => $order->nama_mitra ?: null,
+                            'keterangan' => 'Masuk otomatis dari hasil inspeksi QC #' . $qc->id_qc,
+                            'id_user' => $validated['id_user_qc'],
+                            'tgl_transaksi' => now(),
                         ]);
-
-                        $stokSebelum = (int) ($stock->jumlah_stok_pcs ?? 0);
-                        $stokSesudah = $stokSebelum + (int) $validated['jumlah_lolos'];
-                        $stock->jumlah_stok_pcs = $stokSesudah;
-                        $stock->tgl_update_terakhir = now();
-                        $stock->save();
-
-                        if (Schema::hasTable('Riwayat_Stok_Barang_Jadi')) {
-                            RiwayatStokBarangJadi::create([
-                                'id_stok' => $stock->id_stok,
-                                'id_pola' => $idPola,
-                                'id_spesifikasi' => $idSpec,
-                                'nama_warna' => $warna,
-                                'jenis_transaksi' => 'MASUK',
-                                'jumlah_pcs' => (int) $validated['jumlah_lolos'],
-                                'stok_sebelum' => $stokSebelum,
-                                'stok_sesudah' => $stokSesudah,
-                                'kategori_alasan' => 'Lolos QC Jahit Akhir (Pesanan #' . $order->id_pesanan . ')',
-                                'nama_mitra' => $order->nama_mitra ?: null,
-                                'keterangan' => 'Masuk otomatis dari hasil inspeksi QC #' . $qc->id_qc,
-                                'id_user' => $validated['id_user_qc'],
-                                'tgl_transaksi' => now(),
-                            ]);
-                        }
-
-                        $specModel = SpesifikasiUkuran::find($idSpec);
-                        $allocatedStockInfo = "+{$validated['jumlah_lolos']} Pcs ke Stok_Barang_Jadi (Ukuran " . ($specModel->nama_ukuran ?? 'S/M/L/XL') . ", Warna {$warna})";
                     }
+
+                    $specModel = SpesifikasiUkuran::find($idSpec);
+                    $allocatedStockInfo = "+{$validated['jumlah_lolos']} Pcs ke Stok_Barang_Jadi (Ukuran " . ($specModel->nama_ukuran ?? 'All') . ", Warna {$warna})";
                 }
             }
 
@@ -224,9 +236,12 @@ class QcController extends Controller
             ], 422);
         }
 
-        return DB::transaction(function () use ($qc, $validated) {
-            $oldLolosInStok = ($qc->tahap_qc === 'Jahit Akhir') ? (int) $qc->jumlah_lolos : 0;
-            $newLolosInStok = ($validated['tahap_qc'] === 'Jahit Akhir') ? (int) $validated['jumlah_lolos'] : 0;
+        return DB::transaction(function () use ($qc, $validated, $diperiksa, $lolos, $cacat) {
+            $oldOrder = Pesanan::with('sumberInisiasi')->find($qc->id_pesanan);
+            $newOrder = Pesanan::with('sumberInisiasi')->find($validated['id_pesanan']);
+
+            $oldLolosInStok = ($this->isProdukAbadi($oldOrder) && $qc->tahap_qc === 'Jahit Akhir') ? (int) $qc->jumlah_lolos : 0;
+            $newLolosInStok = ($this->isProdukAbadi($newOrder) && $validated['tahap_qc'] === 'Jahit Akhir') ? (int) $validated['jumlah_lolos'] : 0;
             $deltaStok = $newLolosInStok - $oldLolosInStok;
 
             $tglPemeriksaan = date('Y-m-d H:i:s', strtotime($validated['tgl_pemeriksaan']));
@@ -249,26 +264,30 @@ class QcController extends Controller
                 'tgl_selesai_perbaikan' => $tglSelesai,
             ]);
 
-            if ($deltaStok !== 0) {
-                $order = Pesanan::find($validated['id_pesanan']);
-                if ($order) {
-                    $stock = StokBarangJadi::where('id_pola', $order->id_pola)->first();
-                    if ($stock) {
-                        $stock->jumlah_stok_pcs = max(0, (int) $stock->jumlah_stok_pcs + $deltaStok);
-                        $stock->tgl_update_terakhir = now();
-                        $stock->save();
-                    } elseif ($deltaStok > 0) {
-                        $idSpec = SpesifikasiUkuran::where('id_pola', $order->id_pola)->value('id_spesifikasi');
-                        if ($idSpec) {
-                            StokBarangJadi::create([
-                                'id_pola' => $order->id_pola,
-                                'id_spesifikasi' => $idSpec,
-                                'nama_warna' => 'Hitam',
-                                'jumlah_stok_pcs' => $deltaStok,
-                                'tgl_update_terakhir' => now(),
-                            ]);
-                        }
+            if ($deltaStok !== 0 && $newOrder && $this->isProdukAbadi($newOrder)) {
+                $stock = StokBarangJadi::where('id_pola', $newOrder->id_pola)->first();
+                if ($stock) {
+                    $stock->jumlah_stok_pcs = max(0, (int) $stock->jumlah_stok_pcs + $deltaStok);
+                    $stock->tgl_update_terakhir = now();
+                    $stock->save();
+                } elseif ($deltaStok > 0) {
+                    $idSpec = SpesifikasiUkuran::where('id_pola', $newOrder->id_pola)->value('id_spesifikasi');
+                    if ($idSpec) {
+                        StokBarangJadi::create([
+                            'id_pola' => $newOrder->id_pola,
+                            'id_spesifikasi' => $idSpec,
+                            'nama_warna' => 'Hitam',
+                            'jumlah_stok_pcs' => $deltaStok,
+                            'tgl_update_terakhir' => now(),
+                        ]);
                     }
+                }
+            } elseif ($oldLolosInStok > 0 && $newLolosInStok === 0 && $oldOrder) {
+                $stock = StokBarangJadi::where('id_pola', $oldOrder->id_pola)->first();
+                if ($stock) {
+                    $stock->jumlah_stok_pcs = max(0, (int) $stock->jumlah_stok_pcs - $oldLolosInStok);
+                    $stock->tgl_update_terakhir = now();
+                    $stock->save();
                 }
             }
 
@@ -278,5 +297,47 @@ class QcController extends Controller
                 'data' => $qc->fresh(['pesanan.pola', 'userQc']),
             ]);
         });
+    }
+
+    public function destroy($id)
+    {
+        $qc = Qc::with('pesanan.sumberInisiasi')->findOrFail($id);
+
+        DB::transaction(function () use ($qc) {
+            if ($qc->tahap_qc === 'Jahit Akhir' && (int) $qc->jumlah_lolos > 0) {
+                $riwayatAuto = Schema::hasTable('Riwayat_Stok_Barang_Jadi')
+                    ? RiwayatStokBarangJadi::where('keterangan', 'Masuk otomatis dari hasil inspeksi QC #' . $qc->id_qc)->first()
+                    : null;
+
+                if ($riwayatAuto) {
+                    $stock = StokBarangJadi::find($riwayatAuto->id_stok)
+                        ?? StokBarangJadi::where([
+                            'id_pola' => $riwayatAuto->id_pola,
+                            'id_spesifikasi' => $riwayatAuto->id_spesifikasi,
+                            'nama_warna' => $riwayatAuto->nama_warna,
+                        ])->first();
+                    if ($stock) {
+                        $stock->jumlah_stok_pcs = max(0, (int) $stock->jumlah_stok_pcs - (int) $riwayatAuto->jumlah_pcs);
+                        $stock->tgl_update_terakhir = now();
+                        $stock->save();
+                    }
+                    $riwayatAuto->delete();
+                } elseif ($this->isProdukAbadi($qc->pesanan) && $qc->pesanan) {
+                    $stock = StokBarangJadi::where('id_pola', $qc->pesanan->id_pola)->first();
+                    if ($stock) {
+                        $stock->jumlah_stok_pcs = max(0, (int) $stock->jumlah_stok_pcs - (int) $qc->jumlah_lolos);
+                        $stock->tgl_update_terakhir = now();
+                        $stock->save();
+                    }
+                }
+            }
+
+            $qc->delete();
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => "Catatan QC #{$id} berhasil dihapus.",
+        ]);
     }
 }

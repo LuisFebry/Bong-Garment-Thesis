@@ -35,9 +35,11 @@
             @foreach($orders ?? [] as $ord)
               @php
                 $defaultWarna = $ord->penerimaanBahan?->detailBahanWarna?->first()?->nama_warna ?? 'Hitam';
+                $ordSumberName = $ord->sumberInisiasi->nama_sumber ?? '';
+                $ordIsAbadi = $ordSumberName !== '' ? (stripos($ordSumberName, 'Produk Abadi') !== false) : ((int) $ord->id_sumber === 2);
               @endphp
-              <option value="{{ $ord->id_pesanan }}" data-pola-id="{{ $ord->id_pola }}" data-pola-nama="{{ $ord->pola->nama_pola ?? '-' }}" data-warna="{{ $defaultWarna }}">
-                Pesanan #{{ $ord->id_pesanan }} - {{ $ord->pola->nama_pola ?? $ord->jenis_pesanan }} ({{ $ord->nama_mitra ?? 'Internal Produk Abadi' }} · Status: {{ $ord->status_pesanan }})
+              <option value="{{ $ord->id_pesanan }}" data-pola-id="{{ $ord->id_pola }}" data-pola-nama="{{ $ord->pola->nama_pola ?? '-' }}" data-warna="{{ $defaultWarna }}" data-produk-abadi="{{ $ordIsAbadi ? '1' : '0' }}">
+                Pesanan #{{ $ord->id_pesanan }} - {{ $ord->pola->nama_pola ?? $ord->jenis_pesanan }} ({{ $ord->nama_mitra ?? ($ordSumberName ?: 'Internal Produk Abadi') }} · {{ $ordSumberName ?: 'Umum' }} · Status: {{ $ord->status_pesanan }})
               </option>
             @endforeach
           </select>
@@ -67,7 +69,7 @@
           <select name="tahap_qc" id="sel-tahap-qc" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white font-semibold">
             <option value="Prototipe">Prototipe (Sampel Awal)</option>
             <option value="Potong">Potong (Panel Kain)</option>
-            <option value="Jahit Akhir">Jahit Akhir (+ Tambah Stok Barang Jadi)</option>
+            <option value="Jahit Akhir">Jahit Akhir (+ Stok Gudang untuk Produk Abadi)</option>
           </select>
         </div>
 
@@ -144,8 +146,8 @@
       </div>
     </div>
 
-    <!-- Section 3: Integrasi ke Stok_Barang_Jadi -->
-    <div id="box-integrasi-stok" class="bg-emerald-50/70 rounded-xl border-2 border-emerald-200 shadow-sm p-6 transition-all">
+    <!-- Section 3: Integrasi ke Stok_Barang_Jadi (Khusus Produk Abadi) -->
+    <div id="box-integrasi-stok" class="hidden bg-emerald-50/70 rounded-xl border-2 border-emerald-200 shadow-sm p-6 transition-all">
       <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-emerald-200/70 mb-4">
         <div class="flex items-center gap-3">
           <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-sm">
@@ -153,7 +155,7 @@
           </div>
           <div>
             <h3 class="font-bold text-emerald-950 text-sm">3. Integrasi Otomatis ke Gudang Barang Jadi (<code class="font-mono text-emerald-700">Stok_Barang_Jadi</code>)</h3>
-            <p class="text-[11px] text-emerald-700">Saat <b>Tahap QC = Jahit Akhir</b>, jumlah unit yang <b>Lolos QC</b> otomatis ditambahkan ke stok gudang sesuai ukuran & warna</p>
+            <p class="text-[11px] text-emerald-700">Khusus pesanan <b>Produk Abadi</b>: saat <b>Tahap QC = Jahit Akhir</b>, unit <b>Lolos QC</b> otomatis masuk ke stok gudang</p>
           </div>
         </div>
 
@@ -169,7 +171,7 @@
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-emerald-900 mb-1">Alokasi Spesifikasi Ukuran (S/M/L/XL) (<code class="font-mono">id_spesifikasi</code>)</label>
+          <label class="block text-xs font-semibold text-emerald-900 mb-1">Alokasi Spesifikasi Ukuran (<code class="font-mono">id_spesifikasi</code>)</label>
           <select name="id_spesifikasi" id="sel-qc-spesifikasi" class="w-full text-xs p-2.5 border border-emerald-300 rounded-lg bg-white font-semibold focus:ring-2 focus:ring-emerald-500">
             <option value="">-- Otomatis Ukuran Default Pola --</option>
           </select>
@@ -180,13 +182,13 @@
           <input type="text" name="nama_warna" id="inp-qc-warna" value="Hitam" placeholder="Hitam" class="w-full text-xs p-2.5 border border-emerald-300 rounded-lg bg-white font-semibold focus:ring-2 focus:ring-emerald-500">
         </div>
       </div>
+    </div>
 
-      <div class="flex justify-end gap-2 pt-5 mt-4 border-t border-emerald-200/70">
-        <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-sm transition-colors inline-flex items-center gap-1.5">
-          <i data-lucide="check-circle-2" class="w-4 h-4"></i>
-          Simpan Hasil Inspeksi QC
-        </button>
-      </div>
+    <div class="flex justify-end gap-2">
+      <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-sm transition-colors inline-flex items-center gap-1.5">
+        <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+        Simpan Hasil Inspeksi QC
+      </button>
     </div>
   </form>
 
@@ -221,10 +223,14 @@
               <span class="text-[10px] text-slate-400 block">{{ $qc->pesanan->pola->nama_pola ?? '-' }}</span>
             </td>
             <td class="py-3">
+              @php
+                $rowSumberName = $qc->pesanan->sumberInisiasi->nama_sumber ?? '';
+                $rowIsProdukAbadi = $qc->pesanan && ($rowSumberName !== '' ? (stripos($rowSumberName, 'Produk Abadi') !== false) : ((int) $qc->pesanan->id_sumber === 2));
+              @endphp
               <span class="px-2 py-0.5 rounded font-mono font-semibold text-[10px] {{ $qc->tahap_qc === 'Jahit Akhir' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-700' }}">
                 {{ $qc->tahap_qc }}
               </span>
-              @if($qc->tahap_qc === 'Jahit Akhir' && $qc->jumlah_lolos > 0)
+              @if($rowIsProdukAbadi && $qc->tahap_qc === 'Jahit Akhir' && $qc->jumlah_lolos > 0)
                 <span class="block text-[10px] text-emerald-600 font-semibold mt-0.5">+{{ $qc->jumlah_lolos }} Pcs ke Stok Jadi</span>
               @endif
             </td>
@@ -275,6 +281,12 @@
                   ]) }})"
                   class="px-2.5 py-1.5 text-[11px] bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg font-semibold inline-flex items-center gap-1 transition-colors">
                   <i data-lucide="edit-3" class="w-3 h-3"></i> Edit
+                </button>
+                <button type="button"
+                  onclick="deleteQc({{ $qc->id_qc }})"
+                  class="px-2.5 py-1.5 text-[11px] bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 rounded-lg font-semibold inline-flex items-center gap-1 transition-colors"
+                  title="Hapus Catatan QC">
+                  <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
                 </button>
               </div>
             </td>
@@ -418,13 +430,17 @@
 @php
   $ordersSpecsMap = [];
   foreach (($orders ?? []) as $o) {
+    $sumberName = $o->sumberInisiasi->nama_sumber ?? '';
+    $isProdukAbadi = $sumberName !== '' ? (stripos($sumberName, 'Produk Abadi') !== false) : ((int) $o->id_sumber === 2);
     $ordersSpecsMap[$o->id_pesanan] = [
       'nama_pola' => $o->pola->nama_pola ?? '-',
+      'nama_sumber' => $sumberName,
+      'is_produk_abadi' => $isProdukAbadi,
       'warna' => $o->penerimaanBahan?->detailBahanWarna?->first()?->nama_warna ?? 'Hitam',
       'specs' => ($o->pola->spesifikasiUkuran ?? collect())->map(function($s) {
         return [
           'id_spesifikasi' => $s->id_spesifikasi,
-          'ukuran' => $s->ukuran,
+          'ukuran' => $s->nama_ukuran ?? $s->ukuran,
         ];
       })->values(),
     ];
@@ -486,6 +502,19 @@
   });
 
   function updateStokIndicator() {
+    const idPesanan = document.getElementById('sel-qc-pesanan')?.value;
+    const info = ordersSpecsMap[idPesanan];
+    const boxIntegrasi = document.getElementById('box-integrasi-stok');
+    const isProdukAbadi = Boolean(info && info.is_produk_abadi);
+
+    if (boxIntegrasi) {
+      boxIntegrasi.classList.toggle('hidden', !isProdukAbadi);
+    }
+
+    if (!isProdukAbadi) {
+      return;
+    }
+
     const tahap = document.getElementById('sel-tahap-qc')?.value;
     const lolos = parseInt(document.getElementById('inp-qc-lolos')?.value, 10) || 0;
     const badge = document.getElementById('badge-indikator-stok');
@@ -577,9 +606,12 @@
     e.preventDefault();
     const form = e.target;
     const formData = new FormData(form);
+    const idPesanan = Number(formData.get('id_pesanan'));
+    const info = ordersSpecsMap[idPesanan];
+    const isProdukAbadi = Boolean(info && info.is_produk_abadi);
 
     const payload = {
-      id_pesanan: Number(formData.get('id_pesanan')),
+      id_pesanan: idPesanan,
       id_user_qc: Number(formData.get('id_user_qc')),
       tahap_qc: formData.get('tahap_qc'),
       tgl_pemeriksaan: formData.get('tgl_pemeriksaan'),
@@ -591,8 +623,8 @@
       pic_rework: formData.get('pic_rework') || null,
       tgl_target_perbaikan: formData.get('tgl_target_perbaikan') || null,
       catatan_qc: formData.get('catatan_qc') || null,
-      id_spesifikasi: formData.get('id_spesifikasi') ? Number(formData.get('id_spesifikasi')) : null,
-      nama_warna: formData.get('nama_warna') || null
+      id_spesifikasi: isProdukAbadi && formData.get('id_spesifikasi') ? Number(formData.get('id_spesifikasi')) : null,
+      nama_warna: isProdukAbadi ? (formData.get('nama_warna') || null) : null
     };
 
     if (!payload.id_pesanan) {
@@ -717,6 +749,33 @@
       alert('Terjadi kesalahan saat menyimpan perubahan QC.');
     });
   });
+
+  function deleteQc(id) {
+    if (!confirm(`Hapus catatan inspeksi QC #${id}? Jika sebelumnya menambah Stok Barang Jadi (Produk Abadi), stok tersebut juga akan dikurangi kembali.`)) return;
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+    fetch(`/qc/${id}/delete`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': token
+      }
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        alert(data.message || 'Catatan QC berhasil dihapus.');
+        window.location.reload();
+      } else {
+        alert('Gagal menghapus catatan QC: ' + (data.message || 'Terjadi kesalahan'));
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Terjadi kesalahan saat menghapus catatan QC.');
+    });
+  }
 </script>
 @endpush
 @endsection

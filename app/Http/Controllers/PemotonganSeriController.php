@@ -298,9 +298,17 @@ class PemotonganSeriController extends Controller
                 if ($oldRollId && $newRollId && $oldRollId != $newRollId) {
                     $oldRoll = DetailRollBahan::where('id_roll', $oldRollId)->lockForUpdate()->first();
                     if ($oldRoll) {
-                        $restored = min((float) $oldRoll->ukuran_awal, (float) $oldRoll->ukuran_sisa + $oldKain);
-                        $oldRoll->ukuran_sisa = $restored;
-                        $oldRoll->status_roll = ($restored >= (float) $oldRoll->ukuran_awal - 0.01) ? 'Tersedia' : 'Dipotong';
+                        $otherOldCuts = $gelaran
+                            ? DetailGelaranKain::where('id_roll', $oldRollId)->where('id_gelar', '!=', $gelaran->id_gelar)->exists()
+                            : DetailGelaranKain::where('id_roll', $oldRollId)->exists();
+                        if (!$otherOldCuts) {
+                            $oldRoll->ukuran_sisa = (float) $oldRoll->ukuran_awal;
+                            $oldRoll->status_roll = 'Tersedia';
+                        } else {
+                            $restored = min((float) $oldRoll->ukuran_awal, (float) $oldRoll->ukuran_sisa + $oldKain);
+                            $oldRoll->ukuran_sisa = $restored;
+                            $oldRoll->status_roll = ($restored >= (float) $oldRoll->ukuran_awal - 0.01) ? 'Tersedia' : 'Dipotong';
+                        }
                         $oldRoll->save();
                     }
                     $newRoll = DetailRollBahan::where('id_roll', $newRollId)->lockForUpdate()->first();
@@ -319,13 +327,20 @@ class PemotonganSeriController extends Controller
                 } elseif ($newRollId) {
                     $roll = DetailRollBahan::where('id_roll', $newRollId)->lockForUpdate()->first();
                     if ($roll) {
+                        $wasHabis = $roll->status_roll === 'Habis';
                         $diff = $newKain - $oldKain;
                         $adjustedSisa = max(0.0, min((float) $roll->ukuran_awal, (float) $roll->ukuran_sisa - $diff));
                         $statusReq = $validated['status_roll_baru'] ?? $roll->status_roll;
                         if ($statusReq === 'Habis') {
                             $roll->ukuran_sisa = 0.0;
                             $roll->status_roll = 'Habis';
+                        } elseif ($statusReq === 'Tersedia') {
+                            $roll->ukuran_sisa = (float) $roll->ukuran_awal;
+                            $roll->status_roll = 'Tersedia';
                         } else {
+                            if ($wasHabis && (float) $roll->ukuran_sisa <= 0.05) {
+                                $adjustedSisa = max(0.0, (float) $roll->ukuran_awal - $newKain);
+                            }
                             $roll->ukuran_sisa = $adjustedSisa;
                             $roll->status_roll = $statusReq;
                         }
@@ -344,5 +359,61 @@ class PemotonganSeriController extends Controller
 
             return redirect()->route('pemotongan.index')->with('success', "Data pemotongan seri {$potong->kode_seri} berhasil diperbarui.");
         });
+    }
+
+    public function destroy(Request $request, $id)
+    {
+        $potong = PemotonganSeri::with('detailPemotonganWarna.detailGelaranKain')->findOrFail($id);
+        $reverseRoll = $request->has('reverse_roll') ? $request->boolean('reverse_roll') : true;
+        $kodeSeri = $potong->kode_seri;
+
+        DB::transaction(function () use ($potong, $reverseRoll) {
+            foreach ($potong->detailPemotonganWarna as $pw) {
+                $gelaranList = $pw->detailGelaranKain;
+                $gelaranCount = max(1, $gelaranList->count());
+                $perRollKain = round(((float) $pw->kain_terpakai) / $gelaranCount, 2);
+                $gelarIds = $gelaranList->pluck('id_gelar')->all();
+
+                if ($reverseRoll) {
+                    foreach ($gelaranList as $gk) {
+                        $roll = DetailRollBahan::where('id_roll', $gk->id_roll)->lockForUpdate()->first();
+                        if (!$roll) {
+                            continue;
+                        }
+
+                        $otherCutsExist = DetailGelaranKain::where('id_roll', $gk->id_roll)
+                            ->whereNotIn('id_gelar', $gelarIds)
+                            ->exists();
+
+                        if (!$otherCutsExist) {
+                            $roll->ukuran_sisa = (float) $roll->ukuran_awal;
+                            $roll->status_roll = 'Tersedia';
+                        } else {
+                            $restoreAmt = $perRollKain > 0
+                                ? $perRollKain
+                                : round((float) $gk->panjang_gelar * (int) $gk->jumlah_tumpuk * 0.15, 2);
+                            $restored = min((float) $roll->ukuran_awal, (float) $roll->ukuran_sisa + $restoreAmt);
+                            $roll->ukuran_sisa = $restored;
+                            $roll->status_roll = ($restored >= (float) $roll->ukuran_awal - 0.01) ? 'Tersedia' : 'Dipotong';
+                        }
+                        $roll->save();
+                    }
+                }
+
+                $pw->detailGelaranKain()->delete();
+                $pw->delete();
+            }
+
+            $potong->delete();
+        });
+
+        $msg = $reverseRoll
+            ? "Pemotongan seri {$kodeSeri} berhasil dihapus dan stok/status roll bahan telah dipulihkan."
+            : "Pemotongan seri {$kodeSeri} berhasil dihapus tanpa mengubah status/sisa roll bahan.";
+
+        return response()->json([
+            'success' => true,
+            'message' => $msg,
+        ]);
     }
 }

@@ -7,8 +7,11 @@ use Illuminate\Support\Facades\DB;
 use App\Models\Aksesoris;
 use App\Models\Supplier;
 use App\Models\StokBarangJadi;
+use App\Models\RiwayatStokBarangJadi;
+use App\Models\Pesanan;
 use App\Models\Pola;
 use App\Models\DetailAksesorisPola;
+use Illuminate\Support\Facades\Schema;
 
 class AksesorisController extends Controller
 {
@@ -20,12 +23,29 @@ class AksesorisController extends Controller
             ->orderBy('tgl_update_terakhir', 'desc')
             ->get();
         $pola = Pola::with(['spesifikasiUkuran', 'detailAksesorisPola.aksesoris'])->get();
+        $thresholds = StokBarangJadiController::getThresholds();
 
-        if ($request->wantsJson()) {
-            return response()->json(['success' => true, 'data' => compact('aksesoris', 'stok', 'pola')]);
+        $riwayatStok = collect();
+        if (Schema::hasTable('Riwayat_Stok_Barang_Jadi')) {
+            $riwayatStok = RiwayatStokBarangJadi::with(['pola', 'spesifikasiUkuran', 'user'])
+                ->orderBy('tgl_transaksi', 'desc')
+                ->orderBy('id_riwayat_stok', 'desc')
+                ->limit(100)
+                ->get();
         }
 
-        return view('bong.gudang', compact('aksesoris', 'suppliers', 'stok', 'pola'));
+        $mitraFromPesanan = Pesanan::whereNotNull('nama_mitra')
+            ->where('nama_mitra', '!=', '')
+            ->distinct()
+            ->pluck('nama_mitra');
+        $mitraFromRiwayat = $riwayatStok->pluck('nama_mitra')->filter()->unique();
+        $mitraList = $mitraFromPesanan->merge($mitraFromRiwayat)->unique()->values();
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'data' => compact('aksesoris', 'stok', 'pola', 'riwayatStok', 'thresholds')]);
+        }
+
+        return view('bong.gudang', compact('aksesoris', 'suppliers', 'stok', 'pola', 'riwayatStok', 'mitraList', 'thresholds'));
     }
 
     public function store(Request $request)

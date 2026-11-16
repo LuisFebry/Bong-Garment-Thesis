@@ -211,4 +211,32 @@ class PesananController extends Controller
             'data' => $order,
         ]);
     }
+
+    public function destroy($id)
+    {
+        $order = Pesanan::findOrFail($id);
+
+        $blockedBy = [];
+        if (DB::table('Pemotongan_Seri')->where('id_pesanan', $order->id_pesanan)->exists()) {
+            $blockedBy[] = 'Pemotongan Seri';
+        }
+        if (DB::table('QC')->where('id_pesanan', $order->id_pesanan)->exists()) {
+            $blockedBy[] = 'Quality Control (QC)';
+        }
+
+        if (!empty($blockedBy)) {
+            return response()->json([
+                'success' => false,
+                'message' => "Pesanan #{$order->id_pesanan} tidak dapat dihapus karena masih memiliki data terkait pada " . implode(' dan ', $blockedBy) . '. Hapus catatan terkait terlebih dahulu.',
+            ], 422);
+        }
+
+        $orderId = $order->id_pesanan;
+        $order->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => "Pesanan #{$orderId} berhasil dihapus.",
+        ]);
+    }
 }

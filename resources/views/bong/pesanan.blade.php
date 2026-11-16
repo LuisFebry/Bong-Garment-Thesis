@@ -57,7 +57,7 @@
 
         <div id="field-nama-mitra">
           <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Mitra / Klien</label>
-          <input type="text" name="nama_mitra" id="input-nama-mitra" placeholder="Toko Busana Jaya" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="nama_mitra" id="input-nama-mitra" placeholder="Jupiter" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
 
         <div>
@@ -141,12 +141,12 @@
 
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Pola Unik <span class="text-rose-500">*</span></label>
-            <input type="text" id="new-pola-kode" placeholder="POLA-FLN-05" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white font-mono uppercase focus:ring-2 focus:ring-indigo-500">
+            <input type="text" id="new-pola-kode" placeholder="831" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white font-mono uppercase focus:ring-2 focus:ring-indigo-500">
           </div>
 
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Master Pola Pakaian <span class="text-rose-500">*</span></label>
-            <input type="text" id="new-pola-nama" placeholder="Kemeja Flanel Lengan Panjang" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+            <input type="text" id="new-pola-nama" placeholder="Atasan 831" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
           </div>
         </div>
 
@@ -192,7 +192,7 @@
               <i data-lucide="plus" class="w-3 h-3"></i> Tambah Aksesoris Pola
             </button>
           </div>
-          <div id="container-new-pola-acc" class="space-y-2">
+          <div id="container-new-pola-acc" class="hidden space-y-2">
             <!-- Populated by JS -->
           </div>
         </div>
@@ -304,6 +304,9 @@
                 <button type="button" onclick="openReviseDeadlineModal({{ $item->id_pesanan }}, '{{ $dlAwalIso }}', '{{ $dlTerbaruIso }}')" class="px-2.5 py-1 text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-medium transition-colors">
                   Revisi
                 </button>
+                <button type="button" onclick="deletePesanan({{ $item->id_pesanan }})" class="px-2 py-1 text-[11px] bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-md font-semibold inline-flex items-center gap-1 transition-colors" title="Hapus Pesanan">
+                  <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
+                </button>
               </div>
             </td>
           </tr>
@@ -350,7 +353,7 @@
                 'id_kategori' => $p->id_kategori,
                 'kode_pola' => $p->kode_pola,
                 'nama_pola' => $p->nama_pola,
-                'nama_ukuran' => $firstSpec?->nama_ukuran ?? 'L',
+                'nama_ukuran' => $firstSpec?->nama_ukuran ?? 'All',
                 'lingkar_dada' => $firstSpec?->lingkar_dada,
                 'panjang_baju_celana' => $firstSpec?->panjang_baju_celana,
                 'panjang_pundak' => $firstSpec?->panjang_pundak,
@@ -358,6 +361,12 @@
               ]) }})"
               class="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 inline-flex items-center gap-1 transition-colors">
               <i data-lucide="edit-3" class="w-3 h-3"></i> Edit Pola
+            </button>
+            <button type="button"
+              onclick="deletePola({{ $p->id_pola }}, '{{ addslashes($p->kode_pola) }}', '{{ addslashes($p->nama_pola) }}')"
+              class="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 inline-flex items-center gap-1 transition-colors"
+              title="Hapus Master Pola">
+              <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
             </button>
           </div>
         </div>
@@ -441,7 +450,7 @@
 
         <div id="edit-field-nama-mitra">
           <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Mitra / Klien</label>
-          <input type="text" name="nama_mitra" id="edit-nama-mitra" placeholder="Toko Busana Jaya" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" name="nama_mitra" id="edit-nama-mitra" placeholder="Jupiter" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500">
         </div>
 
         <div>
@@ -511,13 +520,18 @@
         </div>
       </div>
 
-      <div class="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
-        <button type="button" onclick="closeEditPesananModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-lg transition-colors">
-          Batal
+      <div class="flex items-center justify-between gap-2 pt-4 border-t border-slate-100">
+        <button type="button" onclick="deletePesananFromEditModal()" class="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-semibold text-xs rounded-lg inline-flex items-center gap-1 transition-colors">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus Pesanan
         </button>
-        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-sm transition-colors">
-          Simpan Perubahan
-        </button>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="closeEditPesananModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-lg transition-colors">
+            Batal
+          </button>
+          <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-sm transition-colors">
+            Simpan Perubahan
+          </button>
+        </div>
       </div>
     </form>
   </div>
@@ -550,15 +564,15 @@
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Pola Unik <span class="text-rose-500">*</span></label>
-          <input type="text" id="edit-pola-kode" placeholder="POLA-FLN-05" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono uppercase">
+          <input type="text" id="edit-pola-kode" placeholder="831" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono uppercase">
         </div>
         <div class="col-span-full">
           <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Master Pola Pakaian <span class="text-rose-500">*</span></label>
-          <input type="text" id="edit-pola-nama" placeholder="Kemeja Flanel Lengan Panjang" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
+          <input type="text" id="edit-pola-nama" placeholder="Atasan 831" required class="w-full text-xs p-2.5 border border-slate-200 rounded-lg">
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Ukuran Utama (S/M/L/XL)</label>
-          <input type="text" id="edit-pola-ukuran" placeholder="L" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono font-bold text-indigo-700">
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Ukuran Utama (All/S/M/L/XL)</label>
+          <input type="text" id="edit-pola-ukuran" placeholder="All" class="w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono font-bold text-indigo-700">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">Lingkar Dada (cm)</label>
@@ -574,9 +588,14 @@
         </div>
       </div>
 
-      <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-        <button type="button" onclick="closeEditPolaModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-lg">Batal</button>
-        <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-sm">Simpan Perubahan Pola</button>
+      <div class="flex items-center justify-between gap-2 pt-3 border-t border-slate-100">
+        <button type="button" onclick="deletePolaFromEditModal()" class="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-semibold text-xs rounded-lg inline-flex items-center gap-1">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus Pola
+        </button>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="closeEditPolaModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-lg">Batal</button>
+          <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-sm">Simpan Perubahan Pola</button>
+        </div>
       </div>
     </form>
   </div>
@@ -928,17 +947,12 @@
     }
   }
 
-  // Default 4 size rows (S, M, L, XL) for New Pola registration
+  // Default 1 size row ("All") with empty metrics and optional accessories hidden until added
   let newPolaSpecs = [
-    { nama_ukuran: 'S', lingkar_dada: 96, panjang_baju_celana: 68, lebar_baju: 48, panjang_pundak: 13.5, panjang_tangan: 21, lingkar_lengan: 42, diameter_leher: 17.5, lingkar_pinggang: 94, lingkar_selangkang: '', lingkar_paha: '', lebar_kaki: '' },
-    { nama_ukuran: 'M', lingkar_dada: 102, panjang_baju_celana: 70, lebar_baju: 51, panjang_pundak: 14.5, panjang_tangan: 22, lingkar_lengan: 44, diameter_leher: 18.0, lingkar_pinggang: 100, lingkar_selangkang: '', lingkar_paha: '', lebar_kaki: '' },
-    { nama_ukuran: 'L', lingkar_dada: 108, panjang_baju_celana: 72, lebar_baju: 54, panjang_pundak: 15.5, panjang_tangan: 23.5, lingkar_lengan: 46, diameter_leher: 18.5, lingkar_pinggang: 106, lingkar_selangkang: '', lingkar_paha: '', lebar_kaki: '' },
-    { nama_ukuran: 'XL', lingkar_dada: 114, panjang_baju_celana: 74, lebar_baju: 57, panjang_pundak: 16.5, panjang_tangan: 25, lingkar_lengan: 48, diameter_leher: 19.0, lingkar_pinggang: 112, lingkar_selangkang: '', lingkar_paha: '', lebar_kaki: '' }
+    { nama_ukuran: 'All', lingkar_dada: '', panjang_baju_celana: '', lebar_baju: '', panjang_pundak: '', panjang_tangan: '', lingkar_lengan: '', diameter_leher: '', lingkar_pinggang: '', lingkar_selangkang: '', lingkar_paha: '', lebar_kaki: '' }
   ];
 
-  let newPolaAccs = [
-    { id_aksesoris: availableAksesoris[0] ? availableAksesoris[0].id_aksesoris : 1, jumlah_digunakan: 1 }
-  ];
+  let newPolaAccs = [];
 
   window.setPolaMode = function (mode) {
     document.getElementById('inp-pola-mode').value = mode;
@@ -976,7 +990,7 @@
       return `
         <tr>
           <td class="p-1.5">
-            <input type="text" value="${sp.nama_ukuran}" data-idx="${idx}" data-field="nama_ukuran" class="inp-spec-metric w-14 font-mono font-bold text-indigo-700 text-center text-[11px] p-1 border border-slate-200 rounded bg-indigo-50/40">
+            <input type="text" value="${sp.nama_ukuran}" placeholder="All" data-idx="${idx}" data-field="nama_ukuran" class="inp-spec-metric w-14 font-mono font-bold text-indigo-700 text-center text-[11px] p-1 border border-slate-200 rounded bg-indigo-50/40">
           </td>
           ${metricInputs}
           <td class="p-1 text-center">
@@ -1001,7 +1015,7 @@
   }
 
   window.addNewPolaSizeRow = function () {
-    newPolaSpecs.push({ nama_ukuran: 'XXL', lingkar_dada: 120, panjang_baju_celana: 76, lebar_baju: 60, panjang_pundak: 17.5, panjang_tangan: 26, lingkar_lengan: 50, diameter_leher: 19.5, lingkar_pinggang: 118, lingkar_selangkang: '', lingkar_paha: '', lebar_kaki: '' });
+    newPolaSpecs.push({ nama_ukuran: '', lingkar_dada: '', panjang_baju_celana: '', lebar_baju: '', panjang_pundak: '', panjang_tangan: '', lingkar_lengan: '', diameter_leher: '', lingkar_pinggang: '', lingkar_selangkang: '', lingkar_paha: '', lebar_kaki: '' });
     renderNewPolaSpecs();
   };
 
@@ -1014,6 +1028,13 @@
   function renderNewPolaAccs() {
     const container = document.getElementById('container-new-pola-acc');
     if (!container) return;
+
+    if (newPolaAccs.length === 0) {
+      container.classList.add('hidden');
+      container.innerHTML = '';
+      return;
+    }
+    container.classList.remove('hidden');
 
     container.innerHTML = newPolaAccs.map(function (item, idx) {
       const opts = availableAksesoris.map(function (a) {
@@ -1052,7 +1073,10 @@
   }
 
   window.addNewPolaAccRow = function () {
-    if (!availableAksesoris.length) return;
+    if (!availableAksesoris.length) {
+      alert('Belum ada data aksesoris terdaftar di Gudang & Aksesoris.');
+      return;
+    }
     newPolaAccs.push({ id_aksesoris: availableAksesoris[0].id_aksesoris, jumlah_digunakan: 1 });
     renderNewPolaAccs();
   };
@@ -1310,7 +1334,7 @@
     document.getElementById('edit-pola-kategori').value = pola.id_kategori;
     document.getElementById('edit-pola-kode').value = pola.kode_pola || '';
     document.getElementById('edit-pola-nama').value = pola.nama_pola || '';
-    document.getElementById('edit-pola-ukuran').value = pola.nama_ukuran || 'L';
+    document.getElementById('edit-pola-ukuran').value = pola.nama_ukuran || 'All';
     document.getElementById('edit-pola-dada').value = pola.lingkar_dada ?? '';
     document.getElementById('edit-pola-panjang').value = pola.panjang_baju_celana ?? '';
     document.getElementById('edit-pola-pundak').value = pola.panjang_pundak ?? '';
@@ -1321,6 +1345,72 @@
     document.getElementById('modal-edit-pola').classList.add('hidden');
   };
 
+  window.deletePesanan = function (id) {
+    if (!confirm('Hapus Pesanan #' + id + '? Tindakan ini hanya berhasil jika pesanan belum memiliki catatan Pemotongan Seri atau QC.')) return;
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+    fetch('/pesanan/' + id + '/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': token
+      }
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        alert(data.message || 'Pesanan berhasil dihapus.');
+        window.location.reload();
+      } else {
+        alert('Gagal menghapus pesanan: ' + (data.message || 'Masih terdapat data terkait.'));
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Terjadi kesalahan saat menghapus pesanan.');
+    });
+  };
+
+  window.deletePesananFromEditModal = function () {
+    const id = document.getElementById('edit-id-pesanan').value;
+    if (id) window.deletePesanan(id);
+  };
+
+  window.deletePola = function (id, kode, nama) {
+    if (!confirm('Hapus Master Pola "' + kode + ' - ' + nama + '"? Hanya berhasil jika belum digunakan oleh Pesanan atau Stok Barang Jadi.')) return;
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+    fetch('/pola/' + id + '/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': token
+      }
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        alert(data.message || 'Master Pola berhasil dihapus.');
+        window.location.reload();
+      } else {
+        alert('Gagal menghapus Master Pola: ' + (data.message || 'Masih digunakan oleh pesanan/stok.'));
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Terjadi kesalahan saat menghapus Master Pola.');
+    });
+  };
+
+  window.deletePolaFromEditModal = function () {
+    const id = document.getElementById('edit-pola-id').value;
+    const kode = document.getElementById('edit-pola-kode').value;
+    const nama = document.getElementById('edit-pola-nama').value;
+    if (id) window.deletePola(id, kode, nama);
+  };
+
   document.getElementById('form-edit-pola')?.addEventListener('submit', function (e) {
     e.preventDefault();
     const id = document.getElementById('edit-pola-id').value;
@@ -1329,7 +1419,7 @@
       id_kategori: Number(document.getElementById('edit-pola-kategori').value),
       kode_pola: document.getElementById('edit-pola-kode').value.trim(),
       nama_pola: document.getElementById('edit-pola-nama').value.trim(),
-      nama_ukuran: document.getElementById('edit-pola-ukuran').value.trim() || 'L',
+      nama_ukuran: document.getElementById('edit-pola-ukuran').value.trim() || 'All',
       lingkar_dada: document.getElementById('edit-pola-dada').value !== '' ? parseFloat(document.getElementById('edit-pola-dada').value) : null,
       panjang_baju_celana: document.getElementById('edit-pola-panjang').value !== '' ? parseFloat(document.getElementById('edit-pola-panjang').value) : null,
       panjang_pundak: document.getElementById('edit-pola-pundak').value !== '' ? parseFloat(document.getElementById('edit-pola-pundak').value) : null

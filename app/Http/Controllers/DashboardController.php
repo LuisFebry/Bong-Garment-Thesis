@@ -17,13 +17,14 @@ class DashboardController extends Controller
 {
     public function index(Request $request)
     {
+        $thresholds = StokBarangJadiController::getThresholds();
         $kpi = [
             'total_pesanan_aktif' => Pesanan::whereNotIn('status_pesanan', ['Selesai', 'Dibatalkan'])->count(),
             'total_roll_tersedia' => DetailRollBahan::where('status_roll', 'Tersedia')->count(),
             'total_potong_seri' => PemotonganSeri::count(),
             'total_stok_jadi_pcs' => (int) StokBarangJadi::sum('jumlah_stok_pcs'),
             'total_qc_need_rework' => Qc::where('status_qc', 'Need Rework')->count(),
-            'total_aksesoris_low' => Aksesoris::where('stok', '<', 500)->count(),
+            'total_aksesoris_low' => Aksesoris::where('stok', '<', $thresholds['min_stok_aksesoris'])->count(),
         ];
 
         // EDF Cutter Queue

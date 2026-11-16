@@ -4,8 +4,10 @@
 
 @section('content')
 @php
-  $lowStokJadi = ($stok ?? collect())->filter(fn($s) => $s->jumlah_stok_pcs <= 20);
-  $lowAksesoris = ($aksesoris ?? collect())->filter(fn($a) => $a->stok < 500);
+  $minStokJadi = (int) ($thresholds['min_stok_jadi'] ?? 20);
+  $minStokAksesoris = (int) ($thresholds['min_stok_aksesoris'] ?? 500);
+  $lowStokJadi = ($stok ?? collect())->filter(fn($s) => $s->jumlah_stok_pcs <= $minStokJadi);
+  $lowAksesoris = ($aksesoris ?? collect())->filter(fn($a) => $a->stok < $minStokAksesoris);
 @endphp
 
 <div class="space-y-6">
@@ -23,45 +25,69 @@
     </div>
   </div>
 
-  <!-- Red Low / Zero Stock Alert Banner -->
-  @if($lowStokJadi->count() > 0 || $lowAksesoris->count() > 0)
-  <div class="p-4 rounded-xl bg-rose-50 border-2 border-rose-200 flex items-start gap-3 shadow-sm">
-    <div class="w-8 h-8 rounded-lg bg-rose-600 text-white flex items-center justify-center shrink-0 mt-0.5">
-      <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+  <!-- Global Low Stock Alert Banner & Editable Thresholds -->
+  <div class="space-y-2.5">
+    @if($lowStokJadi->count() > 0 || $lowAksesoris->count() > 0)
+    <div class="p-4 rounded-xl bg-rose-50 border-2 border-rose-200 flex items-start gap-3 shadow-sm">
+      <div class="w-8 h-8 rounded-lg bg-rose-600 text-white flex items-center justify-center shrink-0 mt-0.5">
+        <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+      </div>
+      <div class="text-xs text-rose-900 space-y-1 flex-1">
+        <div class="font-bold text-sm text-rose-800">Peringatan Stok Rendah / Habis (Perlu Restock Segera!)</div>
+        @if($lowStokJadi->count() > 0)
+          <div>
+            <span class="font-semibold">Stok Barang Jadi Menipis / Habis (&le; {{ number_format($minStokJadi) }} Pcs):</span>
+            @foreach($lowStokJadi as $ls)
+              <span class="inline-flex items-center px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-mono font-bold text-[11px] mr-1 mt-1 border border-rose-300">
+                {{ $ls->pola->nama_pola ?? 'Pola' }} ({{ $ls->spesifikasiUkuran->nama_ukuran ?? '-' }} · {{ $ls->nama_warna }}): {{ $ls->jumlah_stok_pcs }} Pcs
+              </span>
+            @endforeach
+          </div>
+        @endif
+        @if($lowAksesoris->count() > 0)
+          <div>
+            <span class="font-semibold">Stok Aksesoris Menipis / Habis (&lt; {{ number_format($minStokAksesoris) }} Unit):</span>
+            @foreach($lowAksesoris as $la)
+              <span class="inline-flex items-center px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-mono font-bold text-[11px] mr-1 mt-1 border border-rose-300">
+                {{ $la->nama_aksesoris }}: {{ number_format($la->stok) }} {{ $la->satuan }}
+              </span>
+            @endforeach
+          </div>
+        @endif
+      </div>
     </div>
-    <div class="text-xs text-rose-900 space-y-1 flex-1">
-      <div class="font-bold text-sm text-rose-800">Peringatan Stok Rendah / Habis (Perlu Restock Segera!)</div>
-      @if($lowStokJadi->count() > 0)
-        <div>
-          <span class="font-semibold">Stok Barang Jadi Menipis / Habis (&le; 20 Pcs):</span>
-          @foreach($lowStokJadi as $ls)
-            <span class="inline-flex items-center px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-mono font-bold text-[11px] mr-1 mt-1 border border-rose-300">
-              {{ $ls->pola->nama_pola ?? 'Pola' }} ({{ $ls->spesifikasiUkuran->nama_ukuran ?? '-' }} · {{ $ls->nama_warna }}): {{ $ls->jumlah_stok_pcs }} Pcs
-            </span>
-          @endforeach
-        </div>
-      @endif
-      @if($lowAksesoris->count() > 0)
-        <div>
-          <span class="font-semibold">Stok Aksesoris Menipis / Habis (&lt; 500 Unit):</span>
-          @foreach($lowAksesoris as $la)
-            <span class="inline-flex items-center px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-mono font-bold text-[11px] mr-1 mt-1 border border-rose-300">
-              {{ $la->nama_aksesoris }}: {{ number_format($la->stok) }} {{ $la->satuan }}
-            </span>
-          @endforeach
-        </div>
-      @endif
+    @else
+    <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex flex-wrap items-center justify-between gap-2 text-xs text-emerald-800">
+      <div class="flex items-center gap-2 font-semibold">
+        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i>
+        <span>Seluruh Stok Barang Jadi & Inventori Aksesoris berada di atas batas aman minimum.</span>
+      </div>
+      <span class="text-[11px] font-mono text-emerald-700">Indikator Merah aktif otomatis saat stok &le; {{ number_format($minStokJadi) }} Pcs (Barang Jadi) atau &lt; {{ number_format($minStokAksesoris) }} Unit (Aksesoris)</span>
     </div>
+    @endif
+
+    <form id="form-stock-thresholds" class="bg-white rounded-xl border border-slate-200 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs shadow-sm">
+      <div class="flex items-center gap-2 text-slate-700 font-semibold">
+        <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5 text-indigo-600"></i>
+        <span>Pengaturan Indikator Stok Rendah Global:</span>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <label class="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
+          <span>Barang Jadi (&le;):</span>
+          <input type="number" id="inp-threshold-jadi" min="0" value="{{ $minStokJadi }}" required class="w-20 text-xs font-mono font-bold text-slate-800 px-2 py-1 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500">
+          <span class="font-mono text-slate-400">Pcs</span>
+        </label>
+        <label class="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
+          <span>Aksesoris (&lt;):</span>
+          <input type="number" id="inp-threshold-aksesoris" min="0" value="{{ $minStokAksesoris }}" required class="w-24 text-xs font-mono font-bold text-slate-800 px-2 py-1 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500">
+          <span class="font-mono text-slate-400">Unit</span>
+        </label>
+        <button type="submit" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-[11px] rounded-md shadow-sm transition-colors">
+          Simpan Batas Global
+        </button>
+      </div>
+    </form>
   </div>
-  @else
-  <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs text-emerald-800">
-    <div class="flex items-center gap-2 font-semibold">
-      <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i>
-      <span>Seluruh Stok Barang Jadi & Inventori Aksesoris berada di atas batas aman minimum.</span>
-    </div>
-    <span class="text-[11px] font-mono text-emerald-700">Indikator Merah aktif otomatis saat stok &le; 20 Pcs (Barang Jadi) atau &lt; 500 Unit (Aksesoris)</span>
-  </div>
-  @endif
 
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
     <!-- 1. Tabel Kiri: Stok Barang Jadi (Perpetual Inventory & Outbound) -->
@@ -93,7 +119,7 @@
             @forelse($stok ?? [] as $st)
             @php
               $isZero = $st->jumlah_stok_pcs <= 0;
-              $isLow = $st->jumlah_stok_pcs > 0 && $st->jumlah_stok_pcs <= 20;
+              $isLow = $st->jumlah_stok_pcs > 0 && $st->jumlah_stok_pcs <= $minStokJadi;
             @endphp
             <tr class="{{ ($isZero || $isLow) ? 'bg-rose-50/70 hover:bg-rose-100/60' : 'hover:bg-slate-50' }} transition-colors">
               <td class="py-3 font-medium text-slate-800">{{ $st->pola->nama_pola ?? '-' }}</td>
@@ -130,6 +156,12 @@
                     })"
                     class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-md font-semibold text-[11px] inline-flex items-center gap-1 transition-colors">
                     <i data-lucide="log-out" class="w-3 h-3"></i> Keluar
+                  </button>
+                  <button type="button"
+                    onclick="deleteStokJadi({{ $st->id_stok }}, '{{ addslashes($st->pola->nama_pola ?? ('Pola #' . $st->id_pola)) }}', '{{ addslashes($st->nama_warna) }}')"
+                    class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-md font-semibold text-[11px] inline-flex items-center gap-1 transition-colors"
+                    title="Hapus baris stok barang jadi & riwayatnya">
+                    <i data-lucide="trash-2" class="w-3 h-3"></i>
                   </button>
                 </div>
               </td>
@@ -173,7 +205,7 @@
             @forelse($aksesoris ?? [] as $acc)
             @php
               $accZero = $acc->stok <= 0;
-              $accLow = $acc->stok > 0 && $acc->stok < 500;
+              $accLow = $acc->stok > 0 && $acc->stok < $minStokAksesoris;
             @endphp
             <tr class="{{ ($accZero || $accLow) ? 'bg-rose-50/70 hover:bg-rose-100/60' : 'hover:bg-slate-50' }} transition-colors">
               <td class="py-3 font-medium text-slate-800">{{ $acc->nama_aksesoris }}</td>
@@ -183,7 +215,7 @@
                 @if($accZero)
                   <span class="block text-[9px] font-sans font-bold text-rose-600 uppercase">STOK HABIS (0)</span>
                 @elseif($accLow)
-                  <span class="block text-[9px] font-sans font-bold text-rose-600 uppercase">STOK RENDAH (&lt;500)</span>
+                  <span class="block text-[9px] font-sans font-bold text-rose-600 uppercase">STOK RENDAH (&lt;{{ number_format($minStokAksesoris) }})</span>
                 @endif
               </td>
               <td class="py-3 text-slate-500 text-[11px]">{{ $acc->supplier->nama_supplier ?? '-' }}</td>
@@ -329,6 +361,7 @@
             <th class="pb-2">Alasan Transaksi</th>
             <th class="pb-2">Nama Mitra / Penerima</th>
             <th class="pb-2">Keterangan / Petugas</th>
+            <th class="pb-2 text-right">Aksi</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
@@ -376,10 +409,18 @@
               @endif
               <span class="text-[10px] text-slate-400">Oleh: {{ $rw->user->nama_user ?? 'Petugas Gudang' }}</span>
             </td>
+            <td class="py-3 text-right whitespace-nowrap">
+              <button type="button"
+                onclick="deleteRiwayatStok({{ $rw->id_riwayat_stok }}, '{{ $rw->jenis_transaksi }}', {{ $rw->jumlah_pcs }}, '{{ addslashes($rw->pola->nama_pola ?? ('Pola #'.$rw->id_pola)) }}')"
+                class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-md text-[11px] font-semibold inline-flex items-center gap-1 transition-colors"
+                title="Hapus riwayat & batalkan perubahan stok">
+                <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Hapus &amp; Reverse
+              </button>
+            </td>
           </tr>
           @empty
           <tr>
-            <td colspan="7" class="py-6 text-center text-slate-400">
+            <td colspan="8" class="py-6 text-center text-slate-400">
               Belum ada riwayat transaksi keluar/masuk stok barang jadi yang tercatat. Gunakan tombol <b>Keluar</b> atau <b>Transaksi Keluar / Masuk</b> di atas untuk mencatat serah terima Mitra atau pengeluaran gudang.
             </td>
           </tr>
@@ -459,7 +500,7 @@
           <label id="adj-mitra-label" class="block text-xs font-semibold text-slate-700 mb-1">
             7. Nama Mitra Pengambil Barang (<code class="font-mono">nama_mitra</code>) <span id="adj-mitra-req" class="text-rose-500">*</span>
           </label>
-          <input type="text" id="adj-nama-mitra" list="mitra-datalist" required placeholder="Toko Busana Jaya" class="w-full text-xs p-2.5 border border-indigo-200 bg-indigo-50/30 rounded-lg focus:ring-2 focus:ring-indigo-500">
+          <input type="text" id="adj-nama-mitra" list="mitra-datalist" required placeholder="Jupiter" class="w-full text-xs p-2.5 border border-indigo-200 bg-indigo-50/30 rounded-lg focus:ring-2 focus:ring-indigo-500">
           <datalist id="mitra-datalist">
             @foreach($mitraList ?? [] as $mName)
               <option value="{{ $mName }}"></option>
@@ -922,7 +963,7 @@
 
     if (alasan.toLowerCase().includes('mitra')) {
       mitraInp.required = true;
-      mitraInp.placeholder = 'Toko Busana Jaya';
+      mitraInp.placeholder = 'Jupiter';
       mitraInp.className = 'w-full text-xs p-2.5 border border-indigo-200 bg-indigo-50/30 rounded-lg focus:ring-2 focus:ring-indigo-500';
       mitraLabel.innerHTML = '7. Nama Mitra Pengambil Barang (<code class="font-mono">nama_mitra</code>) <span class="text-rose-500">*</span>';
     } else {
@@ -1265,6 +1306,93 @@
       alert('Terjadi kesalahan saat menyimpan perubahan stok barang jadi.');
     });
   });
+
+  document.getElementById('form-stock-thresholds')?.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const minJadi = Math.max(0, parseInt(document.getElementById('inp-threshold-jadi').value, 10) || 0);
+    const minAcc = Math.max(0, parseInt(document.getElementById('inp-threshold-aksesoris').value, 10) || 0);
+
+    fetch("{{ route('stok.thresholds', [], false) }}", {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': csrfToken
+      },
+      body: JSON.stringify({
+        min_stok_jadi: minJadi,
+        min_stok_aksesoris: minAcc
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        alert(data.message || 'Batas stok rendah global berhasil diperbarui.');
+        window.location.reload();
+      } else {
+        alert('Gagal menyimpan batas stok: ' + (data.message || 'Validasi gagal'));
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Terjadi kesalahan saat menyimpan pengaturan batas stok.');
+    });
+  });
+
+  window.deleteRiwayatStok = function (id, jenis, qty, pola) {
+    const actionDesc = jenis === 'KELUAR'
+      ? `mengembalikan +${qty} pcs ke stok ${pola}`
+      : `membatalkan/mengurangi -${qty} pcs dari stok ${pola}`;
+    if (!confirm(`Hapus riwayat transaksi #${id} dan ${actionDesc}?`)) return;
+
+    fetch('/stok/riwayat/' + id + '/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': csrfToken
+      }
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        alert(data.message || 'Riwayat transaksi dihapus dan stok berhasil direverse.');
+        window.location.reload();
+      } else {
+        alert('Gagal menghapus riwayat: ' + (data.message || 'Terjadi kesalahan'));
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Terjadi kesalahan saat menghapus riwayat stok.');
+    });
+  };
+
+  window.deleteStokJadi = function (id, pola, warna) {
+    if (!confirm(`Hapus baris Stok Barang Jadi #${id} (${pola} · ${warna}) beserta riwayat mutasinya?`)) return;
+
+    fetch('/stok/' + id + '/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': csrfToken
+      }
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        alert(data.message || 'Baris stok barang jadi berhasil dihapus.');
+        window.location.reload();
+      } else {
+        alert('Gagal menghapus stok barang jadi: ' + (data.message || 'Terjadi kesalahan'));
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Terjadi kesalahan saat menghapus stok barang jadi.');
+    });
+  };
 
   if (window.lucide) {
     window.lucide.createIcons();

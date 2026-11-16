@@ -161,5 +161,37 @@ class PolaController extends Controller
             ]);
         });
     }
+
+    public function destroy($id)
+    {
+        $pola = Pola::findOrFail($id);
+
+        $blockedBy = [];
+        if (DB::table('Pesanan')->where('id_pola', $pola->id_pola)->exists()) {
+            $blockedBy[] = 'Pesanan';
+        }
+        if (DB::table('Stok_Barang_Jadi')->where('id_pola', $pola->id_pola)->exists()) {
+            $blockedBy[] = 'Stok Barang Jadi';
+        }
+
+        if (!empty($blockedBy)) {
+            return response()->json([
+                'success' => false,
+                'message' => "Master Pola {$pola->kode_pola} ({$pola->nama_pola}) tidak dapat dihapus karena masih digunakan pada " . implode(' dan ', $blockedBy) . '.',
+            ], 422);
+        }
+
+        $label = "{$pola->kode_pola} ({$pola->nama_pola})";
+        DB::transaction(function () use ($pola) {
+            DetailAksesorisPola::where('id_pola', $pola->id_pola)->delete();
+            SpesifikasiUkuran::where('id_pola', $pola->id_pola)->delete();
+            $pola->delete();
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => "Master Pola {$label} berhasil dihapus.",
+        ]);
+    }
 }
 

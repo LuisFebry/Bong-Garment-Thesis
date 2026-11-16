@@ -325,27 +325,42 @@
               @endforeach
             </td>
             <td class="py-3 text-right">
-              <button type="button"
-                onclick="openEditPemotonganModal({{ json_encode([
-                  'id_potong' => $pm->id_potong,
-                  'id_pesanan' => $pm->id_pesanan,
-                  'id_user_pemotong' => $pm->id_user_pemotong,
-                  'kode_seri' => $pm->kode_seri,
-                  'jenis_variasi' => $pm->jenis_variasi,
-                  'tgl_potong' => $pm->tgl_potong ? \Carbon\Carbon::parse($pm->tgl_potong)->format('Y-m-d\TH:i') : '',
-                  'total_lembar_hasil' => $pm->total_lembar_hasil,
-                  'id_detail_warna' => $firstPw?->id_detail_warna,
-                  'total_lembar_direncanakan' => $firstPw?->total_lembar_direncanakan ?? $pm->total_lembar_hasil,
-                  'kain_terpakai' => $firstPw?->kain_terpakai ?? 0,
-                  'id_roll' => $firstGk?->id_roll,
-                  'panjang_gelar' => $firstGk?->panjang_gelar ?? 2.5,
-                  'jumlah_tumpuk' => $firstGk?->jumlah_tumpuk ?? 50,
-                  'total_lembar_gelar' => $firstGk?->total_lembar_gelar ?? $pm->total_lembar_hasil,
-                  'status_roll' => $firstGk?->detailRollBahan?->status_roll ?? 'Dipotong'
-                ]) }})"
-                class="px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1 transition-colors">
-                <i data-lucide="edit-3" class="w-3 h-3"></i> Edit
-              </button>
+              <div class="inline-flex items-center justify-end gap-1.5">
+                <button type="button"
+                  onclick="openEditPemotonganModal({{ json_encode([
+                    'id_potong' => $pm->id_potong,
+                    'id_pesanan' => $pm->id_pesanan,
+                    'id_user_pemotong' => $pm->id_user_pemotong,
+                    'kode_seri' => $pm->kode_seri,
+                    'jenis_variasi' => $pm->jenis_variasi,
+                    'tgl_potong' => $pm->tgl_potong ? \Carbon\Carbon::parse($pm->tgl_potong)->format('Y-m-d\TH:i') : '',
+                    'total_lembar_hasil' => $pm->total_lembar_hasil,
+                    'id_detail_warna' => $firstPw?->id_detail_warna,
+                    'total_lembar_direncanakan' => $firstPw?->total_lembar_direncanakan ?? $pm->total_lembar_hasil,
+                    'kain_terpakai' => $firstPw?->kain_terpakai ?? 0,
+                    'id_roll' => $firstGk?->id_roll,
+                    'panjang_gelar' => $firstGk?->panjang_gelar ?? 2.5,
+                    'jumlah_tumpuk' => $firstGk?->jumlah_tumpuk ?? 50,
+                    'total_lembar_gelar' => $firstGk?->total_lembar_gelar ?? $pm->total_lembar_hasil,
+                    'status_roll' => $firstGk?->detailRollBahan?->status_roll ?? 'Dipotong'
+                  ]) }})"
+                  class="px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1 transition-colors">
+                  <i data-lucide="edit-3" class="w-3 h-3"></i> Edit
+                </button>
+                <button type="button"
+                  onclick="openDeletePemotonganModal({{ json_encode([
+                    'id_potong' => $pm->id_potong,
+                    'kode_seri' => $pm->kode_seri,
+                    'rolls' => $pm->detailPemotonganWarna->flatMap(fn($pw) => $pw->detailGelaranKain->map(fn($gk) => [
+                      'id_roll' => $gk->id_roll,
+                      'no_roll_ke' => $gk->detailRollBahan->no_roll_ke ?? '?',
+                      'status_roll' => $gk->detailRollBahan->status_roll ?? '-',
+                    ]))->values(),
+                  ]) }})"
+                  class="px-2.5 py-1 bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1 transition-colors">
+                  <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
+                </button>
+              </div>
             </td>
           </tr>
           @empty
@@ -452,6 +467,50 @@
       <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
         <button type="button" onclick="closeEditPemotonganModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>
         <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm">Simpan Perubahan Pemotongan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Hapus Pemotongan Seri + Opsi Reverse Status Roll -->
+<div id="modal-delete-pemotongan" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+      <div>
+        <h3 class="font-bold text-slate-900 text-base">Hapus Catatan Pemotongan Seri</h3>
+        <p class="text-xs text-slate-500 mt-0.5">Kode Seri: <span id="del-pm-kode" class="font-mono font-bold text-indigo-600"></span></p>
+      </div>
+      <button type="button" onclick="closeDeletePemotonganModal()" class="text-slate-400 hover:text-slate-600">&times;</button>
+    </div>
+
+    <form id="form-delete-pemotongan" class="space-y-4">
+      <input type="hidden" id="del-pm-id">
+      <div id="del-pm-rolls-info" class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1">
+      </div>
+
+      <div class="space-y-2">
+        <p class="text-xs font-semibold text-slate-800">Pilih perlakuan terhadap status &amp; sisa roll kain fisik:</p>
+        <label class="flex items-start gap-2.5 p-3 rounded-lg border border-slate-200 hover:border-indigo-300 cursor-pointer bg-white">
+          <input type="radio" name="reverse_roll_choice" value="1" checked class="mt-0.5 text-indigo-600 focus:ring-indigo-500">
+          <div class="text-xs">
+            <span class="font-semibold text-slate-900 block">Kembalikan stok &amp; batalkan status "Habis" roll</span>
+            <span class="text-[11px] text-slate-500">Sisa kain dikembalikan dan status roll yang "Habis" / "Dipotong" dari seri ini dipulihkan.</span>
+          </div>
+        </label>
+        <label class="flex items-start gap-2.5 p-3 rounded-lg border border-slate-200 hover:border-amber-300 cursor-pointer bg-white">
+          <input type="radio" name="reverse_roll_choice" value="0" class="mt-0.5 text-indigo-600 focus:ring-indigo-500">
+          <div class="text-xs">
+            <span class="font-semibold text-slate-900 block">Hapus catatan saja (biarkan status roll tetap seperti sekarang)</span>
+            <span class="text-[11px] text-slate-500">Roll yang sudah berstatus "Habis" dan sisa kainnya tidak akan diubah.</span>
+          </div>
+        </label>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+        <button type="button" onclick="closeDeletePemotonganModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Batal</button>
+        <button type="submit" class="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg shadow-sm inline-flex items-center gap-1.5">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus Pemotongan
+        </button>
       </div>
     </form>
   </div>
@@ -837,6 +896,64 @@
     .catch(err => {
       console.error(err);
       alert('Terjadi kesalahan saat menyimpan perubahan pemotongan seri.');
+    });
+  });
+
+  function openDeletePemotonganModal(pmInfo) {
+    document.getElementById('del-pm-id').value = pmInfo.id_potong;
+    document.getElementById('del-pm-kode').textContent = pmInfo.kode_seri || ('#' + pmInfo.id_potong);
+    const infoBox = document.getElementById('del-pm-rolls-info');
+    if (infoBox) {
+      const rolls = pmInfo.rolls || [];
+      if (rolls.length > 0) {
+        infoBox.innerHTML = '<div class="font-semibold text-slate-800 mb-1">Roll terpakai pada seri ini:</div>' +
+          rolls.map(r => `<div class="font-mono text-[11px]">• Roll #${r.no_roll_ke} (#${r.id_roll}) — Status saat ini: <b>${r.status_roll}</b></div>`).join('');
+      } else {
+        infoBox.innerHTML = '<div class="text-slate-500">Tidak ada roll gelaran tercatat pada seri ini.</div>';
+      }
+    }
+    const defaultRadio = document.querySelector('input[name="reverse_roll_choice"][value="1"]');
+    if (defaultRadio) defaultRadio.checked = true;
+
+    const m = document.getElementById('modal-delete-pemotongan');
+    m.classList.remove('hidden');
+    m.classList.add('flex');
+  }
+
+  function closeDeletePemotonganModal() {
+    const m = document.getElementById('modal-delete-pemotongan');
+    m.classList.add('hidden');
+    m.classList.remove('flex');
+  }
+
+  document.getElementById('form-delete-pemotongan')?.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const id = document.getElementById('del-pm-id').value;
+    const choiceEl = document.querySelector('input[name="reverse_roll_choice"]:checked');
+    const reverseRoll = choiceEl ? choiceEl.value === '1' : true;
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    fetch(`/pemotongan/${id}/delete`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': token
+      },
+      body: JSON.stringify({ reverse_roll: reverseRoll })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        alert(data.message || 'Catatan pemotongan seri berhasil dihapus.');
+        window.location.reload();
+      } else {
+        alert('Gagal menghapus pemotongan: ' + (data.message || 'Validasi gagal'));
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Terjadi kesalahan saat menghapus catatan pemotongan seri.');
     });
   });
 </script>

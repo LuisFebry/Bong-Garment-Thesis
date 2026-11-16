@@ -37,6 +37,7 @@ Route::prefix('pola')->middleware(RoleMiddleware::class . ':Admin,Pemotong,Gudan
     Route::get('/{id}', [PolaController::class, 'show'])->name('pola.show');
     Route::post('/', [PolaController::class, 'store'])->name('pola.store');
     Route::post('/{id}/update', [PolaController::class, 'update'])->name('pola.update');
+    Route::post('/{id}/delete', [PolaController::class, 'destroy'])->name('pola.delete');
 });
 
 // Pesanan & EDF Deadline Management: Admin
@@ -47,6 +48,7 @@ Route::prefix('pesanan')->middleware(RoleMiddleware::class . ':Admin')->group(fu
     Route::put('/{id}', [PesananController::class, 'update'])->name('pesanan.update_put');
     Route::post('/{id}/revise-deadline', [PesananController::class, 'reviseDeadline'])->name('pesanan.revise_deadline');
     Route::post('/{id}/status', [PesananController::class, 'updateStatus'])->name('pesanan.status');
+    Route::post('/{id}/delete', [PesananController::class, 'destroy'])->name('pesanan.delete');
 });
 
 // Penerimaan Bahan & Supplier Registration: Admin, Gudang
@@ -91,6 +93,7 @@ Route::prefix('pemotongan')->middleware(RoleMiddleware::class . ':Admin,Pemotong
     Route::get('/', [PemotonganSeriController::class, 'index'])->name('pemotongan.index');
     Route::post('/', [PemotonganSeriController::class, 'store'])->name('pemotongan.store');
     Route::post('/{id}/update', [PemotonganSeriController::class, 'update'])->name('pemotongan.update');
+    Route::post('/{id}/delete', [PemotonganSeriController::class, 'destroy'])->name('pemotongan.delete');
 });
 
 // Multi-Stage Quality Control: Admin, QC
@@ -98,6 +101,7 @@ Route::prefix('qc')->middleware(RoleMiddleware::class . ':Admin,QC')->group(func
     Route::get('/', [QcController::class, 'index'])->name('qc.index');
     Route::post('/', [QcController::class, 'store'])->name('qc.store');
     Route::post('/{id}/update', [QcController::class, 'update'])->name('qc.update');
+    Route::post('/{id}/delete', [QcController::class, 'destroy'])->name('qc.delete');
     Route::post('/{id}/complete-rework', [QcController::class, 'completeRework'])->name('qc.complete_rework');
 });
 
@@ -105,7 +109,10 @@ Route::prefix('qc')->middleware(RoleMiddleware::class . ':Admin,QC')->group(func
 Route::prefix('stok')->middleware(RoleMiddleware::class . ':Admin,Gudang,Pemilik')->group(function () {
     Route::get('/', [StokBarangJadiController::class, 'index'])->name('stok.index');
     Route::post('/adjust', [StokBarangJadiController::class, 'adjustStock'])->name('stok.adjust');
+    Route::post('/thresholds', [StokBarangJadiController::class, 'updateThresholds'])->name('stok.thresholds');
+    Route::post('/riwayat/{id}/delete', [StokBarangJadiController::class, 'destroyRiwayat'])->name('stok.riwayat.delete');
     Route::post('/{id}/update', [StokBarangJadiController::class, 'update'])->name('stok.update');
+    Route::post('/{id}/delete', [StokBarangJadiController::class, 'destroy'])->name('stok.delete');
 });
 
 // Aksesoris & Inventory: Admin, Gudang

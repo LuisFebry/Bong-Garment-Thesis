@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use App\Models\StokBarangJadi;
 use App\Models\RiwayatStokBarangJadi;
@@ -14,6 +15,53 @@ use App\Models\Supplier;
 
 class StokBarangJadiController extends Controller
 {
+    public static function getThresholds(): array
+    {
+        $defaults = [
+            'min_stok_jadi' => 20,
+            'min_stok_aksesoris' => 500,
+        ];
+
+        $path = storage_path('app/stock_thresholds.json');
+        if (is_file($path)) {
+            $raw = @file_get_contents($path);
+            $decoded = $raw ? json_decode($raw, true) : null;
+            if (is_array($decoded)) {
+                return [
+                    'min_stok_jadi' => max(0, (int) ($decoded['min_stok_jadi'] ?? $defaults['min_stok_jadi'])),
+                    'min_stok_aksesoris' => max(0, (int) ($decoded['min_stok_aksesoris'] ?? $defaults['min_stok_aksesoris'])),
+                ];
+            }
+        }
+
+        return $defaults;
+    }
+
+    public function updateThresholds(Request $request)
+    {
+        $validated = $request->validate([
+            'min_stok_jadi' => 'required|integer|min:0|max:1000000',
+            'min_stok_aksesoris' => 'required|integer|min:0|max:1000000',
+        ]);
+
+        $thresholds = [
+            'min_stok_jadi' => (int) $validated['min_stok_jadi'],
+            'min_stok_aksesoris' => (int) $validated['min_stok_aksesoris'],
+        ];
+
+        $dir = storage_path('app');
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        file_put_contents($dir . DIRECTORY_SEPARATOR . 'stock_thresholds.json', json_encode($thresholds, JSON_PRETTY_PRINT));
+
+        return response()->json([
+            'success' => true,
+            'message' => "Batas indikator stok rendah global disimpan: Barang Jadi <= {$thresholds['min_stok_jadi']} Pcs, Aksesoris < {$thresholds['min_stok_aksesoris']} Unit.",
+            'data' => $thresholds,
+        ]);
+    }
+
     public function index(Request $request)
     {
         $stok = StokBarangJadi::with(['pola', 'spesifikasiUkuran'])
@@ -23,6 +71,7 @@ class StokBarangJadiController extends Controller
         $pola = Pola::with(['spesifikasiUkuran', 'detailAksesorisPola.aksesoris'])->get();
         $aksesoris = Aksesoris::with('supplier')->get();
         $suppliers = Supplier::all();
+        $thresholds = self::getThresholds();
 
         $riwayatStok = collect();
         if (Schema::hasTable('Riwayat_Stok_Barang_Jadi')) {
@@ -43,11 +92,11 @@ class StokBarangJadiController extends Controller
         if ($request->wantsJson()) {
             return response()->json([
                 'success' => true,
-                'data' => compact('stok', 'aksesoris', 'pola', 'riwayatStok'),
+                'data' => compact('stok', 'aksesoris', 'pola', 'riwayatStok', 'thresholds'),
             ]);
         }
 
-        return view('bong.gudang', compact('stok', 'pola', 'aksesoris', 'suppliers', 'riwayatStok', 'mitraList'));
+        return view('bong.gudang', compact('stok', 'pola', 'aksesoris', 'suppliers', 'riwayatStok', 'mitraList', 'thresholds'));
     }
 
     public function adjustStock(Request $request)
@@ -175,6 +224,88 @@ class StokBarangJadiController extends Controller
             'success' => true,
             'message' => "Data Stok Barang Jadi #{$stock->id_stok} ({$stock->nama_warna}) berhasil diperbarui menjadi {$stock->jumlah_stok_pcs} Pcs.",
             'data' => $stock,
+        ]);
+    }
+
+    public function destroyRiwayat(Request $request, $id)
+    {
+        $riwayat = RiwayatStokBarangJadi::with('pola')->findOrFail($id);
+
+        $result = DB::transaction(function () use ($riwayat) {
+            $stock = null;
+            if ($riwayat->id_stok) {
+                $stock = StokBarangJadi::where('id_stok', $riwayat->id_stok)->lockForUpdate()->first();
+            }
+            if (!$stock) {
+                $stock = StokBarangJadi::where([
+                    'id_pola' => $riwayat->id_pola,
+                    'id_spesifikasi' => $riwayat->id_spesifikasi,
+                    'nama_warna' => $riwayat->nama_warna,
+                ])->lockForUpdate()->first();
+            }
+
+            $qty = (int) $riwayat->jumlah_pcs;
+            $jenis = $riwayat->jenis_transaksi;
+            $polaNama = $riwayat->pola->nama_pola ?? ('Pola #' . $riwayat->id_pola);
+
+            if ($jenis === 'KELUAR') {
+                if (!$stock) {
+                    $stock = StokBarangJadi::create([
+                        'id_pola' => $riwayat->id_pola,
+                        'id_spesifikasi' => $riwayat->id_spesifikasi,
+                        'nama_warna' => $riwayat->nama_warna,
+                        'jumlah_stok_pcs' => $qty,
+                        'tgl_update_terakhir' => now(),
+                    ]);
+                } else {
+                    $stock->jumlah_stok_pcs = (int) $stock->jumlah_stok_pcs + $qty;
+                    $stock->tgl_update_terakhir = now();
+                    $stock->save();
+                }
+            } else {
+                if ($stock) {
+                    $stock->jumlah_stok_pcs = max(0, (int) $stock->jumlah_stok_pcs - $qty);
+                    $stock->tgl_update_terakhir = now();
+                    $stock->save();
+                }
+            }
+
+            $riwayatId = $riwayat->id_riwayat_stok;
+            $riwayat->delete();
+
+            return [
+                'id' => $riwayatId,
+                'jenis' => $jenis,
+                'qty' => $qty,
+                'pola' => $polaNama,
+                'new_stock' => $stock ? (int) $stock->jumlah_stok_pcs : 0,
+            ];
+        });
+
+        $reverseAction = $result['jenis'] === 'KELUAR' ? "+{$result['qty']} pcs dikembalikan" : "-{$result['qty']} pcs dibatalkan";
+
+        return response()->json([
+            'success' => true,
+            'message' => "Riwayat #{$result['id']} ({$result['pola']}) dihapus dan mutasi {$reverseAction}. Stok saat ini: {$result['new_stock']} pcs.",
+        ]);
+    }
+
+    public function destroy($id)
+    {
+        $stock = StokBarangJadi::with('pola')->findOrFail($id);
+        $polaNama = $stock->pola->nama_pola ?? ('Pola #' . $stock->id_pola);
+        $warna = $stock->nama_warna;
+
+        DB::transaction(function () use ($stock) {
+            if (Schema::hasTable('Riwayat_Stok_Barang_Jadi')) {
+                RiwayatStokBarangJadi::where('id_stok', $stock->id_stok)->delete();
+            }
+            $stock->delete();
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => "Baris Stok Barang Jadi #{$id} ({$polaNama} - {$warna}) beserta riwayat terkait berhasil dihapus.",
         ]);
     }
 }
