@@ -1,12 +1,13 @@
 # Bong Garment - CMT Production & Inventory Management System
 
-A full-stack, enterprise-grade production and inventory management web application engineered for **Cut, Make, Trim (CMT)** apparel manufacturing. The system features physical fabric roll tracking (`Detail_Roll_Bahan`), an **Earliest Deadline First (EDF)** dynamic priority cutting schedule (`Pesanan`), an 11-metric garment dimension matrix (`Spesifikasi_Ukuran`), multi-stage Quality Control (`QC`) with rework workflows, perpetual finished goods inventory (`Stok_Barang_Jadi`), and an immutable finished goods transaction ledger with client tracking (`Riwayat_Stok_Barang_Jadi`).
+A full-stack, enterprise-grade production and inventory management web application engineered for **Cut, Make, Trim (CMT)** apparel manufacturing. The system features physical fabric roll tracking (`Detail_Roll_Bahan`), an **Earliest Deadline First (EDF)** dynamic priority cutting schedule (`Pesanan`), an 11-metric garment dimension matrix (`Spesifikasi_Ukuran`), multi-stage Quality Control (`QC`) with rework workflows, perpetual finished goods inventory (`Stok_Barang_Jadi`) with configurable global low-stock thresholds, and a reversible finished goods transaction ledger with client tracking (`Riwayat_Stok_Barang_Jadi`).
 
 This repository contains the software implementation for an undergraduate thesis at **Universitas Tarumanagara (UNTAR)**, Faculty of Information Technology, Department of Information Systems.
 
 - **Live App Demo:** [https://thesis.megumin.me](https://thesis.megumin.me) / [https://thesis1.megumin.me](https://thesis1.megumin.me) / [https://thesis2.megumin.me](https://thesis2.megumin.me)
 - **Author & Project Lead:** Luis Febry (NIM: 825220088)
 - **Institution:** Universitas Tarumanagara, Jakarta (2026)
+- **User Manual Book:** [MANUAL_BOOK.md](MANUAL_BOOK.md)
 
 ---
 
@@ -41,7 +42,7 @@ flowchart TB
         CSRF --> SessionGuard --> RBAC --> AutoMigrate
     end
 
-    subgraph AppLayer["3. Application & Controller Layer (Laravel 11 / PHP 8.3)"]
+    subgraph AppLayer["3. Application & Controller Layer (Laravel 11 / PHP 8.2–8.5)"]
         direction TB
         Router["HTTP Routing Engine (routes/web.php)"]
         
@@ -133,7 +134,7 @@ flowchart LR
 2. **Order Planning & EDF Queue (`Pesanan`):** Orders are mapped to master patterns (`Pola`), garment size dimensions (`Spesifikasi_Ukuran`), and fabric notes, then queued using the **Earliest Deadline First (EDF)** algorithm.
 3. **Spreading & Series Cutting (`Pemotongan_Seri`):** Fabric rolls are spread on cutting tables (`panjang_gelar`, `jumlah_tumpuk`), deducting roll balances (`kain_terpakai`) and updating roll statuses (`Tersedia`, `Dipotong`, `Habis`).
 4. **Multi-Stage QC & Rework (`QC`):** Batches are inspected across 3 checkpoints (`Prototipe`, `Potong`, `Jahit Akhir`) with defect classification (`Cacat Potong`, `Cacat Jahit`, `Cacat Bahan`), PIC assignment, and target completion dates.
-5. **Perpetual Finished Stock & Transaction Ledger (`Stok_Barang_Jadi` & `Riwayat_Stok_Barang_Jadi`):** Units passing final sewing QC (`Jahit Akhir`) automatically credit finished goods warehouse balances. Outbound transactions (client shipments / store retail) log immutable debit records capturing the exact recipient Mitra, quantity, and timestamp.
+5. **Perpetual Finished Stock & Transaction Ledger (`Stok_Barang_Jadi` & `Riwayat_Stok_Barang_Jadi`):** Units from **`Produk Abadi`** orders passing final sewing QC (`Jahit Akhir`) automatically credit finished goods warehouse balances (`Request Mitra` and `Inisiatif Tren Pasar` orders remain separate and do not add to warehouse stock). Configurable global low-stock alert thresholds monitor both finished stock and trims, while outbound/inbound ledger entries capture the recipient Mitra, quantity, and timestamp with deletion and balance-reversal support.
 
 ---
 
@@ -184,7 +185,7 @@ erDiagram
     Spesifikasi_Ukuran {
         int id_spesifikasi PK
         int id_pola FK
-        string nama_ukuran "S, M, L, XL"
+        string nama_ukuran "All, S, M, L, XL"
         decimal lingkar_dada
         decimal panjang_baju_celana
         decimal lingkar_pinggang
@@ -334,7 +335,7 @@ flowchart TD
 ### Option 1: Standard Laravel + Composer (Recommended)
 ```bash
 # 1. Clone repository
-git clone https://github.com/luisfebry/Bong-Garment-Thesis.git
+git clone https://github.com/LuisFebry/Bong-Garment-Thesis.git
 cd Bong-Garment-Thesis
 
 # 2. Install dependencies
@@ -344,11 +345,13 @@ composer install
 cp .env.example .env
 php artisan key:generate
 
-# 4. Configure database credentials in .env
+# 4. Configure database & file drivers in .env
 # DB_HOST=127.0.0.1
-# DB_DATABASE=bong_garment
-# DB_USERNAME=root
-# DB_PASSWORD=secret
+# DB_DATABASE=bong_garment_db
+# DB_USERNAME=megumin
+# DB_PASSWORD=megumin
+# SESSION_DRIVER=file
+# CACHE_STORE=file
 
 # 5. Run migrations & bootstrap default accounts
 php artisan migrate --force
@@ -452,12 +455,14 @@ In your OpenResty/Nginx server block, point `root` to `/path/to/project/public`,
 | `POST` | `/pola` | `PolaController@store` | Admin, Pemotong, Gudang | Register new garment master pattern & size matrix |
 | `GET` | `/pola/{id}` | `PolaController@show` | Admin, Pemotong, Gudang | View pattern details and associated size specifications |
 | `POST` | `/pola/{id}/update` | `PolaController@update` | Admin, Pemotong, Gudang | Update pattern code, category, and size metric values |
+| `POST` | `/pola/{id}/delete` | `PolaController@destroy` | Admin, Pemotong, Gudang | Delete master pattern and its size/accessory links (guarded against active orders or stock) |
 | **Pesanan & EDF Deadline Management** | | | | |
 | `GET` | `/pesanan` | `PesananController@index` | Admin | Production order list and intake form |
 | `POST` | `/pesanan` | `PesananController@store` | Admin | Register new production order with initial EDF deadline |
 | `POST` | `/pesanan/{id}/update` | `PesananController@update` | Admin | Edit order parameters, assign fabric receipt note, or change status |
-| `POST` | `/pesanan/{id}/revise-deadline` | `PesananController@reviseDeadline` | Admin | Revise order delivery deadline with immutable audit reason logging |
+| `POST` | `/pesanan/{id}/revise-deadline` | `PesananController@reviseDeadline` | Admin | Revise order delivery deadline with audit reason logging |
 | `POST` | `/pesanan/{id}/status` | `PesananController@updateStatus` | Admin | Update order manufacturing lifecycle status |
+| `POST` | `/pesanan/{id}/delete` | `PesananController@destroy` | Admin | Delete production order (guarded against active cutting series or QC logs) |
 | **Penerimaan Bahan & Roll Tracking** | | | | |
 | `GET` | `/penerimaan` | `PenerimaanBahanController@index` | Admin, Gudang | Fabric receipt notes, color batches, and individual roll inventory |
 | `POST` | `/penerimaan` | `PenerimaanBahanController@store` | Admin, Gudang | Record supplier delivery note, color groups, and roll metrics |
@@ -482,15 +487,20 @@ In your OpenResty/Nginx server block, point `root` to `/path/to/project/public`,
 | `GET` | `/pemotongan` | `PemotonganSeriController@index` | Admin, Pemotong | Cutting queue sorted by EDF deadline and cutting series records |
 | `POST` | `/pemotongan` | `PemotonganSeriController@store` | Admin, Pemotong | Execute cutting series, spread rolls, and deduct roll balances |
 | `POST` | `/pemotongan/{id}/update` | `PemotonganSeriController@update` | Admin, Pemotong | Revise cutting series data and recalculate roll balance deductions |
+| `POST` | `/pemotongan/{id}/delete` | `PemotonganSeriController@destroy` | Admin, Pemotong | Delete cutting series with option to reverse or keep roll `"Habis"` status/stock |
 | **Quality Control Multi-Stage & Rework** | | | | |
 | `GET` | `/qc` | `QcController@index` | Admin, QC | Multi-stage inspection queue (`Prototipe`, `Potong`, `Jahit Akhir`) |
-| `POST` | `/qc` | `QcController@store` | Admin, QC | Record QC inspection batch (passed count, defects, rework PIC) |
+| `POST` | `/qc` | `QcController@store` | Admin, QC | Record QC inspection batch (auto-adds `Stok_Barang_Jadi` only for `Produk Abadi` at `Jahit Akhir`) |
 | `POST` | `/qc/{id}/update` | `QcController@update` | Admin, QC | Edit QC log quantities, defect type, and status |
+| `POST` | `/qc/{id}/delete` | `QcController@destroy` | Admin, QC | Delete QC inspection log and revert `Produk Abadi` finished-stock credit if applicable |
 | `POST` | `/qc/{id}/complete-rework` | `QcController@completeRework` | Admin, QC | Mark rework as completed with actual completion timestamp |
 | **Stok Barang Jadi & Riwayat Transaksi Mitra** | | | | |
-| `GET` | `/stok` | `StokBarangJadiController@index` | Admin, Gudang, Pemilik | Monitor perpetual finished stock & immutable transaction history |
+| `GET` | `/stok` | `StokBarangJadiController@index` | Admin, Gudang, Pemilik | Monitor perpetual finished stock, global low-stock thresholds, and transaction history |
 | `POST` | `/stok/adjust` | `StokBarangJadiController@adjustStock` | Admin, Gudang | Process outbound shipment with `nama_mitra` tracking & audit trail |
+| `POST` | `/stok/thresholds` | `StokBarangJadiController@updateThresholds` | Admin, Gudang | Save global low-stock alert thresholds (`min_stok_jadi`, `min_stok_aksesoris`) |
+| `POST` | `/stok/riwayat/{id}/delete` | `StokBarangJadiController@destroyRiwayat` | Admin, Gudang | Delete transaction ledger entry and reverse its `MASUK`/`KELUAR` stock balance delta |
 | `POST` | `/stok/{id}/update` | `StokBarangJadiController@update` | Admin, Gudang | Direct revision of finished stock balance |
+| `POST` | `/stok/{id}/delete` | `StokBarangJadiController@destroy` | Admin, Gudang | Delete finished goods stock row and associated ledger entries |
 | **Aksesoris & Bill of Materials (BOM)** | | | | |
 | `GET` | `/aksesoris` | `AksesorisController@index` | Admin, Gudang | Manage trims inventory and BOM pattern accessory allocations |
 | `POST` | `/aksesoris` | `AksesorisController@store` | Admin, Gudang | Register new trims or accessory stock item |
