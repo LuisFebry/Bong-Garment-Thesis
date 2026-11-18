@@ -7,7 +7,6 @@ This repository contains the software implementation for an undergraduate thesis
 - **Live App Demo:** [https://thesis.megumin.me](https://thesis.megumin.me) / [https://thesis1.megumin.me](https://thesis1.megumin.me) / [https://thesis2.megumin.me](https://thesis2.megumin.me)
 - **Author & Project Lead:** Luis Febry (NIM: 825220088)
 - **Institution:** Universitas Tarumanagara, Jakarta (2026)
-- **User Manual Book:** [MANUAL_BOOK.md](MANUAL_BOOK.md)
 
 ---
 
