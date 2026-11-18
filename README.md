@@ -27,7 +27,7 @@ flowchart TB
         subgraph DynamicInteractivity["Client-Side Interactivity"]
             ModalDOM["Modal & Form Controllers<br/>(Multi-Roll Intake, Rework Dispatch, Deadline Revision)"]
             CalcEngine["Real-Time Calculators<br/>(Spreading Ply, Fabric Yield & Consumption)"]
-            ExportEngine["Reporting Exporter<br/>(Dynamic CSV & @media print Stylesheets)"]
+            ExportEngine["Reporting Exporter<br/>(Word .doc, CSV & @media print PDF)"]
         end
         UIComponents --- DynamicInteractivity
     end
@@ -55,7 +55,7 @@ flowchart TB
             QcC["QcController<br/>(3-Stage QC & Rework Dispatch)"]
             StokC["StokBarangJadiController<br/>(Perpetual Stock & Outbound)"]
             AccC["AksesorisController<br/>(Trims Stock & BOM Mapping)"]
-            LaporanC["LaporanEksekutifController<br/>(Yield Metrics & Analytics)"]
+            LaporanC["LaporanEksekutifController<br/>(5 Formal Rekapan & Exports)"]
             SettingC["PengaturanController<br/>(Staff RBAC & Database Modes)"]
         end
         Router --> DomainControllers
@@ -107,7 +107,7 @@ flowchart TB
 | **Typography** | Google Fonts | Web | `Inter` (high-readability UI typography) & `JetBrains Mono` (tabular numbers, batch roll IDs, and physical measurement metrics) |
 | **Iconography** | Lucide Icons | Latest CDN | Scalable SVG operational icons embedded across sidebar navigation, status badges, and action buttons |
 | **Frontend Interactivity** | Pure JavaScript | ECMAScript 2023 | Interactive modal management (multi-roll intake, rework assignment, deadline revisions), real-time cutting yield calculators, dynamic unit switchers, and live search filters |
-| **Document & Data Export** | CSV & Browser Print | Dynamic Stream | Instant CSV export with dynamic headers for production analytics, plus formatted `@media print` stylesheets for executive factory reports |
+| **Document & Data Export** | Word (`.doc`), CSV & PDF Print | Multi-Format | Downloadable Word (`.doc`) documents with company letterhead (*Kop Surat*), 2-column operational *Rekapan* table, and signature block, alongside UTF-8 CSV exports and `@media print` A4 PDF layouts across 5 report modes |
 | **Containerization** | Docker & Compose | Multi-Stage | Portable containerized execution (`Dockerfile`, `docker-compose.yml`) bundling PHP 8.4-FPM, internal Nginx web server, and MySQL 8.0 database container |
 | **Cloud Deployment** | Heroku Cloud PaaS | Linux 64-bit | Live production hosting with `heroku-php-apache2` web server routing, automatic Procfile release migrations (`php artisan migrate --force`), and JawsDB MySQL integration |
 | **Database Initialization** | Laravel Seeders | Dual Mode | Dedicated production seeder (`ProductionBootstrapSeeder` for factory go-live with zero sample data) and evaluation seeder (`DatabaseSeeder` with realistic 18-table sample data) |
@@ -508,8 +508,8 @@ In your OpenResty/Nginx server block, point `root` to `/path/to/project/public`,
 | `POST` | `/aksesoris/{id}/delete` | `AksesorisController@destroy` | Admin, Gudang | Delete accessory item |
 | `POST` | `/aksesoris/pola-mapping` | `AksesorisController@storePolaMapping` | Admin, Gudang | Map accessory requirement per garment piece (BOM) |
 | `POST` | `/aksesoris/pola-mapping/delete` | `AksesorisController@destroyPolaMapping` | Admin, Gudang | Remove BOM pattern accessory requirement |
-| **Executive Reports & Data Export** | | | | |
-| `GET` | `/laporan` | `LaporanEksekutifController@index` | Admin, Pemilik | Executive production analytics, yield metrics, and CSV export |
+| **Executive Reports & Formal Rekapan Export** | | | | |
+| `GET` | `/laporan` | `LaporanEksekutifController@index` | Admin, Pemilik | 5 formal report modes (`KONSOLIDASI`, `STOK`, `BAHAN_MASUK`, `MUTASI_KELUAR`, `QC`) with company letterhead, 2-column *Rekapan* table, signature block, and `.doc` / `.csv` / PDF exports |
 | **Pengaturan Sistem & User Administration** | | | | |
 | `GET` | `/pengaturan` | `PengaturanController@index` | Admin | User account administration, master lookups, and DB reset |
 | `POST` | `/pengaturan/user` | `PengaturanController@storeUser` | Admin | Register new staff account with assigned role |
