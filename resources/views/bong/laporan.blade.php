@@ -8,7 +8,13 @@
   $summary = $reports['summary'] ?? [];
   $thresholds = $reports['thresholds'] ?? ['min_stok_jadi' => 20, 'min_stok_aksesoris' => 500];
   $meta = $reports['meta'] ?? [];
+  $company = $reports['companyProfile'] ?? \App\Http\Controllers\LaporanEksekutifController::getCompanyProfile();
   $jenis = $filters['jenis_laporan'] ?? 'KONSOLIDASI';
+
+  $cookieAuthRole = $_COOKIE['bong_garment_auth_role'] ?? request()->cookie('bong_garment_auth_role');
+  $cookieSimRole = $_COOKIE['bong_garment_role'] ?? request()->cookie('bong_garment_role');
+  $effectiveViewRole = ($cookieAuthRole === 'Admin' && $cookieSimRole) ? $cookieSimRole : ($meta['printer_role'] ?? 'Admin');
+  $canEditKopSurat = ($effectiveViewRole === 'Admin');
 
   $printedAt = $meta['printed_at'] ?? \Carbon\Carbon::now('Asia/Jakarta');
   $printedAtFormatted = $printedAt instanceof \Carbon\Carbon
@@ -24,10 +30,11 @@
   $printerName = $meta['printer_name'] ?? 'Administrator';
   $printerUsername = $meta['printer_username'] ?? 'admin';
   $printerRole = $meta['printer_role'] ?? 'Admin';
+  $companyDisplayName = $company['nama_perusahaan'] ?? 'BONG GARMENT';
   $printerRoleLabel = match($printerRole) {
-      'Pemilik' => 'Pemilik Konveksi Bong Garment',
-      'Admin' => 'Admin / Manajemen Konveksi Bong Garment',
-      default => $printerRole . ' Konveksi Bong Garment',
+      'Pemilik' => 'Pemilik ' . $companyDisplayName,
+      'Admin' => 'Admin / Manajemen ' . $companyDisplayName,
+      default => $printerRole . ' ' . $companyDisplayName,
   };
 
   $startLabel = !empty($filters['start_date']) ? \Carbon\Carbon::parse($filters['start_date'])->format('d M Y') : null;
@@ -74,15 +81,38 @@
 
 <style>
   @page {
-    size: A4;
-    margin: 12mm 14mm;
+    size: A4 landscape;
+    margin: 10mm 12mm;
   }
   @media print {
+    html, body, body > div, main {
+      display: block !important;
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+      background: #ffffff !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
     .doc-sheet {
       border: none !important;
       box-shadow: none !important;
+      border-radius: 0 !important;
       padding: 0 !important;
       margin: 0 !important;
+      display: block !important;
+    }
+    .doc-sheet > .print-page-break {
+      margin-top: 0 !important;
+      padding-top: 0 !important;
+      break-before: page !important;
+      page-break-before: always !important;
+    }
+    .print-avoid-break {
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
     }
     .doc-table thead {
       display: table-header-group;
@@ -91,14 +121,35 @@
       break-inside: avoid;
       page-break-inside: avoid;
     }
+    .doc-table th,
+    .doc-table td {
+      padding-top: 4px !important;
+      padding-bottom: 4px !important;
+    }
     .signature-block {
-      break-inside: avoid;
-      page-break-inside: avoid;
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
     }
   }
 </style>
 
-<div class="space-y-6">
+<div class="space-y-6 print:space-y-0">
+  @if(session('success'))
+    <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center justify-between gap-2 print:hidden">
+      <div class="flex items-center gap-2">
+        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600 shrink-0"></i>
+        <span>{{ session('success') }}</span>
+      </div>
+    </div>
+  @endif
+
+  @if($errors->any())
+    <div class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium print:hidden">
+      <i data-lucide="alert-circle" class="w-4 h-4 inline mr-1 text-rose-600"></i>
+      {{ $errors->first() }}
+    </div>
+  @endif
+
   <!-- Header Kontrol & Tombol Ekspor Dokumen -->
   <div class="flex flex-wrap items-center justify-between gap-4 print:hidden">
     <div>
@@ -107,6 +158,12 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
+      @if($canEditKopSurat)
+        <button type="button" onclick="openCompanyProfileModal()" class="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-semibold text-xs rounded-lg shadow-sm inline-flex items-center gap-1.5 transition-colors">
+          <i data-lucide="building-2" class="w-4 h-4 text-indigo-600"></i>
+          <span>Ubah Kop Surat &amp; Alamat</span>
+        </button>
+      @endif
       <button type="button" onclick="exportLaporanWord()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-sm inline-flex items-center gap-1.5 transition-colors">
         <i data-lucide="file-text" class="w-4 h-4"></i>
         <span>Unduh Dokumen (.doc)</span>
@@ -174,20 +231,25 @@
   <div id="laporan-dokumen-resmi" class="doc-sheet bg-white rounded-xl border border-slate-300 shadow-sm p-6 md:p-10 space-y-6 text-slate-900">
 
     <!-- KOP SURAT RESMI PERUSAHAAN -->
-    <div class="border border-slate-300 rounded-xl p-5 bg-white">
+    <div class="border border-slate-300 rounded-xl p-5 bg-white print-avoid-break">
       <div class="flex items-start gap-4">
-        <!-- Logo Emblem Perusahaan -->
-        <div class="w-14 h-14 rounded-lg border-2 border-indigo-700 bg-indigo-50 flex flex-col items-center justify-center shrink-0">
-          <span class="font-serif font-extrabold text-indigo-800 text-lg leading-none tracking-tight">BG</span>
-          <span class="text-[8px] font-bold text-rose-700 uppercase tracking-wider mt-0.5">CMT</span>
+        <!-- Logo Konsisten dengan Navbar (Indigo Rounded + Ikon Gunting Putih) -->
+        <div class="w-14 h-14 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-100 shrink-0" style="background-color:#4f46e5; color:#ffffff;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="6" cy="6" r="3"/>
+            <path d="M8.12 8.12 12 12"/>
+            <path d="M20 4 8.12 15.88"/>
+            <circle cx="6" cy="18" r="3"/>
+            <path d="M14.8 14.8 20 20"/>
+          </svg>
         </div>
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-baseline gap-x-2.5">
-            <h1 class="font-serif text-xl md:text-2xl font-extrabold text-indigo-950 tracking-wide uppercase">BONG GARMENT</h1>
-            <span class="text-[11px] font-bold text-rose-700 uppercase tracking-widest">KONVEKSI &amp; MANUFAKTUR PAKAIAN CMT</span>
+            <h1 class="font-serif text-xl md:text-2xl font-extrabold text-indigo-950 tracking-wide uppercase">{{ $company['nama_perusahaan'] }}</h1>
+            <span class="text-[11px] font-bold text-rose-700 uppercase tracking-widest">{{ $company['tagline'] }}</span>
           </div>
-          <p class="text-xs text-slate-600 mt-0.5">Jl. Industri Konveksi Raya No. 18, Jakarta Barat | Telp: (021) 5589-2410</p>
-          <p class="text-[11px] text-slate-500">Sistem Informasi Manajemen Produksi &amp; Inventori Konveksi Cut, Make, and Trim (CMT)</p>
+          <p class="text-xs text-slate-600 mt-0.5">{{ $company['alamat'] }} | Telp: {{ $company['telepon'] }}</p>
+          <p class="text-[11px] text-slate-500">{{ $company['deskripsi_sistem'] }}</p>
         </div>
       </div>
 
@@ -202,9 +264,9 @@
       <div class="border-t-2 border-slate-900 mt-4"></div>
     </div>
 
-    <!-- 3 KARTU RINGKASAN EKSEKUTIF DINAMIS -->
+    <!-- 3 KARTU RINGKASAN EKSEKUTIF DINAMIS (Selalu 3 Kolom Sejajar pada Halaman 1 PDF) -->
     @if($jenis === 'KONSOLIDASI')
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="kpi-summary-grid grid grid-cols-1 md:grid-cols-3 print:grid-cols-3 gap-4 print-avoid-break">
         <div class="border border-slate-300 rounded-xl p-4 bg-white">
           <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">TOTAL PESANAN PRODUKSI</p>
           <p class="text-xl font-extrabold text-slate-900 mt-1">{{ number_format($summary['total_pesanan'] ?? 0) }} Pesanan</p>
@@ -222,7 +284,7 @@
         </div>
       </div>
     @elseif($jenis === 'STOK')
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="kpi-summary-grid grid grid-cols-1 md:grid-cols-3 print:grid-cols-3 gap-4 print-avoid-break">
         <div class="border border-slate-300 rounded-xl p-4 bg-white">
           <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">TOTAL VARIASI STOK JADI</p>
           <p class="text-xl font-extrabold text-slate-900 mt-1">{{ number_format($summary['total_sku_stok_jadi'] ?? 0) }} Item ({{ number_format($summary['total_stok_jadi'] ?? 0) }} Pcs)</p>
@@ -242,7 +304,7 @@
         </div>
       </div>
     @elseif($jenis === 'BAHAN_MASUK')
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="kpi-summary-grid grid grid-cols-1 md:grid-cols-3 print:grid-cols-3 gap-4 print-avoid-break">
         <div class="border border-slate-300 rounded-xl p-4 bg-white">
           <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">TOTAL NOTA PENERIMAAN</p>
           <p class="text-xl font-extrabold text-slate-900 mt-1">{{ number_format($summary['total_penerimaan_nota'] ?? 0) }} Nota</p>
@@ -260,7 +322,7 @@
         </div>
       </div>
     @elseif($jenis === 'MUTASI_KELUAR')
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="kpi-summary-grid grid grid-cols-1 md:grid-cols-3 print:grid-cols-3 gap-4 print-avoid-break">
         <div class="border border-slate-300 rounded-xl p-4 bg-white">
           <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">TOTAL LOG TRANSAKSI STOK</p>
           <p class="text-xl font-extrabold text-slate-900 mt-1">{{ number_format($riwayatList->count()) }} Transaksi</p>
@@ -278,7 +340,7 @@
         </div>
       </div>
     @elseif($jenis === 'QC')
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="kpi-summary-grid grid grid-cols-1 md:grid-cols-3 print:grid-cols-3 gap-4 print-avoid-break">
         <div class="border border-slate-300 rounded-xl p-4 bg-white">
           <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">TOTAL SAMPEL DIPERIKSA</p>
           <p class="text-xl font-extrabold text-slate-900 mt-1">{{ number_format($summary['total_sampel_diperiksa'] ?? 0) }} Pcs ({{ $qcList->count() }} Log)</p>
@@ -297,11 +359,11 @@
       </div>
     @endif
 
-    <!-- TABEL REKAPITULASI FORMAL 2-KOLOM ALA DOKUMEN .DOCX (Ditampilkan pada KONSOLIDASI) -->
+    <!-- TABEL REKAPITULASI FORMAL 2-KOLOM ALA DOKUMEN .DOCX (Halaman 2 Khusus KONSOLIDASI) -->
     @if($jenis === 'KONSOLIDASI')
-      <div class="pt-2">
+      <div class="rekapan-sheet-block print-page-break print-avoid-break pt-2">
         <div class="text-center mb-3 font-serif">
-          <h3 class="text-sm font-bold uppercase tracking-wide text-slate-900">KONVEKSI BONG GARMENT</h3>
+          <h3 class="text-sm font-bold uppercase tracking-wide text-slate-900">KONVEKSI {{ strtoupper($company['nama_perusahaan']) }}</h3>
           <p class="text-sm font-bold text-slate-900">Rekapitulasi Operasional Produksi &amp; Posisi Inventori CMT</p>
           <p class="text-xs font-bold text-slate-800">Per {{ $printedDateLong }}</p>
         </div>
@@ -410,7 +472,8 @@
       </div>
     @endif
 
-    <!-- TABEL RINCIAN DATA SESUAI JENIS LAPORAN -->
+    <!-- TABEL RINCIAN DATA SESUAI JENIS LAPORAN (Halaman 3 pada KONSOLIDASI / Halaman 2+ pada Laporan Lainnya) -->
+    <div class="print-page-break space-y-6">
     @if($jenis === 'KONSOLIDASI')
       <!-- Detail Konsolidasi End-to-End Pesanan -->
       <div class="border border-slate-300 rounded-xl overflow-hidden">
@@ -889,16 +952,83 @@
     <!-- BLOK PENGESAHAN RESMI (TANDA TANGAN KANAN BAWAH) -->
     <div class="signature-block pt-4 flex justify-end">
       <div class="w-72 text-center text-xs space-y-1">
-        <p class="text-slate-700">Jakarta, {{ $printedDateShort }}</p>
+        <p class="text-slate-700">{{ $company['kota_pengesahan'] ?? 'Jakarta' }}, {{ $printedDateShort }}</p>
         <p class="font-bold text-slate-900">Diotorisasi Oleh &mdash; {{ $printerRoleLabel }}</p>
         <div class="h-14"></div>
         <p class="font-bold text-slate-900 uppercase underline underline-offset-4 tracking-wide">{{ $printerUsername }}</p>
         <p class="text-[11px] text-slate-500">{{ $printerName }} &bull; {{ $printerRoleLabel }}</p>
       </div>
     </div>
+    </div>
 
   </div>
 </div>
+
+@if($canEditKopSurat)
+<!-- MODAL UBAH KOP SURAT & PROFIL PERUSAHAAN -->
+<div id="modal-company-profile" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 print:hidden">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden">
+    <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center">
+          <i data-lucide="building-2" class="w-4 h-4"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900 text-sm">Ubah Kop Surat, Alamat &amp; Telepon Perusahaan</h3>
+          <p class="text-[11px] text-slate-500">Perubahan diterapkan otomatis ke halaman laporan, PDF, dan dokumen Word (<code>.doc</code>)</p>
+        </div>
+      </div>
+      <button type="button" onclick="closeCompanyProfileModal()" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <form method="POST" action="{{ route('laporan.profile.update', [], false) }}" class="p-6 space-y-4 text-xs">
+      @csrf
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Nama Perusahaan <span class="text-rose-600">*</span></label>
+          <input type="text" name="nama_perusahaan" required maxlength="100" value="{{ $company['nama_perusahaan'] }}" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-semibold">
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Tagline / Bidang Usaha <span class="text-rose-600">*</span></label>
+          <input type="text" name="tagline" required maxlength="120" value="{{ $company['tagline'] }}" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+        </div>
+      </div>
+
+      <div>
+        <label class="block font-semibold text-slate-700 mb-1">Alamat Lengkap Konveksi <span class="text-rose-600">*</span></label>
+        <input type="text" name="alamat" required maxlength="255" value="{{ $company['alamat'] }}" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Nomor Telepon / HP <span class="text-rose-600">*</span></label>
+          <input type="text" name="telepon" required maxlength="60" value="{{ $company['telepon'] }}" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-mono">
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Kota Pengesahan Tanda Tangan <span class="text-rose-600">*</span></label>
+          <input type="text" name="kota_pengesahan" required maxlength="60" value="{{ $company['kota_pengesahan'] ?? 'Jakarta' }}" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+        </div>
+      </div>
+
+      <div>
+        <label class="block font-semibold text-slate-700 mb-1">Subjudul / Deskripsi Sistem <span class="text-rose-600">*</span></label>
+        <input type="text" name="deskripsi_sistem" required maxlength="200" value="{{ $company['deskripsi_sistem'] }}" class="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+      </div>
+
+      <div class="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+        <button type="button" onclick="closeCompanyProfileModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors">
+          Batal
+        </button>
+        <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm transition-colors">
+          Simpan Kop Surat
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+@endif
 
 @php
   $exportRows = [];
@@ -994,6 +1124,12 @@
   const exportDataRows = @json($exportRows);
   const activeJenisLaporan = @json($jenis);
   const wordMeta = {
+    companyName: @json($company['nama_perusahaan'] ?? 'BONG GARMENT'),
+    companyTagline: @json($company['tagline'] ?? 'KONVEKSI & MANUFAKTUR PAKAIAN CMT'),
+    companyAddress: @json($company['alamat'] ?? 'Jl. Industri Konveksi Raya No. 18, Jakarta Barat'),
+    companyPhone: @json($company['telepon'] ?? '(021) 5589-2410'),
+    companySubtitle: @json($company['deskripsi_sistem'] ?? 'Sistem Informasi Manajemen Produksi & Inventori Konveksi Cut, Make, and Trim (CMT)'),
+    cityName: @json($company['kota_pengesahan'] ?? 'Jakarta'),
     title: @json($activeReportTitle),
     periode: @json($periodeText),
     printedBy: @json($printerUsername . ' (' . $printerName . ' / ' . $printerRole . ')'),
@@ -1003,6 +1139,16 @@
     signerUser: @json($printerUsername),
     signerName: @json($printerName)
   };
+
+  function openCompanyProfileModal() {
+    const m = document.getElementById('modal-company-profile');
+    if (m) m.classList.remove('hidden');
+  }
+
+  function closeCompanyProfileModal() {
+    const m = document.getElementById('modal-company-profile');
+    if (m) m.classList.add('hidden');
+  }
 
   function exportLaporanExcel() {
     if (!exportDataRows || exportDataRows.length === 0) {
@@ -1040,7 +1186,7 @@
 
     // Extract 3 KPI summary cards into a crisp Word-compatible 3-column table
     let kpiTableHtml = '';
-    const kpiGrid = docRoot.querySelector('.grid.grid-cols-1.md\\:grid-cols-3');
+    const kpiGrid = docRoot.querySelector('.kpi-summary-grid');
     if (kpiGrid) {
       const kpiCells = Array.from(kpiGrid.children).map(card => {
         const ps = Array.from(card.querySelectorAll('p')).map(p => p.textContent.trim());
@@ -1056,7 +1202,7 @@
     // Extract section headings + tables cleanly for Word (.doc) rendering
     const tables = Array.from(docRoot.querySelectorAll('table.doc-table')).map(tbl => {
       let headingHtml = '';
-      const centerWrap = tbl.closest('.pt-2');
+      const centerWrap = tbl.closest('.rekapan-sheet-block');
       const cardWrap = tbl.closest('.border.border-slate-300');
       if (centerWrap) {
         const lines = Array.from(centerWrap.querySelectorAll('h3, p')).map(el => escapeHtmlText(el.textContent.trim()));
@@ -1089,7 +1235,7 @@
   <meta charset="utf-8" />
   <title>${escapeHtmlText(wordMeta.title)}</title>
   <style>
-    @page { size: A4; margin: 1.5cm; }
+    @page { size: A4 landscape; margin: 1.2cm; }
     body { font-family: "Times New Roman", Times, serif; color: #0f172a; font-size: 10pt; }
     .kop-title { font-size: 15pt; font-weight: bold; color: #1e1b4b; margin: 0; }
     .kop-sub { font-size: 9.5pt; color: #475569; margin: 2pt 0 0 0; }
@@ -1102,14 +1248,13 @@
 <body>
   <table style="width:100%; border-collapse:collapse;">
     <tr>
-      <td style="width:52pt; vertical-align:middle; text-align:center; border:2px solid #3730a3; background:#eef2ff; padding:6pt;">
-        <div style="font-size:13pt; font-weight:bold; color:#312e81;">BG</div>
-        <div style="font-size:7pt; font-weight:bold; color:#be123c;">CMT</div>
+      <td style="width:48pt; height:48pt; vertical-align:middle; text-align:center; background:#4f46e5; color:#ffffff; padding:6pt;">
+        <div style="font-size:20pt; line-height:1; color:#ffffff;">&#9986;</div>
       </td>
       <td style="padding-left:10pt; vertical-align:middle;">
-        <p class="kop-title">BONG GARMENT <span style="font-size:9pt; color:#be123c;">KONVEKSI &amp; MANUFAKTUR PAKAIAN CMT</span></p>
-        <p class="kop-sub">Jl. Industri Konveksi Raya No. 18, Jakarta Barat | Telp: (021) 5589-2410</p>
-        <p class="kop-sub">Sistem Informasi Manajemen Produksi &amp; Inventori Konveksi CMT</p>
+        <p class="kop-title">${escapeHtmlText(wordMeta.companyName)} <span style="font-size:9pt; color:#be123c;">${escapeHtmlText(wordMeta.companyTagline)}</span></p>
+        <p class="kop-sub">${escapeHtmlText(wordMeta.companyAddress)} | Telp: ${escapeHtmlText(wordMeta.companyPhone)}</p>
+        <p class="kop-sub">${escapeHtmlText(wordMeta.companySubtitle)}</p>
       </td>
     </tr>
   </table>
@@ -1129,7 +1274,7 @@
     <tr>
       <td style="width:58%;"></td>
       <td style="width:42%; text-align:center; font-size:9.5pt;">
-        <div>Jakarta, ${escapeHtmlText(wordMeta.dateShort)}</div>
+        <div>${escapeHtmlText(wordMeta.cityName)}, ${escapeHtmlText(wordMeta.dateShort)}</div>
         <div><b>Diotorisasi Oleh &mdash; ${escapeHtmlText(wordMeta.signerRole)}</b></div>
         <br/><br/><br/>
         <div><b><u>${escapeHtmlText(wordMeta.signerUser.toUpperCase())}</u></b></div>

@@ -126,9 +126,10 @@ Route::prefix('aksesoris')->middleware(RoleMiddleware::class . ':Admin,Gudang')-
     Route::post('/{id}/delete', [AksesorisController::class, 'destroy'])->name('aksesoris.delete');
 });
 
-// Laporan Eksekutif: Admin, Pemilik
+// Laporan Eksekutif: Admin, Pemilik (Pemilik blocked from POST by RoleMiddleware)
 Route::prefix('laporan')->middleware(RoleMiddleware::class . ':Admin,Pemilik')->group(function () {
     Route::get('/', [LaporanEksekutifController::class, 'index'])->name('laporan.index');
+    Route::post('/profile', [LaporanEksekutifController::class, 'updateProfile'])->name('laporan.profile.update');
 });
 
 // Pengaturan Sistem, Manajemen Pengguna & Reset Produksi: Admin

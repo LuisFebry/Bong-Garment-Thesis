@@ -510,6 +510,7 @@ In your OpenResty/Nginx server block, point `root` to `/path/to/project/public`,
 | `POST` | `/aksesoris/pola-mapping/delete` | `AksesorisController@destroyPolaMapping` | Admin, Gudang | Remove BOM pattern accessory requirement |
 | **Executive Reports & Formal Rekapan Export** | | | | |
 | `GET` | `/laporan` | `LaporanEksekutifController@index` | Admin, Pemilik | 5 formal report modes (`KONSOLIDASI`, `STOK`, `BAHAN_MASUK`, `MUTASI_KELUAR`, `QC`) with company letterhead, 2-column *Rekapan* table, signature block, and `.doc` / `.csv` / PDF exports |
+| `POST` | `/laporan/profile` | `LaporanEksekutifController@updateProfile` | Admin | Update company letterhead (*Kop Surat*) name, tagline, address, phone number, and signature city |
 | **Pengaturan Sistem & User Administration** | | | | |
 | `GET` | `/pengaturan` | `PengaturanController@index` | Admin | User account administration, master lookups, and DB reset |
 | `POST` | `/pengaturan/user` | `PengaturanController@storeUser` | Admin | Register new staff account with assigned role |

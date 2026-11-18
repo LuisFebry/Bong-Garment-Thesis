@@ -19,6 +19,73 @@ use App\Models\User;
 
 class LaporanEksekutifController extends Controller
 {
+    public static function getCompanyProfile(): array
+    {
+        $defaults = [
+            'nama_perusahaan' => 'BONG GARMENT',
+            'tagline' => 'KONVEKSI & MANUFAKTUR PAKAIAN CMT',
+            'alamat' => 'Jl. Industri Konveksi Raya No. 18, Jakarta Barat',
+            'telepon' => '(021) 5589-2410',
+            'deskripsi_sistem' => 'Sistem Informasi Manajemen Produksi & Inventori Konveksi Cut, Make, and Trim (CMT)',
+            'kota_pengesahan' => 'Jakarta',
+        ];
+
+        $path = storage_path('app/company_profile.json');
+        if (is_file($path)) {
+            $raw = @file_get_contents($path);
+            $decoded = $raw ? json_decode($raw, true) : null;
+            if (is_array($decoded)) {
+                return [
+                    'nama_perusahaan' => trim((string) ($decoded['nama_perusahaan'] ?? '')) ?: $defaults['nama_perusahaan'],
+                    'tagline' => trim((string) ($decoded['tagline'] ?? '')) ?: $defaults['tagline'],
+                    'alamat' => trim((string) ($decoded['alamat'] ?? '')) ?: $defaults['alamat'],
+                    'telepon' => trim((string) ($decoded['telepon'] ?? '')) ?: $defaults['telepon'],
+                    'deskripsi_sistem' => trim((string) ($decoded['deskripsi_sistem'] ?? '')) ?: $defaults['deskripsi_sistem'],
+                    'kota_pengesahan' => trim((string) ($decoded['kota_pengesahan'] ?? '')) ?: $defaults['kota_pengesahan'],
+                ];
+            }
+        }
+
+        return $defaults;
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $validated = $request->validate([
+            'nama_perusahaan' => 'required|string|max:100',
+            'tagline' => 'required|string|max:120',
+            'alamat' => 'required|string|max:255',
+            'telepon' => 'required|string|max:60',
+            'deskripsi_sistem' => 'required|string|max:200',
+            'kota_pengesahan' => 'required|string|max:60',
+        ]);
+
+        $profile = [
+            'nama_perusahaan' => trim($validated['nama_perusahaan']),
+            'tagline' => trim($validated['tagline']),
+            'alamat' => trim($validated['alamat']),
+            'telepon' => trim($validated['telepon']),
+            'deskripsi_sistem' => trim($validated['deskripsi_sistem']),
+            'kota_pengesahan' => trim($validated['kota_pengesahan']),
+        ];
+
+        $dir = storage_path('app');
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        file_put_contents($dir . DIRECTORY_SEPARATOR . 'company_profile.json', json_encode($profile, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Profil & Kop Surat perusahaan berhasil diperbarui.',
+                'data' => $profile,
+            ]);
+        }
+
+        return redirect()->back()->with('success', 'Profil & Kop Surat perusahaan berhasil diperbarui.');
+    }
+
     public function index(Request $request)
     {
         $jenisLaporan = strtoupper((string) $request->input('jenis_laporan', 'KONSOLIDASI'));
@@ -243,6 +310,7 @@ class LaporanEksekutifController extends Controller
                 'printer_role' => $printerRole,
                 'printed_at' => Carbon::now('Asia/Jakarta'),
             ],
+            'companyProfile' => self::getCompanyProfile(),
             'thresholds' => $thresholds,
             'summary' => [
                 'total_pesanan' => $totalOrders,
