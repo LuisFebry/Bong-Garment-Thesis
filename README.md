@@ -1,14 +1,21 @@
-# Bong Garment Thesis Prototype
+# Bong Garment Thesis Prototype (`prototype` branch)
 
 **Pembangunan Manajemen Produksi dan Inventori Garment Berbasis Web (Bong Garment)**  
 *Skripsi Program Studi Sistem Informasi - Universitas Tarumanagara (2026)*  
 **Disusun oleh:** Luis Febry (NIM: 825220088)
 
+- **Live Prototype Preview (GitHub Pages):** [https://luisfebry.github.io/Bong-Garment-Thesis](https://luisfebry.github.io/Bong-Garment-Thesis)
+- **Active Branch:** [`prototype`](https://github.com/LuisFebry/Bong-Garment-Thesis/tree/prototype) *(Static HTML/CSS/JS client-side preview)*
+- **Production App Branch:** [`main`](https://github.com/LuisFebry/Bong-Garment-Thesis/tree/main) *(Full-stack Laravel 11 + MySQL 8.0 InnoDB)*
+
+> [!NOTE]
+> **Branch Structure:** You are currently viewing the **`prototype`** branch, which hosts the static browser-based UI prototype deployed on GitHub Pages at [https://luisfebry.github.io/Bong-Garment-Thesis](https://luisfebry.github.io/Bong-Garment-Thesis). For the full-stack Laravel 11 & MySQL 8.0 production application, switch to the **[`main` branch](https://github.com/LuisFebry/Bong-Garment-Thesis/tree/main)**.
+
 ---
 
 ## 📌 Executive Overview
 
-**Bong Garment Management System (Static HTML Prototype)** is a 100% client-side, static HTML/CSS/JavaScript prototype matching the visual layout, workflows, 18-table relational database schema, and 5-role access control of the full Laravel web application (`Bong-Garment-Thesis-main`), running purely in the browser via `localStorage` without any backend server or build step.
+**Bong Garment Management System (Static HTML Prototype)** is a 100% client-side, static HTML/CSS/JavaScript prototype matching the visual layout, workflows, 18-table relational database schema, and 5-role access control of the full Laravel web application on the [`main` branch](https://github.com/LuisFebry/Bong-Garment-Thesis/tree/main), running purely in the browser via `localStorage` without any backend server or build step.
 
 ---
 
@@ -59,7 +66,7 @@
 ---
 
 ## 🛠️ Architecture & Tech Stack
-* **Static HTML5 & Tailwind CSS (CDN):** Zero build step; works directly via `file://` or any static HTTP server / GitHub Pages.
+* **Static HTML5 & Tailwind CSS (CDN):** Zero build step; works directly via `file://`, any static HTTP server, or the live GitHub Pages deployment at [https://luisfebry.github.io/Bong-Garment-Thesis](https://luisfebry.github.io/Bong-Garment-Thesis).
 * **State & Domain Engine (`db.js`):** `BongDB` (18 canonical tables persisted in `localStorage`), `BongAuth` (5-role RBAC + Admin View Simulator + Pemilik Read-Only Audit Mode), `BongQ` (relational joins), and `BongService` (business logic & report builder).
 * **UI Controller (`app.js`):** Hash router, `dd/mm/yyyy` & `dd/mm/yyyy hh:mm` date input enhancer, modal/toast management, screen renderers, and Word/CSV/PDF exporters.
 
@@ -90,9 +97,15 @@
 
 ---
 
-## ⚡ Local Execution
-1. Open `index.html` directly in any modern browser, or serve locally:
-   ```bash
-   python -m http.server 8000
-   ```
-2. Visit `http://localhost:8000` (defaults to logged in as `Administrator` with full access; click **Keluar** or use **Mode Tampilan** in the top bar to switch roles).
+## ⚡ Live Preview & Local Execution
+- **Live GitHub Pages Preview (`prototype` branch):** Open [https://luisfebry.github.io/Bong-Garment-Thesis](https://luisfebry.github.io/Bong-Garment-Thesis) directly in any browser without installation.
+- **Local Execution (`prototype` branch):**
+  1. Download the `prototype` branch ZIP directly from GitHub (`https://github.com/LuisFebry/Bong-Garment-Thesis/tree/prototype`) or clone the `prototype` branch:
+     ```bash
+     git clone -b prototype https://github.com/LuisFebry/Bong-Garment-Thesis.git
+     ```
+  2. Open `index.html` directly in any modern browser, or serve locally:
+     ```bash
+     python -m http.server 8000
+     ```
+  3. Visit `http://localhost:8000` (defaults to logged in as `Administrator` with full access; click **Keluar** or use **Mode Tampilan** in the top bar to switch roles).
