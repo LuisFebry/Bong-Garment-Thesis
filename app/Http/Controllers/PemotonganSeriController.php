@@ -182,7 +182,7 @@ class PemotonganSeriController extends Controller
                             ? $perRollKain
                             : round((float)$g['panjang_gelar'] * (int)$g['jumlah_tumpuk'] * 0.15, 2);
 
-                        $newSisa = max(0.0, (float)$roll->ukuran_sisa - $rollDeduction);
+                        $newSisa = round(max(0.0, (float)$roll->ukuran_sisa - $rollDeduction), 2);
 
                         if ($statusRequested === 'Habis' || $newSisa <= 0.05) {
                             $roll->ukuran_sisa = 0.0;
@@ -305,7 +305,7 @@ class PemotonganSeriController extends Controller
                             $oldRoll->ukuran_sisa = (float) $oldRoll->ukuran_awal;
                             $oldRoll->status_roll = 'Tersedia';
                         } else {
-                            $restored = min((float) $oldRoll->ukuran_awal, (float) $oldRoll->ukuran_sisa + $oldKain);
+                            $restored = round(min((float) $oldRoll->ukuran_awal, (float) $oldRoll->ukuran_sisa + $oldKain), 2);
                             $oldRoll->ukuran_sisa = $restored;
                             $oldRoll->status_roll = ($restored >= (float) $oldRoll->ukuran_awal - 0.01) ? 'Tersedia' : 'Dipotong';
                         }
@@ -314,7 +314,7 @@ class PemotonganSeriController extends Controller
                     $newRoll = DetailRollBahan::where('id_roll', $newRollId)->lockForUpdate()->first();
                     if ($newRoll) {
                         $statusReq = $validated['status_roll_baru'] ?? 'Dipotong';
-                        $sisa = max(0.0, (float) $newRoll->ukuran_sisa - $newKain);
+                        $sisa = round(max(0.0, (float) $newRoll->ukuran_sisa - $newKain), 2);
                         if ($statusReq === 'Habis' || $sisa <= 0.05) {
                             $newRoll->ukuran_sisa = 0.0;
                             $newRoll->status_roll = 'Habis';
@@ -329,7 +329,7 @@ class PemotonganSeriController extends Controller
                     if ($roll) {
                         $wasHabis = $roll->status_roll === 'Habis';
                         $diff = $newKain - $oldKain;
-                        $adjustedSisa = max(0.0, min((float) $roll->ukuran_awal, (float) $roll->ukuran_sisa - $diff));
+                        $adjustedSisa = round(max(0.0, min((float) $roll->ukuran_awal, (float) $roll->ukuran_sisa - $diff)), 2);
                         $statusReq = $validated['status_roll_baru'] ?? $roll->status_roll;
                         if ($statusReq === 'Habis') {
                             $roll->ukuran_sisa = 0.0;
@@ -339,7 +339,7 @@ class PemotonganSeriController extends Controller
                             $roll->status_roll = 'Tersedia';
                         } else {
                             if ($wasHabis && (float) $roll->ukuran_sisa <= 0.05) {
-                                $adjustedSisa = max(0.0, (float) $roll->ukuran_awal - $newKain);
+                                $adjustedSisa = round(max(0.0, (float) $roll->ukuran_awal - $newKain), 2);
                             }
                             $roll->ukuran_sisa = $adjustedSisa;
                             $roll->status_roll = $statusReq;
@@ -392,7 +392,7 @@ class PemotonganSeriController extends Controller
                             $restoreAmt = $perRollKain > 0
                                 ? $perRollKain
                                 : round((float) $gk->panjang_gelar * (int) $gk->jumlah_tumpuk * 0.15, 2);
-                            $restored = min((float) $roll->ukuran_awal, (float) $roll->ukuran_sisa + $restoreAmt);
+                            $restored = round(min((float) $roll->ukuran_awal, (float) $roll->ukuran_sisa + $restoreAmt), 2);
                             $roll->ukuran_sisa = $restored;
                             $roll->status_roll = ($restored >= (float) $roll->ukuran_awal - 0.01) ? 'Tersedia' : 'Dipotong';
                         }

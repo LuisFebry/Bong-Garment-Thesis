@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+    <php>
+        <server name="APP_ENV" value="testing"/>
+        <server name="APP_KEY" value="base64:Q29uZmlnVGVzdEtleUZvckJvbmdHYXJtZW50Q01UMjY="/>
+        <server name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <server name="BCRYPT_ROUNDS" value="4"/>
+        <server name="CACHE_STORE" value="array"/>
+        <server name="DB_CONNECTION" value="mysql"/>
+        <server name="DB_HOST" value="mysql"/>
+        <server name="DB_PORT" value="3306"/>
+        <server name="DB_DATABASE" value="bong_garment_testing"/>
+        <server name="DB_USERNAME" value="bong_user"/>
+        <server name="DB_PASSWORD" value="bong_secret_password"/>
+        <server name="DB_URL" value=""/>
+        <server name="JAWSDB_URL" value=""/>
+        <server name="MAIL_MAILER" value="array"/>
+        <server name="QUEUE_CONNECTION" value="sync"/>
+        <server name="SESSION_DRIVER" value="array"/>
+
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="APP_KEY" value="base64:Q29uZmlnVGVzdEtleUZvckJvbmdHYXJtZW50Q01UMjY=" force="true"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file" force="true"/>
+        <env name="BCRYPT_ROUNDS" value="4" force="true"/>
+        <env name="CACHE_STORE" value="array" force="true"/>
+        <env name="DB_CONNECTION" value="mysql" force="true"/>
+        <env name="DB_HOST" value="mysql" force="true"/>
+        <env name="DB_PORT" value="3306" force="true"/>
+        <env name="DB_DATABASE" value="bong_garment_testing" force="true"/>
+        <env name="DB_USERNAME" value="bong_user" force="true"/>
+        <env name="DB_PASSWORD" value="bong_secret_password" force="true"/>
+        <env name="DB_URL" value="" force="true"/>
+        <env name="JAWSDB_URL" value="" force="true"/>
+        <env name="MAIL_MAILER" value="array" force="true"/>
+        <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <env name="SESSION_DRIVER" value="array" force="true"/>
+    </php>
+</phpunit>

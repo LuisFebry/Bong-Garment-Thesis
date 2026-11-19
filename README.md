@@ -5,6 +5,7 @@ A full-stack, enterprise-grade production and inventory management web applicati
 This repository contains the software implementation for an undergraduate thesis at **Universitas Tarumanagara (UNTAR)**, Faculty of Information Technology, Department of Information Systems.
 
 - **Live App Demo:** [https://thesis.megumin.me](https://thesis.megumin.me) / [https://thesis1.megumin.me](https://thesis1.megumin.me) / [https://thesis2.megumin.me](https://thesis2.megumin.me)
+- **Static Prototype Preview (GitHub Pages — `prototype` branch):** [https://luisfebry.github.io/Bong-Garment-Thesis](https://luisfebry.github.io/Bong-Garment-Thesis)
 - **Author & Project Lead:** Luis Febry (NIM: 825220088)
 - **Institution:** Universitas Tarumanagara, Jakarta (2026)
 
@@ -86,6 +87,7 @@ flowchart TB
         Baremetal["Baremetal Linux / VPS<br/>(PHP 8.4/8.5 + OpenResty/Nginx)"]
         Heroku["Heroku Cloud PaaS<br/>(heroku-php-apache2 Procfile)"]
         ArtisanCLI["Artisan CLI Suite<br/>(Production vs Sample Seeders)"]
+        PHPUnitTest["PHPUnit 11 Test Suite<br/>(19 Unit/Integration + 29 Black-Box)"]
     end
 
     ClientLayer ==> SecurityLayer
@@ -111,6 +113,7 @@ flowchart TB
 | **Containerization** | Docker & Compose | Multi-Stage | Portable containerized execution (`Dockerfile`, `docker-compose.yml`) bundling PHP 8.4-FPM, internal Nginx web server, and MySQL 8.0 database container |
 | **Cloud Deployment** | Heroku Cloud PaaS | Linux 64-bit | Live production hosting with `heroku-php-apache2` web server routing, automatic Procfile release migrations (`php artisan migrate --force`), and JawsDB MySQL integration |
 | **Database Initialization** | Laravel Seeders | Dual Mode | Dedicated production seeder (`ProductionBootstrapSeeder` for factory go-live with zero sample data) and evaluation seeder (`DatabaseSeeder` with realistic 18-table sample data) |
+| **Quality Assurance & Testing** | PHPUnit & Laravel Test Suite | `^11.0` | Isolated MySQL testing harness (`bong_garment_testing`, `tests/TestCase.php`) running **19 Unit & Integration tests** (`UI-01`–`UI-19`) and **29 Black-Box system tests** (`BB-01`–`BB-29`) |
 
 ---
 
@@ -439,6 +442,38 @@ php artisan view:cache
 ```
 
 In your OpenResty/Nginx server block, point `root` to `/path/to/project/public`, configure `try_files $uri $uri/ /index.php?$query_string;`, and route PHP to your PHP-FPM FastCGI socket (`fastcgi_pass unix:/run/php/php8.5-fpm.sock;`).
+
+---
+
+## Automated Testing & V-Model Validation Suite
+
+Following the **V-Model** verification-validation methodology, the repository includes an automated **48-case PHPUnit test suite** (`phpunit.xml`, `.env.testing`, `tests/`) designed to verify business logic, ACID transactions, RBAC security, and end-to-end HTTP workflows against an isolated MySQL 8.0 InnoDB database without modifying operational data.
+
+### 1. Isolated Test Environment & Safety Harness (`tests/TestCase.php`)
+- **Strict Database Guard:** `phpunit.xml` and `.env.testing` route connections to the dedicated `bong_garment_testing` database; `TestCase::setUp()` asserts `DB::connection()->getDatabaseName() === 'bong_garment_testing'` before running `migrate:fresh --force` and seeding deterministic fixtures via `BongGarment18TableSeeder`.
+- **Storage State Snapshot:** Automatically backs up and restores `storage/app/stock_thresholds.json` and `storage/app/company_profile.json` across every test case.
+
+### 2. Test Suites Overview
+
+| Suite File | Level | Cases | Coverage Scope |
+|---|---|---|---|
+| `tests/Feature/UnitAndIntegrationTest.php` | Unit & Integration | **19 tests** (`UI-01`–`UI-19`) | EDF priority sorting (`COALESCE(deadline_terbaru, deadline_awal) ASC`), deadline revision, atomic fabric roll deduction & IEEE-754 `round(..., 2)` boundary (`<= 0.05` &rarr; `Habis`), reverse-roll deletion, QC balance validation & `Produk Abadi`-only warehouse stock crediting, outbound Mitra guards & ledger reversal, `RoleMiddleware` `401`/`403` & `Pemilik` Read-Only enforcement, and InnoDB `ON DELETE RESTRICT` integrity checks |
+| `tests/Feature/BlackBoxSystemTest.php` | System (*Black-Box*) | **29 tests** (`BB-01`–`BB-29`) | End-to-end positive (`valid`) and negative (`invalid`, validation `422`, RBAC `403`, auth `302`/`401`) HTTP checks across `/login`, `/logout`, `/dashboard`, `/pesanan`, `/penerimaan`, `/pemotongan`, `/qc`, `/stok`, `/laporan` (including CSV & Word `.doc` export checks and Kop Surat profile updates), and `/pengaturan` |
+
+### 3. Executing Tests
+Make sure `dev` dependencies (`phpunit/phpunit` in `composer.json`) are installed (`composer install`, without `--no-dev`) and your `bong_garment_testing` MySQL database exists with grants for `DB_USERNAME`:
+
+```bash
+# Run the complete 48-test automated validation suite
+php artisan test
+
+# Run suites individually
+php artisan test --filter=UnitAndIntegrationTest
+php artisan test --filter=BlackBoxSystemTest
+
+# Run inside Docker container
+docker compose exec app php artisan test
+```
 
 ---
 
