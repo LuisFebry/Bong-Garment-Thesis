@@ -1,1766 +1,911 @@
 /* ============================================================================
- * BONG GARMENT — Sistem Produksi & Inventori CMT (Cut, Make, Trim)
- * Prototipe Skripsi · Luis Febry (NIM 825220088) · Sistem Informasi UNTAR
- * ----------------------------------------------------------------------------
- * app.js · STEP 1
- *   1. BongDB   — 14-table relational store with localStorage persistence
- *   2. Router   — switchTab() across 6 screens + URL hash sync
- *   3. Roles    — Admin / Pemotong / QC / Pemilik switcher
- *   4. UI utils — toast, modal, confirm dialog, global search, notifications
- *   5. Dashboard renderer — fully derived from BongDB (auto re-render on change)
- *
- * Later steps (2–6) should mutate data ONLY through BongDB.insert/update/remove;
- * every mutation emits a change event and the dashboard re-renders itself.
+ * BONG GARMENT — Static Prototype SPA Controller
+ * Mirrors Bong-Garment-Thesis-main UI, 8 Screens, 5 Roles & Report Exporters.
  * ========================================================================== */
 (function () {
   'use strict';
 
-  /* --------------------------------------------------------------------------
-   * 0. CONSTANTS & HELPERS
-   * ------------------------------------------------------------------------ */
-  const DB_KEY = 'bong_garment_db_v1';
-  const DB_VERSION = 1;
-  const ROLE_KEY = 'bong_garment_role';
+  const {
+    esc, sum, round2, fmtNum, todayIso, nowLocalIsoMin, addDays,
+    datePart, toInputDateTime, fmtDateDmy, fmtDateTimeDmy, fmtDateShortId, fmtDateLongId,
+  } = window.BongUtil;
+  const DB = window.BongDB;
+  const Auth = window.BongAuth;
+  const Q = window.BongQ;
+  const Svc = window.BongService;
 
-  /** Fixed "today" of the demo world so seeded data stays meaningful. */
-  const APP_TODAY = '2026-10-28';
-  const APP_TODAY_LABEL = 'Senin, 28 Okt 2026';
-  const TARGET_HARIAN_PCS = 1250;           // daily cutting capacity target
-  const ORDER_ROWS_DEFAULT = 5;
-  const CHART_LABELS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Hari Ini'];
-  const ACTIVE_STATUSES = ['ANTREAN', 'PEMOTONGAN', 'DALAM QC'];
-
-  /** Primary key of each of the 14 physical tables (thesis proposal order). */
-  const TABLE_PK = {
-    Sumber_Inisiasi: 'id_sumber',
-    Kategori_Pola: 'id_kategori',
-    Pola: 'id_pola',
-    Spesifikasi_Ukuran: 'id_spesifikasi',
-    User: 'id_user',
-    Pesanan: 'id_pesanan',
-    Supplier: 'id_supplier',
-    Penerimaan_Bahan: 'id_penerimaan',
-    Detail_Bahan_Warna: 'id_detail_warna',
-    Detail_Roll_Bahan: 'id_roll',
-    Pemotongan_Seri: 'id_potong',
-    Detail_Pemotongan_Warna: 'id_potong_warna',
-    Detail_Gelaran_Kain: 'id_gelar',
-    Kerusakan: 'id_qc',
+  const TABS = ['dashboard', 'pesanan', 'penerimaan', 'pemotongan', 'qc', 'gudang', 'laporan', 'pengaturan'];
+  const TAB_TITLES = {
+    dashboard: 'Dashboard Produksi - Bong Garment',
+    pesanan: 'Kelola Pesanan & Pola - Bong Garment',
+    penerimaan: 'Penerimaan Bahan & Roll - Bong Garment',
+    pemotongan: 'Pemotongan Seri & Gelaran - Bong Garment',
+    qc: 'Quality Control & Cacat - Bong Garment',
+    gudang: 'Gudang & Stok Barang Jadi - Bong Garment',
+    laporan: 'Laporan Eksekutif & Rekapan - Bong Garment',
+    pengaturan: 'Pengaturan & Manajemen Pengguna - Bong Garment',
   };
 
-  const TABS = ['dashboard', 'pesanan', 'penerimaan', 'pemotongan', 'qc', 'laporan'];
-  const TAB_META = {
-    dashboard: { label: 'Dashboard', step: 1 },
-    pesanan: { label: 'Kelola Pesanan & Pola', step: 2 },
-    penerimaan: { label: 'Penerimaan & Roll Bahan', step: 3 },
-    pemotongan: { label: 'Pemotongan Seri & Gelaran', step: 4 },
-    qc: { label: 'Quality Control & Kerusakan', step: 5 },
-    laporan: { label: 'Laporan Eksekutif', step: 6 },
-    pengaturan: { label: 'Pengaturan Sistem' },
-  };
+  const state = {
+    tab: 'dashboard',
+    // Pesanan screen draft state
+    polaMode: 'existing',
+    newPolaSpecs: [
+      { nama_ukuran: 'All', lingkar_dada: '', panjang_baju_celana: '', lebar_baju: '', panjang_pundak: '', panjang_tangan: '', lingkar_lengan: '', diameter_leher: '', lingkar_pinggang: '', lingkar_selangkang: '', lingkar_paha: '', lebar_kaki: '' },
+    ],
+    newPolaAccs: [],
 
-  const ROLES = {
-    Admin: { icon: 'user-cog', desc: 'Kelola pesanan, penerimaan bahan & laporan', tabs: ['dashboard', 'pesanan', 'penerimaan', 'laporan', 'pengaturan'] },
-    Pemotong: { icon: 'scissors', desc: 'Eksekusi pemotongan seri & input gelaran', tabs: ['dashboard', 'pemotongan'] },
-    QC: { icon: 'shield-check', desc: 'Inspeksi mutu & pencatatan temuan cacat', tabs: ['dashboard', 'qc'] },
-    Pemilik: { icon: 'crown', desc: 'Pemantauan kinerja & laporan eksekutif', tabs: ['dashboard', 'laporan'] },
-  };
+    // Penerimaan screen draft state
+    nextColorGroupId: 2,
+    colorGroups: [{ id: 1, namaWarna: '', kodeWarna: '', satuanUkur: 'Kg' }],
+    draftRolls: [
+      { colorGroupId: 1, berat: 25.00 },
+      { colorGroupId: 1, berat: 25.00 },
+      { colorGroupId: 1, berat: 25.00 },
+    ],
 
-  const STATUS_META = {
-    'ANTREAN': { badge: 'bg-slate-100 text-slate-700 ring-slate-200', bar: 'bg-slate-400' },
-    'PEMOTONGAN': { badge: 'bg-indigo-50 text-indigo-700 ring-indigo-200', bar: 'bg-indigo-500' },
-    'DALAM QC': { badge: 'bg-amber-50 text-amber-700 ring-amber-200', bar: 'bg-amber-400' },
-    'SELESAI': { badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', bar: 'bg-emerald-500' },
-  };
+    // Pemotongan screen draft state
+    gelaranRows: [
+      { id_roll: '', panjang_gelar: 2.50, jumlah_tumpuk: 50, total_lembar_gelar: 300, status_roll_baru: 'Dipotong' },
+    ],
 
-  const SUMBER_META = {
-    1: { icon: 'handshake', text: 'text-indigo-700', bg: 'bg-indigo-50 text-indigo-600', bar: 'bg-indigo-500', desc: 'Pesanan makloon dari mitra / klien eksternal dengan deadline kontrak.' },
-    2: { icon: 'infinity', text: 'text-emerald-700', bg: 'bg-emerald-50 text-emerald-600', bar: 'bg-emerald-500', desc: 'Produk stok berkelanjutan (evergreen) milik Bong Garment.' },
-    3: { icon: 'trending-up', text: 'text-amber-700', bg: 'bg-amber-50 text-amber-600', bar: 'bg-amber-400', desc: 'Produksi berdasarkan analisis tren pasar terkini.' },
-    default: { icon: 'circle-dot', text: 'text-slate-700', bg: 'bg-slate-100 text-slate-600', bar: 'bg-slate-400', desc: 'Sumber inisiasi lainnya.' },
-  };
-
-  const ROLL_META = {
-    Tersedia: { badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: 'bg-emerald-50 text-emerald-600', dot: 'bg-emerald-500' },
-    Dipotong: { badge: 'bg-indigo-50 text-indigo-700 ring-indigo-200', icon: 'bg-indigo-50 text-indigo-600', dot: 'bg-indigo-500' },
-    Habis: { badge: 'bg-slate-100 text-slate-600 ring-slate-200', icon: 'bg-slate-100 text-slate-500', dot: 'bg-slate-400' },
-    Retur: { badge: 'bg-amber-50 text-amber-700 ring-amber-200', icon: 'bg-amber-50 text-amber-600', dot: 'bg-amber-400' },
-  };
-
-  const QC_META = {
-    'Need Rework': { badge: 'bg-rose-50 text-rose-700 ring-rose-200', icon: 'rotate-ccw', iconCls: 'bg-rose-50 text-rose-600 ring-rose-100' },
-    'Rework Selesai': { badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: 'circle-check', iconCls: 'bg-emerald-50 text-emerald-600 ring-emerald-100' },
-    'Retur Supplier': { badge: 'bg-amber-50 text-amber-700 ring-amber-200', icon: 'undo-2', iconCls: 'bg-amber-50 text-amber-600 ring-amber-100' },
-    'Scrapped': { badge: 'bg-rose-100 text-rose-800 ring-rose-300', icon: 'trash-2', iconCls: 'bg-rose-100 text-rose-700 ring-rose-200' },
-    'Finished': { badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: 'check-circle-2', iconCls: 'bg-emerald-50 text-emerald-600 ring-emerald-100' },
-  };
-
-  // Icons renamed between Lucide versions → fallback both ways.
-  const ICON_FALLBACK = {
-    'file-bar-chart': 'file-chart-column', 'file-chart-column': 'file-bar-chart',
-    'chart-column': 'bar-chart-3', 'circle-check': 'check-circle-2',
-    'triangle-alert': 'alert-triangle', 'circle-x': 'x-circle',
-    'circle-dot': 'dot', 'receipt-text': 'receipt', 'table-2': 'table',
-    'list-ordered': 'list', 'undo-2': 'undo', 'sliders-horizontal': 'sliders',
+    // Laporan filter state
+    laporanFilters: {
+      jenis_laporan: 'KONSOLIDASI',
+      id_sumber: '',
+      start_date: '',
+      end_date: '',
+    },
+    lastReportData: null,
   };
 
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
-  const range = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
-  const sum = (arr, fn = (x) => x) => arr.reduce((t, x) => t + (Number(fn(x)) || 0), 0);
-  const round1 = (n) => Math.round(n * 10) / 10;
-  const fmtNum = (n, d = 0) => new Intl.NumberFormat('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }).format(n);
-  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const BULAN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
-  function addDays(iso, n) {
-    const d = new Date(iso + 'T00:00:00Z');
-    d.setUTCDate(d.getUTCDate() + n);
-    return d.toISOString().slice(0, 10);
-  }
-  function diffDays(fromIso, toIso) {
-    return Math.round((Date.parse(toIso + 'T00:00:00Z') - Date.parse(fromIso + 'T00:00:00Z')) / 86400000);
-  }
-  function fmtDate(iso) {
-    if (!iso) return '-';
-    const [y, m, d] = iso.split('-').map(Number);
-    return `${d} ${BULAN[m - 1]} ${y}`;
-  }
-  /** Deterministic PRNG so the seed is identical on every reset. */
-  function mulberry32(a) {
-    return function () {
-      a |= 0; a = (a + 0x6D2B79F5) | 0;
-      let t = Math.imul(a ^ (a >>> 15), 1 | a);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  }
-
-  /* --------------------------------------------------------------------------
-   * 1. SEED DATA — 14 physical tables
-   *    Engineered so the dashboard derives exactly the wireframe figures:
-   *    18 active orders (8/6/4), 142 rolls Tersedia, 1,250 pcs today across
-   *    19 gelaran / 8 rolls, avg 68.4 pcs/roll (7 days), 3 orders pending rework.
-   * ------------------------------------------------------------------------ */
-  function buildSeed() {
-    const rnd = mulberry32(825220088);
-    const d = (n) => addDays(APP_TODAY, n);
-
-    // 1. Sumber_Inisiasi
-    const Sumber_Inisiasi = [
-      { id_sumber: 1, nama_sumber: 'Request Mitra' },
-      { id_sumber: 2, nama_sumber: 'Produk Abadi' },
-      { id_sumber: 3, nama_sumber: 'Inisiatif Tren Pasar' },
-    ];
-
-    // 2. Kategori_Pola
-    const Kategori_Pola = [
-      { id_kategori: 1, nama_kategori: 'Kemeja' },
-      { id_kategori: 2, nama_kategori: 'Kaos & Polo' },
-      { id_kategori: 3, nama_kategori: 'Jaket & Outerwear' },
-      { id_kategori: 4, nama_kategori: 'Celana' },
-    ];
-
-    // 3. Pola
-    const Pola = [
-      { id_pola: 1, id_kategori: 1, kode_pola: 'KMJ-FLN-01', nama_pola: 'Kemeja Flanel' },
-      { id_pola: 2, id_kategori: 3, kode_pola: 'JKT-CNV-02', nama_pola: 'Jaket Canvas' },
-      { id_pola: 3, id_kategori: 2, kode_pola: 'KOS-PLS-03', nama_pola: 'Kaos Polos' },
-      { id_pola: 4, id_kategori: 1, kode_pola: 'KMJ-OXF-04', nama_pola: 'Kemeja Oxford' },
-      { id_pola: 5, id_kategori: 2, kode_pola: 'POL-SHR-05', nama_pola: 'Polo Shirt' },
-      { id_pola: 6, id_kategori: 4, kode_pola: 'CLN-CHN-06', nama_pola: 'Celana Chino' },
-      { id_pola: 7, id_kategori: 3, kode_pola: 'HDY-FLC-07', nama_pola: 'Hoodie Fleece' },
-      { id_pola: 8, id_kategori: 2, kode_pola: 'KOS-RGL-08', nama_pola: 'Kaos Raglan' },
-    ];
-
-    // 4. Spesifikasi_Ukuran (S–XL per pola)
-    const ukuranBase = { // [lingkar_dada, panjang, lebar_bahu, panjang_lengan]
-      1: [100, 72, 44, 60], 2: [108, 70, 47, 62], 3: [96, 68, 42, 20], 4: [102, 73, 44, 60],
-      5: [98, 69, 43, 22], 7: [110, 68, 50, 60], 8: [96, 68, 42, 58],
-    };
-    const Spesifikasi_Ukuran = [];
-    let idSpec = 1;
-    Pola.forEach((p) => {
-      ['S', 'M', 'L', 'XL'].forEach((uk, i) => {
-        if (p.id_pola === 6) {
-          Spesifikasi_Ukuran.push({ id_spesifikasi: idSpec++, id_pola: 6, nama_ukuran: uk, lingkar_dada: null, panjang: 98 + i, lebar_bahu: null, panjang_lengan: null, lingkar_pinggang: 72 + i * 4 });
-        } else {
-          const [dd, pj, bh, lg] = ukuranBase[p.id_pola];
-          Spesifikasi_Ukuran.push({ id_spesifikasi: idSpec++, id_pola: p.id_pola, nama_ukuran: uk, lingkar_dada: dd + i * 4, panjang: pj + i * 2, lebar_bahu: round1(bh + i * 1.5), panjang_lengan: round1(lg + i), lingkar_pinggang: null });
-        }
-      });
-    });
-
-    // 5. User
-    const User = [
-      { id_user: 1, username: 'luis.febry', nama_user: 'Luis Febry', role: 'Admin' },
-      { id_user: 2, username: 'budi.cutter', nama_user: 'Budi Santoso', role: 'Pemotong' },
-      { id_user: 3, username: 'sari.qc', nama_user: 'Sari Wulandari', role: 'QC' },
-      { id_user: 4, username: 'bong.owner', nama_user: 'Bong Hartono', role: 'Pemilik' },
-      { id_user: 5, username: 'agus.cutter', nama_user: 'Agus Pratama', role: 'Pemotong' },
-    ];
-
-    // 7. Supplier
-    const Supplier = [
-      { id_supplier: 1, nama_supplier: 'PT Sinar Tekstil Abadi', kontak: '022-6012345', alamat: 'Jl. Soekarno-Hatta No. 112, Bandung' },
-      { id_supplier: 2, nama_supplier: 'CV Kahatex Mandiri', kontak: '0812-2201-7788', alamat: 'Jl. Raya Rancaekek KM 23, Sumedang' },
-      { id_supplier: 3, nama_supplier: 'PT Busana Indah (Kain Mitra)', kontak: '021-5550192', alamat: 'Jl. Daan Mogot No. 45, Jakarta Barat' },
-      { id_supplier: 4, nama_supplier: 'Toko Kain Cigondewah Jaya', kontak: '0857-2034-1122', alamat: 'Jl. Cigondewah Kaler No. 8, Bandung' },
-    ];
-
-    // 8. Penerimaan_Bahan
-    const pb = (id_penerimaan, id_supplier, no_nota, tgl_nota, nama_kain, lebar_gramasi, no_kendaraan, penerima) =>
-      ({ id_penerimaan, id_supplier, no_nota, tgl_nota, nama_kain, lebar_gramasi, no_kendaraan, penerima });
-    const Penerimaan_Bahan = [
-      pb(1, 2, '796', d(-16), 'Combed 30s', '72" · 180 gsm', 'D 8123 AB', 'Dedi Kurniawan'),
-      pb(2, 3, '797', d(-14), 'Flanel Yarn Dyed', '58" · 165 gsm', 'B 9012 KLA', 'Dedi Kurniawan'),
-      pb(3, 4, '798', d(-13), 'Lacoste PE', '72" · 220 gsm', 'D 1456 TR', 'Dedi Kurniawan'),
-      pb(4, 1, '799', d(-12), 'Cotton Oxford', '58" · 130 gsm', 'D 7781 UF', 'Luis Febry'),
-      pb(5, 1, '800', d(-11), 'Twill Drill', '58" · 240 gsm', 'D 7781 UF', 'Luis Febry'),
-      pb(6, 2, '801', d(-8), 'Combed 30s', '72" · 180 gsm', 'D 8123 AB', 'Dedi Kurniawan'),
-      pb(7, 4, '802', d(-7), 'Canvas', '60" · 12 oz', 'D 1456 TR', 'Dedi Kurniawan'),
-      pb(8, 1, '803', d(-2), 'Drill', '58" · 230 gsm', 'D 7781 UF', 'Luis Febry'),
-      pb(9, 2, '804', d(-1), 'Fleece Cotton', '72" · 280 gsm', 'D 8123 AB', 'Dedi Kurniawan'),
-      pb(10, 4, '805', d(0), 'Canvas', '60" · 12 oz', 'D 1456 TR', 'Luis Febry'),
-    ];
-
-    // 9 + 10. Detail_Bahan_Warna & Detail_Roll_Bahan
-    // [id_detail_warna, id_penerimaan, nama_warna, kode_warna, rak, usedRollIds, tersediaCount]
-    const warnaSpec = [
-      [1, 1, 'White', 'WHT-01', 'A-03', range(4452, 4458), 0],
-      [2, 1, 'Misty Grey', 'GRY-02', 'A-04', range(4459, 4466), 0],
-      [3, 3, 'Navy', 'NVY-03', 'C-02', [...range(4467, 4472), 4489], 0],
-      [4, 2, 'Red Check', 'RCK-04', 'A-07', [...range(4473, 4479), 4495, 4496, 4497], 6],
-      [5, 4, 'Sky Blue', 'SKY-05', 'C-04', range(4480, 4485), 0],
-      [6, 2, 'Blue Check', 'BCK-06', 'A-08', [4486, 4487, 4488, ...range(4490, 4494)], 0],
-      [7, 6, 'Black', 'BLK-07', 'C-03', [4498, 4499, 4501], 8],
-      [8, 7, 'Navy', 'NVY-08', 'A-05', [4500, 4502], 6],
-      [9, 8, 'Khaki', 'KHK-09', 'B-04', [], 24],
-      [10, 8, 'Black', 'BLK-10', 'B-05', [], 18],
-      [11, 5, 'Cream', 'CRM-11', 'C-01', [], 14],
-      [12, 9, 'Charcoal', 'CHR-12', 'D-02', [], 20],
-      [13, 9, 'Black', 'BLK-13', 'D-03', [], 16],
-      [14, 10, 'Navy', 'NVY-14', 'A-01', [], 18],
-      [15, 10, 'Olive', 'OLV-15', 'A-02', [], 12],
-    ];
-    const tersediaOrder = [9, 10, 11, 12, 13, 14, 15, 4, 7, 8]; // FIFO: id_roll 4503 → Drill Khaki
-    const tersediaIds = {};
-    let nextFree = 4503;
-    tersediaOrder.forEach((wid) => {
-      const n = warnaSpec.find((w) => w[0] === wid)[6];
-      tersediaIds[wid] = range(nextFree, nextFree + n - 1);
-      nextFree += n;
-    });
-    const beratOverride = { 4501: 24.5, 4502: 28.0, 4503: 22.1 };
-    const Detail_Bahan_Warna = [];
-    const Detail_Roll_Bahan = [];
-    warnaSpec.forEach(([id, idPen, nama, kode, rak, used]) => {
-      const ids = [...used, ...(tersediaIds[id] || [])].sort((a, b) => a - b);
-      const rolls = ids.map((rid, i) => {
-        let status = 'Tersedia';
-        if (used.includes(rid)) status = rid === 4501 ? 'Dipotong' : rid === 4489 ? 'Retur' : 'Habis';
-        return {
-          id_roll: rid, id_detail_warna: id, no_roll_ke: i + 1,
-          berat_kg: beratOverride[rid] ?? round1(20 + rnd() * 8),
-          total_roll: ids.length, status_roll: status,
-          rak_alokasi: status === 'Tersedia' ? rak : status === 'Dipotong' ? 'Meja Potong 02' : '-',
-        };
-      });
-      Detail_Roll_Bahan.push(...rolls);
-      Detail_Bahan_Warna.push({ id_detail_warna: id, id_penerimaan: idPen, nama_warna: nama, kode_warna: kode, total_roll: ids.length, total_kg: round1(sum(rolls, (r) => r.berat_kg)) });
-    });
-    Detail_Roll_Bahan.sort((a, b) => a.id_roll - b.id_roll);
-
-    // 6. Pesanan
-    const ps = (id, pola, sumber, pen, mitra, order, deadline, status, pct) => ({
-      id_pesanan: id, id_pola: pola, id_sumber: sumber, id_penerimaan: pen, id_user_admin: 1,
-      jenis_pesanan: sumber === 1 ? 'Makloon CMT (Mitra)' : 'Produksi Mandiri',
-      nama_mitra: mitra, tgl_order: d(order), deadline: d(deadline), status_pesanan: status, progress_pct: pct,
-    });
-    const Pesanan = [
-      ps(96, 8, 2, 1, null, -24, -5, 'SELESAI', 100),
-      ps(97, 6, 1, 5, 'PT Seragam Nusantara', -22, -3, 'SELESAI', 100),
-      ps(98, 5, 1, 3, 'CV Sport Wear Indo', -21, -2, 'SELESAI', 100),
-      ps(99, 4, 1, 4, 'PT Seragam Nusantara', -20, -1, 'SELESAI', 100),
-      ps(100, 3, 2, 1, null, -19, -1, 'SELESAI', 100),
-      ps(101, 1, 1, 2, 'PT Busana Indah', -18, 8, 'PEMOTONGAN', 70),
-      ps(102, 2, 3, 10, null, -1, 23, 'ANTREAN', 25),
-      ps(103, 3, 2, 1, null, -20, 3, 'DALAM QC', 90),
-      ps(104, 2, 1, 7, 'CV Maju Garmindo', -10, 11, 'PEMOTONGAN', 55),
-      ps(105, 3, 1, 6, 'Distro Urban Kasual', -9, 9, 'PEMOTONGAN', 45),
-      ps(106, 6, 2, 5, null, -11, 13, 'PEMOTONGAN', 40),
-      ps(107, 7, 3, 9, null, -3, 15, 'PEMOTONGAN', 35),
-      ps(108, 4, 1, 4, 'PT Seragam Nusantara', -12, 12, 'PEMOTONGAN', 60),
-      ps(109, 7, 1, 9, 'Komunitas Lari Bandung', -2, 18, 'ANTREAN', 15),
-      ps(110, 6, 1, 8, 'PT Seragam Nusantara', -2, 21, 'ANTREAN', 10),
-      ps(111, 8, 3, null, null, -1, 28, 'ANTREAN', 0),
-      ps(112, 5, 1, null, 'CV Sport Wear Indo', -1, 25, 'ANTREAN', 0),
-      ps(113, 1, 2, null, null, 0, 34, 'ANTREAN', 0),
-      ps(114, 6, 3, 8, null, -1, 31, 'ANTREAN', 20),
-      ps(115, 3, 2, null, null, 0, 38, 'ANTREAN', 5),
-      ps(116, 5, 1, 3, 'CV Sport Wear Indo', -15, 5, 'DALAM QC', 85),
-      ps(117, 3, 2, 1, null, -14, 6, 'DALAM QC', 88),
-      ps(118, 4, 1, 4, 'PT Seragam Nusantara', -13, 7, 'DALAM QC', 92),
-    ];
-
-    // 11 + 12 + 13. Pemotongan_Seri, Detail_Pemotongan_Warna, Detail_Gelaran_Kain
-    // Past days: one gelaran per roll, layers spread evenly. Today: explicit gelaran (lembar per gelaran).
-    const potongSpec = [
-      { id: 294, ord: 103, day: -6, ppl: 4, pjg: 5.2, total: 380, rolls: range(4452, 4458) },
-      { id: 295, ord: 117, day: -5, ppl: 6, pjg: 6.0, total: 420, rolls: range(4459, 4466) },
-      { id: 296, ord: 116, day: -4, ppl: 2, pjg: 3.1, total: 290, rolls: range(4467, 4472) },
-      { id: 297, ord: 101, day: -3, ppl: 4, pjg: 6.4, total: 360, rolls: range(4473, 4479) },
-      { id: 298, ord: 118, day: -2, ppl: 2, pjg: 3.4, total: 310, rolls: range(4480, 4485) },
-      { id: 299, ord: 101, day: -1, ppl: 2, pjg: 3.3, total: 410, rolls: [4486, 4487, 4488, ...range(4490, 4494)] },
-      { id: 300, ord: 101, day: 0, ppl: 4, pjg: 6.4, gel: { 4495: [60, 60, 60], 4496: [60, 60], 4497: [60, 60] } },
-      { id: 301, ord: 105, day: 0, ppl: 8, pjg: 5.6, gel: { 4498: [72, 72], 4499: [64, 64], 4501: [72, 72, 64] } },
-      { id: 302, ord: 104, day: 0, ppl: 5, pjg: 4.8, gel: { 4500: [70, 70, 70], 4502: [70, 70] } },
-    ];
-    const rollById = Object.fromEntries(Detail_Roll_Bahan.map((r) => [r.id_roll, r]));
-    const Pemotongan_Seri = [];
-    const Detail_Pemotongan_Warna = [];
-    const Detail_Gelaran_Kain = [];
-    const seriCount = {};
-    let idPW = 501;
-    let idGel = 7001;
-    potongSpec.forEach((s, idx) => {
-      let gel = s.gel;
-      if (!gel) {
-        const layers = s.total / s.ppl;
-        const base = Math.floor(layers / s.rolls.length);
-        const rem = layers % s.rolls.length;
-        gel = {};
-        s.rolls.forEach((rid, i) => { gel[rid] = [(base + (i < rem ? 1 : 0)) * s.ppl]; });
-      }
-      const rollIds = Object.keys(gel).map(Number);
-      const total = sum(rollIds, (rid) => sum(gel[rid]));
-      seriCount[s.ord] = (seriCount[s.ord] || 0) + 1;
-      Pemotongan_Seri.push({
-        id_potong: s.id, id_pesanan: s.ord, id_user_pemotong: idx % 2 ? 5 : 2,
-        kode_seri: `SR-${s.ord}-${String(seriCount[s.ord]).padStart(2, '0')}`,
-        jenis_variasi: 'Warna Tunggal', total_lembar_hasil: total, tgl_potong: d(s.day),
-      });
-      const pw = {
-        id_potong_warna: idPW++, id_potong: s.id, id_detail_warna: rollById[rollIds[0]].id_detail_warna,
-        total_lembar_direncanakan: Math.ceil(total / 50) * 50,
-        berat_terpakai_kg: round1(sum(rollIds, (rid) => rollById[rid].berat_kg * (rollById[rid].status_roll === 'Dipotong' ? 0.6 : 1))),
-      };
-      Detail_Pemotongan_Warna.push(pw);
-      rollIds.forEach((rid) => gel[rid].forEach((lembar) => {
-        Detail_Gelaran_Kain.push({ id_gelar: idGel++, id_potong_warna: pw.id_potong_warna, id_roll: rid, panjang_gelar: s.pjg, jumlah_tumpuk: lembar / s.ppl, total_lembar_gelar: lembar });
-      }));
-    });
-
-    // 14. Kerusakan
-    const Kerusakan = [
-      { id_qc: 82, id_pesanan: 96, id_user_qc: 3, jenis_cacat: 'Cacat Jahit', jumlah_pcs: 5, catatan: 'Jahitan rantai lepas pada ujung lengan', tgl_temuan: d(-9), status: 'Rework Selesai', tgl_selesai_perbaikan: d(-8), pic_rework: 'Tim Jahit B' },
-      { id_qc: 83, id_pesanan: 100, id_user_qc: 3, jenis_cacat: 'Cacat Potong', jumlah_pcs: 4, catatan: 'Selisih ukuran panel badan belakang (±1 cm)', tgl_temuan: d(-5), status: 'Rework Selesai', tgl_selesai_perbaikan: d(-4), pic_rework: 'Tim Potong A' },
-      { id_qc: 84, id_pesanan: 116, id_user_qc: 3, jenis_cacat: 'Cacat Jahit', jumlah_pcs: 6, catatan: 'Jahitan kerah polo miring & bergelombang', tgl_temuan: d(-1), status: 'Need Rework', tgl_selesai_perbaikan: null, pic_rework: 'Tim Jahit A' },
-      { id_qc: 85, id_pesanan: 103, id_user_qc: 3, jenis_cacat: 'Cacat Potong', jumlah_pcs: 8, catatan: 'Ukuran panel tidak presisi akibat pergeseran layer tumpuk ke-7', tgl_temuan: d(-1), status: 'Need Rework', tgl_selesai_perbaikan: null, pic_rework: 'Tim Potong B (Agus)' },
-      { id_qc: 86, id_pesanan: 98, id_user_qc: 3, jenis_cacat: 'Cacat Bahan', jumlah_pcs: 1, catatan: 'Shading warna belang di tengah roll id_roll: 4489', tgl_temuan: d(-2), status: 'Retur Supplier', tgl_selesai_perbaikan: null, pic_rework: 'Gudang · Retur Supplier' },
-      { id_qc: 87, id_pesanan: 99, id_user_qc: 3, jenis_cacat: 'Cacat Jahit', jumlah_pcs: 3, catatan: 'Kerutan pada kerah leher', tgl_temuan: d(-1), status: 'Rework Selesai', tgl_selesai_perbaikan: d(0), pic_rework: 'Tim Jahit A' },
-      { id_qc: 88, id_pesanan: 101, id_user_qc: 3, jenis_cacat: 'Cacat Potong', jumlah_pcs: 12, catatan: 'Pergeseran pola kain pada gelaran layer 4', tgl_temuan: d(0), status: 'Need Rework', tgl_selesai_perbaikan: null, pic_rework: 'Tim Potong A (Budi)' },
-    ];
-
-    return {
-      _meta: { version: DB_VERSION, app_today: APP_TODAY, seeded_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-      Sumber_Inisiasi, Kategori_Pola, Pola, Spesifikasi_Ukuran, User, Pesanan, Supplier,
-      Penerimaan_Bahan, Detail_Bahan_Warna, Detail_Roll_Bahan, Pemotongan_Seri,
-      Detail_Pemotongan_Warna, Detail_Gelaran_Kain, Kerusakan,
-    };
-  }
-
-  /* --------------------------------------------------------------------------
-   * 2. BongDB — relational store with localStorage persistence
-   * ------------------------------------------------------------------------ */
-  const BongDB = {
-    KEY: DB_KEY,
-    TABLES: TABLE_PK,
-    data: null,
-    _listeners: [],
-    _memoryOnly: false,
-
-    init() {
-      let parsed = null;
-      try {
-        const raw = localStorage.getItem(DB_KEY);
-        parsed = raw ? JSON.parse(raw) : null;
-      } catch (err) {
-        console.warn('[BongDB] localStorage tidak tersedia, memakai memori.', err);
-        this._memoryOnly = true;
-      }
-      if (this._isValid(parsed)) {
-        this.data = parsed;
-      } else {
-        this.data = buildSeed();
-        this.save();
-      }
-      // Cross-tab sync
-      window.addEventListener('storage', (e) => {
-        if (e.key !== DB_KEY || !e.newValue) return;
-        try {
-          const next = JSON.parse(e.newValue);
-          if (this._isValid(next)) { this.data = next; this._emit({ type: 'sync' }); }
-        } catch (_) { /* ignore */ }
-      });
-      return this;
-    },
-
-    _isValid(db) {
-      return !!db && db._meta && db._meta.version === DB_VERSION &&
-        Object.keys(TABLE_PK).every((t) => Array.isArray(db[t]));
-    },
-
-    save() {
-      this.data._meta.updated_at = new Date().toISOString();
-      if (this._memoryOnly) return;
-      try { localStorage.setItem(DB_KEY, JSON.stringify(this.data)); }
-      catch (err) { console.warn('[BongDB] Gagal menyimpan ke localStorage.', err); }
-    },
-
-    pk(table) {
-      const key = TABLE_PK[table];
-      if (!key) throw new Error(`[BongDB] Tabel tidak dikenal: ${table}`);
-      return key;
-    },
-    all(table) { this.pk(table); return this.data[table]; },
-    find(table, id) {
-      if (id === null || id === undefined) return null;
-      const key = this.pk(table);
-      return this.data[table].find((r) => r[key] === Number(id)) || null;
-    },
-    where(table, predicate) { return this.all(table).filter(predicate); },
-    nextId(table) {
-      const key = this.pk(table);
-      return this.data[table].reduce((m, r) => Math.max(m, Number(r[key]) || 0), 0) + 1;
-    },
-
-    insert(table, record) {
-      const key = this.pk(table);
-      const rec = { ...record };
-      if (rec[key] === undefined || rec[key] === null) rec[key] = this.nextId(table);
-      if (this.find(table, rec[key])) throw new Error(`[BongDB] Duplikat PK ${key}=${rec[key]} pada ${table}`);
-      this.data[table].push(rec);
-      this.save();
-      this._emit({ type: 'insert', table, record: rec });
-      return rec;
-    },
-    insertMany(table, records) {
-      const out = records.map((r) => {
-        const key = this.pk(table);
-        const rec = { ...r };
-        if (rec[key] === undefined || rec[key] === null) rec[key] = this.nextId(table);
-        this.data[table].push(rec);
-        return rec;
-      });
-      this.save();
-      this._emit({ type: 'insert', table, records: out });
-      return out;
-    },
-    update(table, id, patch) {
-      const rec = this.find(table, id);
-      if (!rec) return null;
-      Object.assign(rec, patch, { [this.pk(table)]: rec[this.pk(table)] });
-      this.save();
-      this._emit({ type: 'update', table, record: rec });
-      return rec;
-    },
-    remove(table, id) {
-      const key = this.pk(table);
-      const before = this.data[table].length;
-      this.data[table] = this.data[table].filter((r) => r[key] !== Number(id));
-      const removed = before !== this.data[table].length;
-      if (removed) { this.save(); this._emit({ type: 'remove', table, id: Number(id) }); }
-      return removed;
-    },
-
-    reset() {
-      this.data = buildSeed();
-      this.save();
-      this._emit({ type: 'reset' });
-    },
-    stats() {
-      return Object.keys(TABLE_PK).map((t, i) => ({ no: i + 1, table: t, pk: TABLE_PK[t], count: this.data[t].length }));
-    },
-    totalRecords() { return sum(Object.keys(TABLE_PK), (t) => this.data[t].length); },
-    exportJSON() { return JSON.stringify(this.data, null, 2); },
-
-    subscribe(fn) {
-      this._listeners.push(fn);
-      return () => { this._listeners = this._listeners.filter((f) => f !== fn); };
-    },
-    _emit(evt) {
-      this._listeners.forEach((fn) => { try { fn(evt); } catch (err) { console.error(err); } });
-    },
-  };
-  window.BongDB = BongDB;
-
-  /* --------------------------------------------------------------------------
-   * 3. RELATIONAL QUERY HELPERS (joins)
-   * ------------------------------------------------------------------------ */
-  const Q = {
-    pola: (id) => BongDB.find('Pola', id),
-    kategori: (id) => BongDB.find('Kategori_Pola', id),
-    sumber: (id) => BongDB.find('Sumber_Inisiasi', id),
-    user: (id) => BongDB.find('User', id),
-    pesanan: (id) => BongDB.find('Pesanan', id),
-    penerimaan: (id) => BongDB.find('Penerimaan_Bahan', id),
-    supplier: (id) => BongDB.find('Supplier', id),
-    warna: (id) => BongDB.find('Detail_Bahan_Warna', id),
-    roll: (id) => BongDB.find('Detail_Roll_Bahan', id),
-
-    rollInfo(roll) {
-      const w = Q.warna(roll.id_detail_warna);
-      const p = w ? Q.penerimaan(w.id_penerimaan) : null;
-      return { warna: w, penerimaan: p, label: [p?.nama_kain, w?.nama_warna].filter(Boolean).join(' ') || `Roll ${roll.id_roll}` };
-    },
-    /** Gelaran rows of a roll, enriched with id_potong / pesanan. */
-    rollGelaran(idRoll) {
-      return BongDB.where('Detail_Gelaran_Kain', (g) => g.id_roll === Number(idRoll)).map((g) => {
-        const pw = BongDB.find('Detail_Pemotongan_Warna', g.id_potong_warna);
-        const ps = pw ? BongDB.find('Pemotongan_Seri', pw.id_potong) : null;
-        return { ...g, id_potong: ps?.id_potong ?? null, potong: ps };
-      });
-    },
-    /** All gelaran belonging to a list of Pemotongan_Seri records. */
-    gelaranOfPotong(potongList) {
-      const ids = new Set(potongList.map((p) => p.id_potong));
-      const pwIds = new Set(BongDB.where('Detail_Pemotongan_Warna', (w) => ids.has(w.id_potong)).map((w) => w.id_potong_warna));
-      return BongDB.where('Detail_Gelaran_Kain', (g) => pwIds.has(g.id_potong_warna));
-    },
-  };
-
-  function progressLabel(p) {
-    if (p.status_pesanan === 'SELESAI') return 'Selesai';
-    if (!p.id_penerimaan) return 'Menunggu Bahan';
-    const v = Number(p.progress_pct) || 0;
-    if (v < 35) return 'Persiapan Gelar';
-    if (v < 60) return 'Proses Gelar & Potong';
-    if (v < 85) return 'Potong Selesai';
-    return 'Tahap Akhir';
-  }
-  function defectTag(text) {
-    const t = String(text || '').toLowerCase();
-    if (t.includes('layer') || t.includes('gelaran')) return 'Layering';
-    if (t.includes('kerah')) return 'Kerah';
-    if (t.includes('shading') || t.includes('belang')) return 'Shading';
-    if (t.includes('ukuran') || t.includes('presisi')) return 'Ukuran';
-    if (t.includes('jahitan')) return 'Jahitan';
-    return null;
-  }
-  const qcUnit = (k) => (k.jenis_cacat === 'Cacat Bahan' ? 'Roll' : 'Pcs');
-
-  /* --------------------------------------------------------------------------
-   * 4. APP STATE
-   * ------------------------------------------------------------------------ */
-  const state = {
-    tab: 'dashboard',
-    role: (() => { try { return localStorage.getItem(ROLE_KEY) || 'Admin'; } catch (_) { return 'Admin'; } })(),
-    orderFilter: 'ALL',
-    showAllOrders: false,
-    selectedSumber: 1,
-    selectedEdf: null,
-    notifSeen: 0,
-    countPrev: {},
-    confirmFn: null,
-
-    // Step 2: Screen 2 (Pesanan & Pola) state
-    pesanan: {
-      polaMode: 'existing', // 'existing' | 'new'
-      selectedPolaId: 1,
-      flashOrderId: null,
-    },
-
-    // Step 2: Screen 3 (Penerimaan & Roll Bahan) state
-    penerimaan: {
-      nextColorGroupId: 1,
-      colorGroups: [
-        { id: 1, namaWarna: 'Black Jet', kodeWarna: 'BLK-30S-01', rakDefault: 'B-04', hexColor: '#1E293B' },
-      ],
-      draftRolls: [
-        { colorGroupId: 1, beratKg: 24.50, rakAlokasi: 'B-04' },
-        { colorGroupId: 1, beratKg: 25.00, rakAlokasi: 'B-04' },
-        { colorGroupId: 1, beratKg: 25.00, rakAlokasi: 'B-04' },
-      ],
-      rollFilter: 'ALL',
-      flashRollId: null,
-    },
-
-    // Step 4: Screen 4 (Pemotongan Seri & Gelaran) state
-    pemotongan: {
-      draftGelarRows: [
-        { id_roll: 4503, panjang_gelar: 2.2, jumlah_tumpuk: 50, total_lembar_gelar: 60, status_akhir: 'Dipotong' },
-      ],
-      rollStatusMap: {}, // id_roll -> 'Dipotong' | 'Habis'
-    },
-
-    // Step 5: Screen 5 (Quality Control & Kerusakan) state
-    qc: {
-      selectedDefectCat: 'Cacat Potong', // 'Cacat Potong' | 'Cacat Jahit' | 'Cacat Bahan'
-      selectedDecision: 'Need Rework',   // 'Need Rework' | 'Scrapped' | 'Finished' | 'Retur Supplier'
-      tableFilter: 'ALL',                // 'ALL' | 'Need Rework' | 'Rework Selesai' | 'Retur / Scrapped'
-      selectedOrderId: null,
-    },
-
-    // Step 6: Screen 6 (Laporan Eksekutif) state
-    laporan: {
-      jenis: 'ALL',
-      startDate: addDays(APP_TODAY, -30),
-      endDate: APP_TODAY,
-      sumber: 'ALL',
-      status: 'ALL',
-    },
-  };
-
-  /* --------------------------------------------------------------------------
-   * 5. UI UTILITIES — icons, toast, modal, download
-   * ------------------------------------------------------------------------ */
   function refreshIcons() {
-    if (!window.lucide || typeof window.lucide.createIcons !== 'function') return;
-    try { window.lucide.createIcons(); } catch (_) { /* ignore */ }
-    let changed = false;
-    $$('i[data-lucide]').forEach((el) => {
-      const fb = ICON_FALLBACK[el.getAttribute('data-lucide')];
-      if (fb && !el.dataset.fb) { el.dataset.fb = '1'; el.setAttribute('data-lucide', fb); changed = true; }
-    });
-    if (changed) { try { window.lucide.createIcons(); } catch (_) { /* ignore */ } }
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      try { window.lucide.createIcons(); } catch (_) { /* ignore */ }
+    }
   }
 
-  function showToast(message, opts = {}) {
-    const { type = 'success', title, duration = 3600 } = opts;
-    const cfg = {
-      success: { icon: 'circle-check', cls: 'bg-emerald-50 text-emerald-600', bar: 'bg-emerald-500', title: 'Berhasil' },
-      info: { icon: 'info', cls: 'bg-indigo-50 text-indigo-600', bar: 'bg-indigo-500', title: 'Informasi' },
-      warning: { icon: 'triangle-alert', cls: 'bg-amber-50 text-amber-600', bar: 'bg-amber-500', title: 'Perhatian' },
-      error: { icon: 'circle-x', cls: 'bg-rose-50 text-rose-600', bar: 'bg-rose-500', title: 'Gagal' },
-    }[type] || {};
+  /* --------------------------------------------------------------------------
+   * Toast & Modal Helpers
+   * ------------------------------------------------------------------------ */
+  function showToast(msg, type = 'success') {
     const root = $('#toast-root');
+    if (!root) return;
+    const cfg = {
+      success: { bg: 'border-emerald-200 bg-white', icon: 'check-circle-2', iconCls: 'bg-emerald-50 text-emerald-600', title: 'Berhasil' },
+      info: { bg: 'border-indigo-200 bg-white', icon: 'info', iconCls: 'bg-indigo-50 text-indigo-600', title: 'Informasi' },
+      warning: { bg: 'border-amber-200 bg-white', icon: 'alert-triangle', iconCls: 'bg-amber-50 text-amber-600', title: 'Perhatian' },
+      error: { bg: 'border-rose-200 bg-white', icon: 'alert-circle', iconCls: 'bg-rose-50 text-rose-600', title: 'Gagal' },
+    }[type] || { bg: 'border-slate-200 bg-white', icon: 'info', iconCls: 'bg-slate-100 text-slate-600', title: 'Info' };
+
     const el = document.createElement('div');
-    el.className = 'toast pointer-events-auto relative w-[22rem] overflow-hidden bg-white border border-slate-200 rounded-xl shadow-xl shadow-slate-900/10';
-    el.setAttribute('role', 'status');
+    el.className = `toast pointer-events-auto w-80 sm:w-96 rounded-xl border ${cfg.bg} shadow-xl p-3.5 pr-9 relative flex items-start gap-3`;
     el.innerHTML = `
-      <div class="flex items-start gap-3 p-3.5 pr-10">
-        <span class="w-8 h-8 shrink-0 rounded-lg grid place-items-center ${cfg.cls}"><i data-lucide="${cfg.icon}" class="w-4 h-4"></i></span>
-        <div class="min-w-0">
-          <p class="text-sm font-semibold text-slate-900">${esc(title || cfg.title)}</p>
-          <p class="text-xs text-slate-500 mt-0.5 leading-relaxed">${message}</p>
-        </div>
+      <div class="w-8 h-8 rounded-lg ${cfg.iconCls} flex items-center justify-center shrink-0">
+        <i data-lucide="${cfg.icon}" class="w-4 h-4"></i>
       </div>
-      <button type="button" class="absolute top-2.5 right-2.5 w-6 h-6 grid place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Tutup notifikasi"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
-      <span class="toast-progress absolute bottom-0 left-0 h-0.5 w-full ${cfg.bar}" style="animation-duration:${duration}ms"></span>`;
+      <div class="min-w-0 flex-1">
+        <p class="text-xs font-bold text-slate-900">${cfg.title}</p>
+        <p class="text-[11px] text-slate-600 mt-0.5 leading-relaxed">${esc(msg)}</p>
+      </div>
+      <button type="button" class="absolute top-2.5 right-2.5 text-slate-400 hover:text-slate-600" aria-label="Tutup">
+        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+      </button>`;
     root.appendChild(el);
     while (root.children.length > 4) root.firstElementChild.remove();
     refreshIcons();
     const dismiss = () => {
       if (el.classList.contains('is-leaving')) return;
       el.classList.add('is-leaving');
-      setTimeout(() => el.remove(), 240);
+      setTimeout(() => el.remove(), 200);
     };
     el.querySelector('button').addEventListener('click', dismiss);
-    setTimeout(dismiss, duration);
-    return dismiss;
+    setTimeout(dismiss, 3800);
   }
 
-  function openModal({ title, subtitle = '', icon = 'info', iconCls = 'bg-indigo-50 text-indigo-600', body = '', footer = '', size = 'max-w-2xl' }) {
-    const root = $('#modal-root');
-    root.innerHTML = `
-      <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div class="modal-backdrop absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" data-action="close-modal"></div>
-        <div class="modal-panel relative w-full ${size} max-h-[88vh] flex flex-col bg-white rounded-2xl shadow-2xl border border-slate-200" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-          <div class="flex items-start gap-3 px-6 py-5 border-b border-slate-100">
-            <span class="w-10 h-10 rounded-xl grid place-items-center shrink-0 ${iconCls}"><i data-lucide="${icon}" class="w-5 h-5"></i></span>
-            <div class="flex-1 min-w-0">
-              <h3 id="modal-title" class="text-base font-semibold text-slate-900">${title}</h3>
-              ${subtitle ? `<p class="text-xs text-slate-500 mt-0.5">${subtitle}</p>` : ''}
-            </div>
-            <button type="button" class="icon-btn w-8 h-8" data-action="close-modal" aria-label="Tutup"><i data-lucide="x" class="w-4 h-4"></i></button>
-          </div>
-          <div class="px-6 py-5 overflow-y-auto thin-scroll">${body}</div>
-          ${footer ? `<div class="px-6 py-4 border-t border-slate-100 bg-slate-50/70 rounded-b-2xl flex flex-wrap justify-end gap-3">${footer}</div>` : ''}
-        </div>
-      </div>`;
-    root.classList.remove('hidden');
+  function openModalById(id) {
+    const m = document.getElementById(id);
+    if (!m) return;
+    m.classList.remove('hidden');
+    m.classList.add('flex');
     refreshIcons();
   }
-  function closeModal() {
-    const root = $('#modal-root');
-    root.classList.add('hidden');
-    root.innerHTML = '';
-    state.confirmFn = null;
-  }
-  function confirmDialog({ title, message, confirmText = 'Ya, Lanjutkan', danger = false, icon = 'triangle-alert', onConfirm }) {
-    openModal({
-      title, icon, size: 'max-w-md',
-      iconCls: danger ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600',
-      body: `<p class="text-sm text-slate-600 leading-relaxed">${message}</p>`,
-      footer: `<button type="button" class="btn btn-outline" data-action="close-modal">Batal</button>
-               <button type="button" class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-action="confirm-yes">${confirmText}</button>`,
-    });
-    state.confirmFn = onConfirm;
+
+  function closeModalById(id) {
+    const m = document.getElementById(id);
+    if (!m) return;
+    m.classList.add('hidden');
+    m.classList.remove('flex');
   }
 
-  function downloadFile(filename, content, mime) {
-    const blob = new Blob([content], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
-  }
-  function toCsv(rows) {
-    if (!rows.length) return '';
-    const cols = Object.keys(rows[0]);
-    const cell = (v) => {
-      const s = v === null || v === undefined ? '' : String(v);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    return [cols.join(','), ...rows.map((r) => cols.map((c) => cell(r[c])).join(','))].join('\n');
+  function closeAllModals() {
+    $$('[id^="modal-"]').forEach((m) => {
+      m.classList.add('hidden');
+      m.classList.remove('flex');
+    });
   }
 
-  function runCountUps(root = document) {
-    $$('[data-countup]', root).forEach((el) => {
-      const key = el.dataset.key || '';
-      const to = Number(el.dataset.countup) || 0;
-      const dec = Number(el.dataset.decimals || 0);
-      const from = key in state.countPrev ? state.countPrev[key] : 0;
-      state.countPrev[key] = to;
-      if (from === to) { el.textContent = fmtNum(to, dec); return; }
-      const t0 = performance.now();
-      const dur = 900;
-      const step = (now) => {
-        const k = Math.min(1, (now - t0) / dur);
-        const v = from + (to - from) * (1 - Math.pow(1 - k, 3));
-        el.textContent = fmtNum(dec ? v : Math.round(v), dec);
-        if (k < 1) requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
-    });
+  function runAction(fn, successMsg = null) {
+    try {
+      const res = fn();
+      if (successMsg) showToast(successMsg, 'success');
+      else if (res && typeof res === 'object' && res.message) showToast(res.message, 'success');
+      return res;
+    } catch (err) {
+      showToast(err.message || 'Terjadi kesalahan.', 'error');
+      return null;
+    }
   }
 
   /* --------------------------------------------------------------------------
-   * 6. ROUTER
+   * Global dd/mm/yyyy & dd/mm/yyyy hh:mm Date Input Enhancer (from app.blade.php)
    * ------------------------------------------------------------------------ */
+  function isoToDisplayDate(iso, isDateTime) {
+    if (!iso) return '';
+    const m = String(iso).trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
+    if (!m) return '';
+    const datePartStr = `${m[3]}/${m[2]}/${m[1]}`;
+    if (!isDateTime) return datePartStr;
+    return `${datePartStr} ${m[4] || '00'}:${m[5] || '00'}`;
+  }
+
+  function normalizeIsoValue(val, isDateTime) {
+    if (!val) return '';
+    const m = String(val).trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
+    if (!m) return '';
+    if (!isDateTime) return `${m[1]}-${m[2]}-${m[3]}`;
+    return `${m[1]}-${m[2]}-${m[3]}T${m[4] || '00'}:${m[5] || '00'}`;
+  }
+
+  function isValidYmd(year, month, day) {
+    if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+    const dt = new Date(Date.UTC(year, month - 1, day));
+    return dt.getUTCFullYear() === year && dt.getUTCMonth() === month - 1 && dt.getUTCDate() === day;
+  }
+
+  function displayToIsoDate(disp, isDateTime) {
+    if (!disp) return '';
+    const trimmed = String(disp).trim();
+    const isoDirect = normalizeIsoValue(trimmed, isDateTime);
+    if (isoDirect) {
+      const p = isoDirect.slice(0, 10).split('-').map(Number);
+      return isValidYmd(p[0], p[1], p[2]) ? isoDirect : '';
+    }
+    const m = trimmed.match(/^(\d{1,2})\s*[\/\-]\s*(\d{1,2})\s*[\/\-]\s*(\d{4})(?:[\sT]+(\d{1,2}):(\d{2}))?$/);
+    if (!m) return '';
+    const day = Number(m[1]);
+    const month = Number(m[2]);
+    const year = Number(m[3]);
+    if (!isValidYmd(year, month, day)) return '';
+    const yyyy = String(year).padStart(4, '0');
+    const mm = String(month).padStart(2, '0');
+    const dd = String(day).padStart(2, '0');
+    if (!isDateTime) return `${yyyy}-${mm}-${dd}`;
+    if (m[4] === undefined || m[5] === undefined) return '';
+    const hour = Number(m[4]);
+    const minute = Number(m[5]);
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return '';
+    return `${yyyy}-${mm}-${dd}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  }
+
+  function enhanceDateInputs(root = document) {
+    const nativeValueDesc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    let enhancedAny = false;
+
+    $$('input[type="date"], input[type="datetime-local"]', root).forEach((origInput) => {
+      if (origInput.classList.contains('pointer-events-none') || origInput.dataset.ddmmyyyyEnhanced) return;
+      origInput.dataset.ddmmyyyyEnhanced = '1';
+      enhancedAny = true;
+
+      const isDateTime = origInput.type === 'datetime-local';
+      const initialIso = normalizeIsoValue(nativeValueDesc.get.call(origInput), isDateTime);
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'relative flex items-center w-full';
+      origInput.parentNode.insertBefore(wrapper, origInput);
+
+      const dispInput = document.createElement('input');
+      dispInput.type = 'text';
+      dispInput.className = origInput.className + ' pr-9 font-mono';
+      dispInput.placeholder = isDateTime ? 'dd / mm / yyyy hh:mm' : 'dd / mm / yyyy';
+      dispInput.maxLength = isDateTime ? 19 : 14;
+      dispInput.autocomplete = 'off';
+      if (origInput.required) {
+        dispInput.required = true;
+        origInput.required = false;
+      }
+      dispInput.value = isoToDisplayDate(initialIso, isDateTime);
+
+      origInput.className = 'absolute right-2 bottom-0 w-px h-px opacity-0 pointer-events-none';
+      origInput.tabIndex = -1;
+      origInput.setAttribute('aria-hidden', 'true');
+      if (initialIso) nativeValueDesc.set.call(origInput, initialIso);
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.title = 'Pilih tanggal dari kalender';
+      btn.className = 'absolute right-2.5 text-slate-400 hover:text-indigo-600 p-0.5 rounded transition-colors';
+      btn.innerHTML = '<i data-lucide="calendar" class="w-4 h-4"></i>';
+
+      wrapper.appendChild(dispInput);
+      wrapper.appendChild(origInput);
+      wrapper.appendChild(btn);
+
+      Object.defineProperty(origInput, 'value', {
+        configurable: true,
+        enumerable: true,
+        get() {
+          const raw = nativeValueDesc.get.call(origInput);
+          if (raw) return raw;
+          return displayToIsoDate(dispInput.value, isDateTime);
+        },
+        set(val) {
+          const norm = normalizeIsoValue(val, isDateTime);
+          nativeValueDesc.set.call(origInput, norm);
+          dispInput.value = isoToDisplayDate(norm, isDateTime);
+          dispInput.setCustomValidity('');
+        },
+      });
+
+      dispInput.addEventListener('input', (e) => {
+        const isDelete = String(e.inputType || '').startsWith('delete');
+        if (!isDelete && dispInput.selectionStart === dispInput.value.length) {
+          if (/^\d{2}$/.test(dispInput.value) || /^\d{2}\/\d{2}$/.test(dispInput.value)) {
+            dispInput.value += '/';
+          } else if (isDateTime && /^\d{2}\/\d{2}\/\d{4}$/.test(dispInput.value)) {
+            dispInput.value += ' ';
+          } else if (isDateTime && /^\d{2}\/\d{2}\/\d{4}\s\d{2}$/.test(dispInput.value)) {
+            dispInput.value += ':';
+          }
+        }
+        const rawDisp = dispInput.value.trim();
+        const iso = displayToIsoDate(rawDisp, isDateTime);
+        nativeValueDesc.set.call(origInput, iso);
+        if (rawDisp === '' || iso) {
+          dispInput.setCustomValidity('');
+        } else {
+          dispInput.setCustomValidity(isDateTime ? 'Gunakan format dd/mm/yyyy hh:mm yang valid' : 'Gunakan format dd/mm/yyyy yang valid');
+        }
+      });
+
+      dispInput.addEventListener('blur', () => {
+        let rawDisp = dispInput.value.trim();
+        if (isDateTime && /^\d{1,2}\s*[\/\-]\s*\d{1,2}\s*[\/\-]\s*\d{4}$/.test(rawDisp)) {
+          rawDisp += ' 00:00';
+        }
+        const iso = displayToIsoDate(rawDisp, isDateTime);
+        if (iso) {
+          nativeValueDesc.set.call(origInput, iso);
+          dispInput.value = isoToDisplayDate(iso, isDateTime);
+          dispInput.setCustomValidity('');
+        }
+      });
+
+      origInput.addEventListener('change', () => {
+        const picked = nativeValueDesc.get.call(origInput);
+        dispInput.value = isoToDisplayDate(picked, isDateTime);
+        dispInput.setCustomValidity('');
+      });
+
+      btn.addEventListener('click', () => {
+        if (typeof origInput.showPicker === 'function') {
+          try { origInput.showPicker(); } catch (_) { origInput.focus(); origInput.click(); }
+        } else {
+          origInput.focus();
+          origInput.click();
+        }
+      });
+
+      if (origInput.form) {
+        origInput.form.addEventListener('reset', () => {
+          setTimeout(() => {
+            const resetVal = nativeValueDesc.get.call(origInput);
+            dispInput.value = isoToDisplayDate(resetVal, isDateTime);
+            dispInput.setCustomValidity('');
+          }, 0);
+        });
+      }
+    });
+
+    if (enhancedAny) refreshIcons();
+  }
+
+  /* --------------------------------------------------------------------------
+   * Auth, Role Chrome & Router
+   * ------------------------------------------------------------------------ */
+  function syncAuthVisibility() {
+    const loggedIn = Auth.isLoggedIn();
+    const overlay = $('#login-overlay');
+    const shell = $('#app-shell');
+    if (loggedIn) {
+      overlay.classList.add('hidden');
+      overlay.classList.remove('flex');
+      shell.classList.remove('hidden');
+      shell.classList.add('flex');
+    } else {
+      overlay.classList.remove('hidden');
+      overlay.classList.add('flex');
+      shell.classList.add('hidden');
+      shell.classList.remove('flex');
+      $('#login-error-box')?.classList.add('hidden');
+    }
+  }
+
+  function syncChrome() {
+    const user = Auth.getUser();
+    const trueRole = Auth.getTrueRole();
+    const effRole = Auth.getEffectiveRole();
+    const isAdminAcct = Auth.isAdminAccount();
+
+    $('#sidebar-user-initials').textContent = Auth.getInitials(user.nama_user);
+    $('#sidebar-user-name').textContent = user.nama_user;
+    $('#sidebar-user-meta').textContent = `@${user.username} • ${trueRole}`;
+    $('#header-user-name').textContent = user.nama_user;
+
+    const auditBadge = $('#audit-mode-badge');
+    if (effRole === 'Pemilik') {
+      auditBadge.classList.remove('hidden');
+      auditBadge.classList.add('flex');
+    } else {
+      auditBadge.classList.add('hidden');
+      auditBadge.classList.remove('flex');
+    }
+
+    const simWrap = $('#role-sim-wrap');
+    const staticBadge = $('#role-static-badge');
+    if (isAdminAcct) {
+      simWrap.classList.remove('hidden');
+      simWrap.classList.add('flex');
+      staticBadge.classList.add('hidden');
+      staticBadge.classList.remove('flex');
+      $('#role-select').value = effRole;
+    } else {
+      simWrap.classList.add('hidden');
+      simWrap.classList.remove('flex');
+      staticBadge.classList.remove('hidden');
+      staticBadge.classList.add('flex');
+      $('#role-static-label').textContent = Auth.getRoleLabel(effRole);
+    }
+
+    // Sidebar visibility per RBAC
+    $$('.nav-item[data-tab]').forEach((a) => {
+      const tab = a.dataset.tab;
+      if (tab === 'pengaturan') return; // handled by section wrapper
+      a.style.display = Auth.canAccessTab(tab) ? '' : 'none';
+    });
+    const adminSec = $('#nav-admin-section');
+    if (adminSec) {
+      adminSec.style.display = isAdminAcct ? '' : 'none';
+    }
+  }
+
   function switchTab(tabId, opts = {}) {
-    if (tabId === 'pengaturan') { openSettingsModal(); return; }
+    if (!Auth.isLoggedIn()) {
+      syncAuthVisibility();
+      return;
+    }
     if (!TABS.includes(tabId)) tabId = 'dashboard';
-    const changed = state.tab !== tabId;
+    if (!Auth.canAccessTab(tabId)) {
+      showToast(`Peran '${Auth.getEffectiveRole()}' tidak memiliki akses ke modul ${tabId}. Dialihkan ke Dashboard.`, 'warning');
+      tabId = 'dashboard';
+    }
     state.tab = tabId;
 
-    $$('.screen-section').forEach((sec) => sec.classList.toggle('is-active', sec.id === `screen-${tabId}`));
-    $$('[data-tab]').forEach((link) => {
-      const on = link.dataset.tab === tabId;
-      link.classList.toggle('is-active', on);
-      if (on) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+    $$('.screen-section').forEach((sec) => {
+      sec.classList.toggle('is-active', sec.id === `screen-${tabId}`);
+    });
+    $$('.nav-item[data-tab]').forEach((link) => {
+      const active = link.dataset.tab === tabId;
+      link.classList.toggle('bg-indigo-600', active);
+      link.classList.toggle('text-white', active);
+      link.classList.toggle('shadow-sm', active);
+      link.classList.toggle('text-slate-600', !active);
+      link.classList.toggle('hover:bg-slate-100', !active);
     });
 
     if (opts.updateHash !== false && location.hash !== `#${tabId}`) {
       try { history.pushState(null, '', `#${tabId}`); } catch (_) { location.hash = tabId; }
     }
-    document.title = `${TAB_META[tabId].label} · Bong Garment — Sistem Produksi CMT`;
-    if (changed) { const main = $('#main-content'); if (main) main.scrollTo({ top: 0, behavior: 'smooth' }); }
-    if (tabId === 'dashboard') animateChartBars();
+    document.title = TAB_TITLES[tabId] || 'Bong Garment - Sistem Produksi CMT';
+    renderActiveScreen();
+    if (opts.scrollTop !== false) {
+      const main = $('#main-content');
+      if (main) main.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  function renderActiveScreen() {
+    syncChrome();
+    switch (state.tab) {
+      case 'dashboard': renderDashboard(); break;
+      case 'pesanan': renderPesanan(); break;
+      case 'penerimaan': renderPenerimaan(); break;
+      case 'pemotongan': renderPemotongan(); break;
+      case 'qc': renderQc(); break;
+      case 'gudang': renderGudang(); break;
+      case 'laporan': renderLaporan(); break;
+      case 'pengaturan': renderPengaturan(); break;
+    }
     refreshIcons();
   }
 
   /* --------------------------------------------------------------------------
-   * 7. ROLE SWITCHER
+   * SCREEN 1: DASHBOARD
    * ------------------------------------------------------------------------ */
-  function applyRole(role, { announce = false } = {}) {
-    if (!ROLES[role]) role = 'Admin';
-    state.role = role;
-    try { localStorage.setItem(ROLE_KEY, role); } catch (_) { /* ignore */ }
-    const cfg = ROLES[role];
-
-    $('#role-label').textContent = role;
-    $('#role-avatar').innerHTML = `<i data-lucide="${cfg.icon}" class="w-4 h-4"></i>`;
-
-    $$('.nav-link[data-tab], .nav-link[data-nav]').forEach((el) => {
-      const key = el.dataset.tab || el.dataset.nav;
-      const ok = cfg.tabs.includes(key);
-      el.classList.toggle('role-ok', ok);
-      el.classList.toggle('role-dim', !ok);
-      el.title = ok ? `Akses utama peran ${role}` : `Di luar akses utama peran ${role}`;
-    });
-    const screens = cfg.tabs.filter((t) => TABS.includes(t));
-    $('#role-access-label').textContent = `${role} · ${screens.length} layar utama`;
-
-    $('#role-options').innerHTML = Object.entries(ROLES).map(([name, r]) => {
-      const on = name === role;
-      return `
-        <button type="button" data-action="set-role" data-role="${name}" class="w-full flex items-center gap-3 p-2.5 rounded-lg text-left transition ${on ? 'bg-indigo-50 ring-1 ring-inset ring-indigo-200' : 'hover:bg-slate-50'}">
-          <span class="w-8 h-8 rounded-lg grid place-items-center shrink-0 ${on ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}"><i data-lucide="${r.icon}" class="w-4 h-4"></i></span>
-          <span class="flex-1 min-w-0">
-            <span class="block text-sm font-semibold ${on ? 'text-indigo-700' : 'text-slate-800'}">${name}</span>
-            <span class="block text-[11px] text-slate-500 truncate">${r.desc}</span>
-          </span>
-          ${on ? '<i data-lucide="check" class="w-4 h-4 text-indigo-600"></i>' : ''}
-        </button>`;
-    }).join('');
-
-    refreshIcons();
-    if (announce) {
-      const names = screens.filter((t) => t !== 'dashboard').map((t) => `<b class="text-slate-700">${TAB_META[t].label}</b>`).join(', ');
-      showToast(`Akses utama: Dashboard${names ? ', ' + names : ''}. Menu terkait ditandai titik indigo.`, { type: 'info', title: `Peran aktif: ${role}` });
-    }
-  }
-
-  /* --------------------------------------------------------------------------
-   * 8. DASHBOARD RENDERER (fully derived from BongDB)
-   * ------------------------------------------------------------------------ */
-  function computeMetrics() {
-    const D = BongDB.data;
-    const aktif = D.Pesanan.filter((p) => ACTIVE_STATUSES.includes(p.status_pesanan));
-    const status = Object.fromEntries(ACTIVE_STATUSES.map((s) => [s, aktif.filter((p) => p.status_pesanan === s).length]));
-
-    const rollStatus = { Tersedia: 0, Dipotong: 0, Habis: 0, Retur: 0 };
-    D.Detail_Roll_Bahan.forEach((r) => { rollStatus[r.status_roll] = (rollStatus[r.status_roll] || 0) + 1; });
-
-    const potongOn = (date) => D.Pemotongan_Seri.filter((p) => String(p.tgl_potong).slice(0, 10) === date);
-    const todayPotong = potongOn(APP_TODAY);
-    const todayGel = Q.gelaranOfPotong(todayPotong);
-    const today = {
-      pcs: sum(todayPotong, (p) => p.total_lembar_hasil),
-      gelaran: todayGel.length,
-      rolls: new Set(todayGel.map((g) => g.id_roll)).size,
-    };
-
-    const days = range(-6, 0).map((off, i) => {
-      const date = addDays(APP_TODAY, off);
-      const p = potongOn(date);
-      const g = Q.gelaranOfPotong(p);
-      return { date, label: CHART_LABELS[i], isToday: off === 0, pcs: sum(p, (x) => x.total_lembar_hasil), gelaran: g.length, rolls: new Set(g.map((x) => x.id_roll)).size, seri: p.length };
-    });
-    const weekStart = addDays(APP_TODAY, -6);
-    const weekPotong = D.Pemotongan_Seri.filter((p) => {
-      const dp = String(p.tgl_potong).slice(0, 10);
-      return dp >= weekStart && dp <= APP_TODAY;
-    });
-    const weekGel = Q.gelaranOfPotong(weekPotong);
-    const weekRolls = new Set(weekGel.map((g) => g.id_roll)).size;
-    const week = {
-      pcs: sum(weekGel, (g) => g.total_lembar_gelar),
-      gelaran: weekGel.length,
-      rolls: weekRolls,
-      avgYield: weekRolls ? sum(weekGel, (g) => g.total_lembar_gelar) / weekRolls : 0,
-    };
-
-    const pending = D.Kerusakan.filter((k) => k.status === 'Need Rework');
-    const pendingOrders = new Set(pending.map((k) => k.id_pesanan));
-    const groups = {};
-    pending.forEach((k) => {
-      groups[k.jenis_cacat] = groups[k.jenis_cacat] || { orders: new Set(), tags: {} };
-      groups[k.jenis_cacat].orders.add(k.id_pesanan);
-      const tag = defectTag(k.catatan);
-      if (tag) groups[k.jenis_cacat].tags[tag] = (groups[k.jenis_cacat].tags[tag] || 0) + 1;
-    });
-    const pendingText = Object.entries(groups).map(([jenis, g]) => {
-      const tag = Object.entries(g.tags).sort((a, b) => b[1] - a[1])[0];
-      return `${g.orders.size} ${jenis}${tag ? ` (${tag[0]})` : ''}`;
-    }).join(' • ');
-
-    return { aktif, status, rollStatus, today, days, week, pendingCount: pendingOrders.size, pendingText };
-  }
-
-  function renderKpis(m) {
-    const host = $('#kpi-grid');
-    if (!host) return;
-    const total = m.aktif.length || 1;
-    const seg = (n, cls) => (n ? `<span class="${cls} h-full first:rounded-l-full last:rounded-r-full" style="width:${(n / total * 100).toFixed(2)}%"></span>` : '');
-    const pctTarget = Math.round((m.today.pcs / TARGET_HARIAN_PCS) * 100);
-    const targetOk = pctTarget >= 100;
-    const pendingOk = m.pendingCount === 0;
-
-    host.innerHTML = `
-      <article class="card p-5 flex flex-col hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-        <div class="flex items-start justify-between">
-          <p class="kpi-label">Total Pesanan Aktif</p>
-          <span class="kpi-icon bg-indigo-50 text-indigo-600"><i data-lucide="clipboard-list" class="w-[18px] h-[18px]"></i></span>
-        </div>
-        <div class="mt-2 flex items-baseline gap-2">
-          <span class="kpi-value" data-key="aktif" data-countup="${m.aktif.length}">0</span>
-          <span class="text-sm font-medium text-slate-500">Pesanan</span>
-        </div>
-        <div class="mt-auto pt-4">
-          <div class="flex h-2 w-full gap-0.5 overflow-hidden rounded-full bg-slate-100">
-            ${seg(m.status.ANTREAN, 'bg-slate-400')}${seg(m.status.PEMOTONGAN, 'bg-indigo-500')}${seg(m.status['DALAM QC'], 'bg-amber-400')}
-          </div>
-          <div class="mt-2.5 flex items-center justify-between text-[11px] text-slate-500">
-            <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-slate-400"></span><b class="font-mono text-slate-800">${m.status.ANTREAN}</b> Antrean</span>
-            <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-indigo-500"></span><b class="font-mono text-slate-800">${m.status.PEMOTONGAN}</b> Potong</span>
-            <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-400"></span><b class="font-mono text-slate-800">${m.status['DALAM QC']}</b> QC</span>
-          </div>
-        </div>
-      </article>
-
-      <article class="card p-5 flex flex-col hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-        <div class="flex items-start justify-between">
-          <p class="kpi-label">Stok Roll Kain Fisik</p>
-          <span class="kpi-icon bg-emerald-50 text-emerald-600"><i data-lucide="cylinder" class="w-[18px] h-[18px]"></i></span>
-        </div>
-        <div class="mt-2 flex items-baseline gap-2">
-          <span class="kpi-value" data-key="roll" data-countup="${m.rollStatus.Tersedia}">0</span>
-          <span class="text-sm font-medium text-slate-500">Roll Tersedia</span>
-        </div>
-        <div class="mt-auto pt-4">
-          <span class="badge bg-emerald-50 text-emerald-700 ring-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Per-Roll Tracking</span>
-          <p class="mt-2 text-[11px] text-slate-500">Tiap <code class="font-mono text-slate-700">id_roll</code> memiliki stok unik individu</p>
-        </div>
-      </article>
-
-      <article class="card p-5 flex flex-col hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-        <div class="flex items-start justify-between">
-          <p class="kpi-label">Hasil Potong Hari Ini</p>
-          <span class="kpi-icon bg-violet-50 text-violet-600"><i data-lucide="scissors" class="w-[18px] h-[18px]"></i></span>
-        </div>
-        <div class="mt-2 flex items-baseline gap-2">
-          <span class="kpi-value" data-key="pcs" data-countup="${m.today.pcs}">0</span>
-          <span class="text-sm font-medium text-slate-500">Lembar (Pcs)</span>
-        </div>
-        <div class="mt-auto pt-4">
-          <p class="text-[11px] font-medium ${targetOk ? 'text-emerald-600' : 'text-amber-600'} inline-flex items-center gap-1">
-            <i data-lucide="${targetOk ? 'circle-check' : 'triangle-alert'}" class="w-3.5 h-3.5"></i>
-            ${targetOk ? `${Math.min(pctTarget, 100)}% Sesuai target kapasitas` : `${pctTarget}% dari target kapasitas`}
-          </p>
-          <div class="mt-2 grid grid-cols-2 gap-2">
-            <div class="rounded-md bg-slate-50 border border-slate-100 px-2.5 py-1.5"><p class="text-sm font-bold font-mono text-slate-800">${m.today.gelaran}</p><p class="text-[10px] text-slate-500">Gelaran</p></div>
-            <div class="rounded-md bg-slate-50 border border-slate-100 px-2.5 py-1.5"><p class="text-sm font-bold font-mono text-slate-800">${m.today.rolls}</p><p class="text-[10px] text-slate-500">Roll Kain</p></div>
-          </div>
-        </div>
-      </article>
-
-      <article class="card p-5 flex flex-col hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${pendingOk ? '' : 'border-rose-200/80 bg-gradient-to-br from-white to-rose-50/50'}">
-        <div class="flex items-start justify-between">
-          <p class="kpi-label">Pending Rework / Dalam QC</p>
-          <span class="kpi-icon ${pendingOk ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}"><i data-lucide="shield-alert" class="w-[18px] h-[18px]"></i></span>
-        </div>
-        <div class="mt-2 flex items-baseline gap-2">
-          <span class="kpi-value ${pendingOk ? '' : 'text-rose-600'}" data-key="pending" data-countup="${m.pendingCount}">0</span>
-          <span class="text-sm font-medium text-slate-500">Pesanan</span>
-        </div>
-        <div class="mt-auto pt-4">
-          ${pendingOk
-            ? '<span class="badge bg-emerald-50 text-emerald-700 ring-emerald-200">TERKENDALI</span><p class="mt-2 text-[11px] text-slate-500">Tidak ada rework tertunda.</p>'
-            : `<span class="badge bg-rose-50 text-rose-700 ring-rose-200"><span class="pulse-dot w-1.5 h-1.5 rounded-full bg-rose-500 text-rose-500"></span>PERLU TINDAK LANJUT</span>
-               <p class="mt-2 text-[11px] text-slate-600">${esc(m.pendingText)}</p>`}
-        </div>
-      </article>`;
-  }
-
-  function renderOrdersTable() {
-    const D = BongDB.data;
-    const tbody = $('#tbl-pesanan-body');
-    if (!tbody) return;
-    const active = D.Pesanan.filter((p) => ACTIVE_STATUSES.includes(p.status_pesanan)).sort((a, b) => a.id_pesanan - b.id_pesanan);
-    const rows = state.orderFilter === 'ALL' ? active : active.filter((p) => p.status_pesanan === state.orderFilter);
-    const shown = state.showAllOrders ? rows : rows.slice(0, ORDER_ROWS_DEFAULT);
-
-    tbody.innerHTML = shown.map((p) => {
-      const pola = Q.pola(p.id_pola);
-      const s = Q.sumber(p.id_sumber);
-      const sm = SUMBER_META[p.id_sumber] || SUMBER_META.default;
-      const st = STATUS_META[p.status_pesanan] || STATUS_META.ANTREAN;
-      return `
-        <tr class="cursor-pointer hover:bg-slate-50/80" data-action="open-order" data-id="${p.id_pesanan}" id="row-pesanan-${p.id_pesanan}">
-          <td class="pl-5 pr-3 py-3.5"><span class="font-mono text-[13px] font-semibold text-indigo-600">#${p.id_pesanan}</span></td>
-          <td class="px-3 py-3.5">
-            <p class="font-medium text-slate-900 whitespace-nowrap">${esc(pola?.nama_pola || '-')}</p>
-            <p class="font-mono text-[10.5px] text-slate-400">${esc(pola?.kode_pola || '')}</p>
-          </td>
-          <td class="px-3 py-3.5">
-            <span class="inline-flex items-center gap-2 text-xs font-medium whitespace-nowrap ${sm.text}">
-              <span class="w-6 h-6 rounded-md grid place-items-center ${sm.bg}"><i data-lucide="${sm.icon}" class="w-3.5 h-3.5"></i></span>${esc(s?.nama_sumber || '-')}
-            </span>
-          </td>
-          <td class="px-3 py-3.5 text-[13px] ${p.nama_mitra ? 'text-slate-700' : 'text-slate-300'} whitespace-nowrap">${p.nama_mitra ? esc(p.nama_mitra) : '-'}</td>
-          <td class="px-3 py-3.5 min-w-[150px]">
-            <div class="flex items-center justify-between gap-2 text-[11px] mb-1">
-              <span class="font-mono font-semibold text-slate-800">${p.progress_pct}%</span>
-              <span class="text-slate-400 whitespace-nowrap">${progressLabel(p)}</span>
-            </div>
-            <div class="h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full rounded-full ${st.bar} transition-all duration-700" style="width:${p.progress_pct}%"></div></div>
-          </td>
-          <td class="pl-3 pr-5 py-3.5 text-right"><span class="badge ${st.badge}">${p.status_pesanan}</span></td>
-        </tr>`;
-    }).join('') || `<tr><td colspan="6" class="px-5 py-10 text-center text-sm text-slate-400">Tidak ada pesanan pada filter ini.</td></tr>`;
-
-    // Filter chips
-    $$('#order-filters [data-filter]').forEach((b) => b.classList.toggle('is-active', b.dataset.filter === state.orderFilter));
-    $$('[data-filter-count]').forEach((el) => {
-      const f = el.dataset.filterCount;
-      el.textContent = f === 'ALL' ? active.length : active.filter((p) => p.status_pesanan === f).length;
-    });
-
-    // Toggle button
-    const btn = $('#btn-toggle-orders');
-    if (rows.length > ORDER_ROWS_DEFAULT) {
-      btn.classList.remove('hidden');
-      btn.innerHTML = state.showAllOrders
-        ? `Ringkas<i data-lucide="chevron-up" class="w-3.5 h-3.5"></i>`
-        : `Tampilkan Semua (${rows.length})<i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>`;
-    } else {
-      btn.classList.add('hidden');
-    }
-
-    // Sumber distribution
-    const dist = D.Sumber_Inisiasi.map((s) => ({ s, n: active.filter((p) => p.id_sumber === s.id_sumber).length }));
-    const tot = active.length || 1;
-    $('#sumber-dist').innerHTML = `
-      <div class="flex items-center gap-3">
-        <span class="text-[10.5px] font-semibold tracking-wider uppercase text-slate-400 whitespace-nowrap">Sumber</span>
-        <div class="flex-1 flex h-1.5 rounded-full overflow-hidden bg-slate-200 gap-0.5 min-w-[80px]">
-          ${dist.map(({ s, n }) => (n ? `<span class="${(SUMBER_META[s.id_sumber] || SUMBER_META.default).bar}" style="width:${(n / tot * 100).toFixed(1)}%"></span>` : '')).join('')}
-        </div>
-      </div>
-      <div class="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
-        ${dist.map(({ s, n }) => `<span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full ${(SUMBER_META[s.id_sumber] || SUMBER_META.default).bar}"></span>${esc(s.nama_sumber)} <b class="font-mono text-slate-700">${n}</b></span>`).join('')}
-      </div>`;
-  }
-
-  function pickFeaturedRolls(n = 3) {
-    const R = BongDB.data.Detail_Roll_Bahan;
-    const by = (s) => R.filter((r) => r.status_roll === s);
-    const dipotong = by('Dipotong').sort((a, b) => b.id_roll - a.id_roll);
-    const habis = by('Habis').sort((a, b) => b.id_roll - a.id_roll);       // most recently depleted
-    const tersedia = by('Tersedia').sort((a, b) => a.id_roll - b.id_roll); // FIFO next to spread
-    const picks = [dipotong[0], habis[0], tersedia[0]].filter(Boolean);
-    for (const r of [...tersedia, ...dipotong, ...habis]) {
-      if (picks.length >= n) break;
-      if (!picks.includes(r)) picks.push(r);
-    }
-    return picks.slice(0, n);
-  }
-
-  function renderRollCards(m) {
-    const summary = $('#roll-status-summary');
-    if (summary) {
-      summary.innerHTML = ['Tersedia', 'Dipotong', 'Habis', 'Retur'].map((s) => `
-        <div class="rounded-lg border border-slate-100 bg-slate-50/70 px-2.5 py-2">
-          <p class="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400"><span class="w-1.5 h-1.5 rounded-full ${ROLL_META[s].dot}"></span>${s}</p>
-          <p class="text-base font-bold font-mono text-slate-800 mt-0.5">${fmtNum(m.rollStatus[s] || 0)}</p>
-        </div>`).join('');
-    }
-    const host = $('#roll-cards');
-    if (!host) return;
-    host.innerHTML = pickFeaturedRolls(3).map((r) => {
-      const info = Q.rollInfo(r);
-      const meta = ROLL_META[r.status_roll] || ROLL_META.Habis;
-      const gel = Q.rollGelaran(r.id_roll);
-      let footer = '';
-      if (r.status_roll === 'Dipotong') {
-        const last = gel.sort((a, b) => b.id_gelar - a.id_gelar)[0];
-        footer = `<div class="flex items-center gap-2 rounded-md bg-indigo-50/70 border border-indigo-100 px-3 py-2 text-xs text-indigo-700">
-            <i data-lucide="layers" class="w-3.5 h-3.5"></i>Digelar pd Potong PK <b class="font-mono">#${last?.id_potong ?? '-'}</b>
-            <span class="ml-auto font-mono text-[10.5px] text-indigo-500">${gel.length} gelaran · ${fmtNum(sum(gel, (g) => g.total_lembar_gelar))} pcs</span></div>`;
-      } else if (r.status_roll === 'Habis') {
-        footer = `<div class="flex items-center gap-2 rounded-md bg-slate-50 border border-slate-100 px-3 py-2 text-xs text-slate-600">
-            <i data-lucide="gauge" class="w-3.5 h-3.5 text-slate-400"></i>Total Yield: <b class="font-mono text-slate-900">${fmtNum(sum(gel, (g) => g.total_lembar_gelar))} Pcs</b>
-            <span class="ml-auto font-mono text-[10.5px] text-slate-400">${gel.length} gelaran</span></div>`;
-      } else if (r.status_roll === 'Tersedia') {
-        footer = `<div class="flex items-center justify-between gap-2">
-            <span class="inline-flex items-center gap-1.5 text-xs text-slate-600"><i data-lucide="warehouse" class="w-3.5 h-3.5 text-slate-400"></i>Rak Alokasi: <b class="font-mono text-slate-900">${esc(r.rak_alokasi)}</b></span>
-            <button type="button" data-action="siap-gelar" data-id="${r.id_roll}" class="btn btn-primary btn-sm"><i data-lucide="scissors" class="w-3.5 h-3.5"></i>Siap Gelar di Meja Potong</button></div>`;
-      } else {
-        footer = `<div class="flex items-center gap-2 rounded-md bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-700"><i data-lucide="undo-2" class="w-3.5 h-3.5"></i>Diretur ke supplier</div>`;
-      }
-      return `
-        <div class="group rounded-lg border border-slate-200 p-4 hover:border-indigo-200 hover:shadow-sm transition cursor-pointer" data-action="open-roll" data-id="${r.id_roll}">
-          <div class="flex items-start justify-between gap-3">
-            <div class="flex items-center gap-3 min-w-0">
-              <span class="w-10 h-10 rounded-lg grid place-items-center shrink-0 ${meta.icon}"><i data-lucide="cylinder" class="w-[18px] h-[18px]"></i></span>
-              <div class="min-w-0">
-                <p class="font-mono text-[11px] text-slate-400">id_roll: <b class="text-slate-900 text-[13px]">${r.id_roll}</b></p>
-                <p class="text-sm font-semibold text-slate-900 truncate group-hover:text-indigo-700">${esc(info.label)}</p>
-              </div>
-            </div>
-            <span class="badge ${meta.badge}">${r.status_roll}</span>
-          </div>
-          <div class="mt-2.5 mb-3 flex items-center gap-4 text-[11px] text-slate-500">
-            <span class="inline-flex items-center gap-1"><i data-lucide="receipt" class="w-3 h-3"></i>Nota #${esc(info.penerimaan?.no_nota || '-')}</span>
-            <span class="inline-flex items-center gap-1"><i data-lucide="weight" class="w-3 h-3"></i><b class="font-mono text-slate-700">${fmtNum(r.berat_kg, 1)}</b> kg</span>
-            <span class="inline-flex items-center gap-1 font-mono">Roll ${r.no_roll_ke}/${r.total_roll}</span>
-          </div>
-          ${footer}
-        </div>`;
-    }).join('') || '<p class="text-sm text-slate-400 text-center py-8">Belum ada data roll.</p>';
-  }
-
-  function renderYieldChart(m) {
-    const host = $('#yield-chart');
-    if (!host) return;
-    const max = Math.max(...m.days.map((d) => d.pcs), 1);
-    const niceMax = Math.ceil(max / 250) * 250;
-    const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(niceMax * f));
-
-    $('#yield-avg').innerHTML = `<i data-lucide="gauge" class="w-3.5 h-3.5"></i>Rata-rata Yield: <span class="font-mono">${fmtNum(m.week.avgYield, 1)}</span> Pcs / Roll`;
-
-    host.innerHTML = `
-      <div class="relative h-60">
-        <div class="absolute inset-x-0 top-0 bottom-7 flex flex-col-reverse justify-between pointer-events-none">
-          ${ticks.map((t) => `<div class="relative border-t ${t === 0 ? 'border-slate-200' : 'border-dashed border-slate-200/80'}"><span class="absolute -top-2 left-0 pr-2 bg-white text-[10px] font-mono text-slate-400">${fmtNum(t)}</span></div>`).join('')}
-        </div>
-        <div class="absolute inset-0 pl-12 flex items-end gap-3">
-          ${m.days.map((d) => `
-            <div class="group flex-1 h-full flex flex-col items-center">
-              <div class="relative w-full flex-1 flex items-end justify-center">
-                <div class="bar relative w-full max-w-[46px] rounded-t-md ${d.isToday ? 'bg-gradient-to-t from-indigo-600 to-indigo-500 shadow-lg shadow-indigo-500/30' : 'bg-indigo-200 group-hover:bg-indigo-300'}" style="height:0%" data-h="${(d.pcs / niceMax * 100).toFixed(2)}">
-                  <span class="absolute -top-6 left-1/2 -translate-x-1/2 text-[10.5px] font-mono font-semibold ${d.isToday ? 'text-indigo-700' : 'text-slate-500'}">${d.pcs ? fmtNum(d.pcs) : ''}</span>
-                  <div class="pointer-events-none absolute bottom-full mb-8 left-1/2 -translate-x-1/2 w-40 rounded-lg bg-slate-900 text-white text-[11px] p-2.5 shadow-xl opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition z-10">
-                    <p class="font-semibold">${fmtDate(d.date)}</p>
-                    <p class="text-slate-300 mt-1 font-mono">${fmtNum(d.pcs)} pcs · ${d.seri} seri</p>
-                    <p class="text-slate-300 font-mono">${d.gelaran} gelaran · ${d.rolls} roll</p>
-                  </div>
-                </div>
-              </div>
-              <span class="h-7 flex items-end text-[11px] ${d.isToday ? 'font-semibold text-indigo-700' : 'text-slate-500'}">${d.label}</span>
-            </div>`).join('')}
-        </div>
-      </div>`;
-
-    $('#yield-summary').innerHTML = [
-      ['Total 7 Hari', `${fmtNum(m.week.pcs)}`, 'Pcs'],
-      ['Roll Terpakai', `${fmtNum(m.week.rolls)}`, 'Roll'],
-      ['Total Gelaran', `${fmtNum(m.week.gelaran)}`, 'Gelaran'],
-    ].map(([label, val, unit]) => `
-      <div><p class="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">${label}</p>
-      <p class="mt-0.5 text-lg font-bold font-mono text-slate-900">${val} <span class="text-xs font-sans font-medium text-slate-400">${unit}</span></p></div>`).join('');
-
-    if (state.tab === 'dashboard') animateChartBars();
-  }
-  function animateChartBars() {
-    setTimeout(() => {
-      $$('#yield-chart .bar').forEach((b) => { b.style.height = `${b.dataset.h}%`; });
-    }, 40);
-  }
-
-  function renderQcFeed() {
-    const host = $('#qc-feed');
-    if (!host) return;
-    const items = [...BongDB.data.Kerusakan].sort((a, b) => b.id_qc - a.id_qc).slice(0, 3);
-    host.innerHTML = items.map((k) => {
-      const p = Q.pesanan(k.id_pesanan);
-      const pola = p ? Q.pola(p.id_pola) : null;
-      const meta = QC_META[k.status] || QC_META['Need Rework'];
-      const inspector = Q.user(k.id_user_qc);
-      return `
-        <div class="flex gap-3 p-3.5 rounded-lg border border-slate-200 hover:border-slate-300 hover:shadow-sm transition cursor-pointer" data-action="open-order" data-id="${k.id_pesanan}">
-          <span class="w-9 h-9 shrink-0 rounded-lg grid place-items-center ring-1 ring-inset ${meta.iconCls}"><i data-lucide="${meta.icon}" class="w-4 h-4"></i></span>
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center justify-between gap-2">
-              <p class="font-mono text-[11px] text-slate-400">id_qc: <b class="text-slate-800">${k.id_qc}</b></p>
-              <span class="badge ${meta.badge}">${esc(k.status.toUpperCase())}</span>
-            </div>
-            <p class="text-sm font-semibold text-slate-900 mt-1">Pesanan #${k.id_pesanan} (${esc(pola?.nama_pola || '-')})</p>
-            <p class="text-xs text-slate-600 mt-0.5 leading-relaxed"><b class="font-semibold text-slate-800">${esc(k.jenis_cacat)} (${k.jumlah_pcs} ${qcUnit(k)})</b> - ${esc(k.catatan)}</p>
-            <p class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10.5px] text-slate-400">
-              <span class="inline-flex items-center gap-1"><i data-lucide="calendar" class="w-3 h-3"></i>${fmtDate(k.tgl_temuan)}</span>
-              <span class="inline-flex items-center gap-1"><i data-lucide="user-check" class="w-3 h-3"></i>${esc(inspector?.nama_user || '-')}</span>
-              <span class="inline-flex items-center gap-1"><i data-lucide="wrench" class="w-3 h-3"></i>${esc(k.pic_rework || '-')}</span>
-            </p>
-          </div>
-        </div>`;
-    }).join('') || '<p class="text-sm text-slate-400 text-center py-8">Belum ada temuan QC.</p>';
-  }
-
   function renderDashboard() {
-    const m = computeMetrics();
-    renderKpis(m);
-    renderOrdersTable();
-    renderRollCards(m);
-    renderYieldChart(m);
-    renderQcFeed();
-  }
+    $('#dash-today-label').textContent = fmtDateLongId(todayIso());
+    const orders = DB.all('Pesanan');
+    const activeOrders = orders.filter((o) => !['Selesai', 'Dibatalkan'].includes(o.status_pesanan));
+    const rollsTersedia = DB.where('Detail_Roll_Bahan', (r) => r.status_roll === 'Tersedia').length;
+    const totalStokJadi = sum(DB.all('Stok_Barang_Jadi'), (s) => s.jumlah_stok_pcs);
+    const needRework = DB.where('QC', (q) => q.status_qc === 'Need Rework').length;
 
-  /* --------------------------------------------------------------------------
-   * 9. LIGHTWEIGHT PREVIEWS ON SKELETON SCREENS
-   * ------------------------------------------------------------------------ */
-  function renderSkeletons() {
-    $$('[data-skeleton]').forEach((el) => {
-      const variant = el.dataset.skeleton;
-      const fields = (el.dataset.fields || '').split('|').filter(Boolean);
-      const tables = (el.dataset.tables || '').split(',').map((s) => s.trim()).filter(Boolean);
-      const step = el.dataset.step;
-      const cols = { 2: 'md:grid-cols-2', 3: 'md:grid-cols-3', 4: 'md:grid-cols-4' }[el.dataset.cols || '3'] || 'md:grid-cols-3';
-      const box = (h = 'h-10') => `<div class="shimmer ${h} rounded-lg bg-white border border-slate-200"></div>`;
-      let inner = '';
-      if (variant === 'table') {
-        const rows = Number(el.dataset.rows || 3);
-        inner = `
-          <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-            <table class="w-full text-xs">
-              <thead class="bg-slate-50 border-b border-slate-200"><tr>${fields.map((f) => `<th class="th ${f.includes('id_roll') ? 'font-mono normal-case tracking-normal' : ''}">${esc(f)}</th>`).join('')}</tr></thead>
-              <tbody class="divide-y divide-slate-100">
-                ${range(1, rows).map(() => `<tr>${fields.map((_, i) => `<td class="px-3 py-3"><div class="shimmer h-3 rounded bg-slate-100" style="width:${50 + ((i * 17) % 40)}%"></div></td>`).join('')}</tr>`).join('')}
-              </tbody>
-            </table>
-          </div>`;
-      } else if (variant === 'metrics') {
-        inner = `<div class="grid grid-cols-2 md:grid-cols-${Math.min(fields.length, 4)} gap-3">
-          ${fields.map((f) => `<div class="rounded-lg bg-white border border-slate-200 p-3.5"><p class="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">${esc(f)}</p><div class="shimmer mt-2.5 h-6 w-2/3 rounded bg-slate-100"></div></div>`).join('')}
-        </div>`;
-      } else {
-        inner = `<div class="grid grid-cols-1 ${cols} gap-4">
-          ${fields.map((f) => `<div><p class="field-label">${esc(f)}</p>${box()}</div>`).join('')}
-        </div>`;
-      }
-      el.innerHTML = `
-        <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-4">
-          ${inner}
-          <div class="mt-4 pt-3 border-t border-dashed border-slate-200 flex flex-wrap items-center justify-between gap-2">
-            <div class="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
-              <i data-lucide="database" class="w-3.5 h-3.5"></i>Relasi tabel:
-              ${tables.map((t) => `<code class="font-mono px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-700">${esc(t)}</code>`).join('')}
-            </div>
-            <span class="badge bg-indigo-50 text-indigo-700 ring-indigo-200"><i data-lucide="hammer" class="w-3 h-3"></i>Diaktifkan pada Step ${esc(step)}</span>
-          </div>
-        </div>`;
-    });
-  }
+    $('#kpi-pesanan-aktif').textContent = fmtNum(activeOrders.length);
+    $('#kpi-roll-tersedia').textContent = fmtNum(rollsTersedia);
+    $('#kpi-stok-jadi').innerHTML = `${fmtNum(totalStokJadi)} <span class="text-sm font-normal text-slate-500">pcs</span>`;
+    $('#kpi-qc-rework').textContent = fmtNum(needRework);
 
-  function renderSumberTiles() {
-    const host = $('#sumber-tiles');
-    if (!host) return;
-    host.innerHTML = BongDB.data.Sumber_Inisiasi.map((s) => {
-      const meta = SUMBER_META[s.id_sumber] || SUMBER_META.default;
-      const on = s.id_sumber === state.selectedSumber;
-      return `
-        <button type="button" data-action="select-sumber" data-id="${s.id_sumber}" id="sumber-${s.id_sumber}"
-          class="relative text-left p-4 rounded-xl border-2 transition-all duration-150 ${on ? 'border-indigo-500 bg-indigo-50/50 shadow-sm' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}">
-          <div class="flex items-center justify-between">
-            <span class="w-10 h-10 rounded-lg grid place-items-center ${meta.bg}"><i data-lucide="${meta.icon}" class="w-5 h-5"></i></span>
-            <span class="w-5 h-5 rounded-full border-2 grid place-items-center ${on ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}">${on ? '<span class="w-1.5 h-1.5 rounded-full bg-white"></span>' : ''}</span>
-          </div>
-          <p class="mt-3 text-sm font-semibold ${on ? 'text-indigo-700' : 'text-slate-900'}">${esc(s.nama_sumber)}</p>
-          <p class="mt-1 text-xs text-slate-500 leading-relaxed">${meta.desc}</p>
-          <p class="mt-2 font-mono text-[10px] text-slate-400">id_sumber: ${s.id_sumber}</p>
-        </button>`;
-    }).join('');
-    const isMitra = state.selectedSumber === 1;
-    const mitraFields = $('#sumber-mitra-fields');
-    if (mitraFields) mitraFields.classList.toggle('hidden', !isMitra);
-    const internalNote = $('#sumber-internal-note');
-    if (internalNote) internalNote.classList.toggle('hidden', isMitra);
-    const nm = Q.sumber(state.selectedSumber)?.nama_sumber || '';
-    const internalText = $('#sumber-internal-text');
-    if (internalText) {
-      internalText.textContent = `${nm} — produksi internal, tidak memerlukan data mitra. Nama mitra otomatis disimpan sebagai null sesuai Flowchart Gambar 2-25.`;
-    }
-    const pill = $('#sumber-selected-pill');
-    if (pill) {
-      pill.textContent = `# Selected ID: ${state.selectedSumber} (${nm})`;
-    }
-  }
+    const edfAll = Q.edfSortOrders(orders.filter((o) => ['Antrean', 'Pemotongan'].includes(o.status_pesanan)));
+    const edfTop5 = edfAll.slice(0, 5);
+    $('#dash-edf-count').textContent = `${edfAll.length} Pesanan Aktif`;
 
-  function renderEdfQueue() {
-    const host = $('#edf-queue');
-    if (!host) return;
-    const queue = BongDB.data.Pesanan
-      .filter((p) => (p.status_pesanan === 'ANTREAN' || p.status_pesanan === 'PEMOTONGAN') && p.id_penerimaan)
-      .sort((a, b) => {
-        const da = a.deadline || addDays(a.tgl_order || APP_TODAY, 14);
-        const db = b.deadline || addDays(b.tgl_order || APP_TODAY, 14);
-        return da.localeCompare(db) || a.id_pesanan - b.id_pesanan;
-      });
-    const countEl = $('#edf-count');
-    if (countEl) countEl.textContent = `${queue.length} pesanan siap`;
-    if (state.selectedEdf === null && queue[0]) state.selectedEdf = queue[0].id_pesanan;
-
-    host.innerHTML = queue.map((p, i) => {
-      const pola = Q.pola(p.id_pola);
-      const dl = p.deadline || addDays(p.tgl_order || APP_TODAY, 14);
-      const sisa = diffDays(APP_TODAY, dl);
-      const urg = sisa <= 7 ? 'bg-rose-50 text-rose-700 ring-rose-200' : sisa <= 14 ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-slate-100 text-slate-600 ring-slate-200';
-      const on = p.id_pesanan === state.selectedEdf;
-      return `
-        <button type="button" data-action="select-edf" data-id="${p.id_pesanan}" class="w-full flex items-center gap-3 p-3 rounded-lg border text-left transition ${on ? 'border-indigo-400 bg-indigo-50/60 ring-2 ring-indigo-500/15' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}">
-          <span class="w-7 h-7 shrink-0 rounded-md grid place-items-center text-[11px] font-bold font-mono ${i === 0 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}">${i + 1}</span>
-          <span class="flex-1 min-w-0">
-            <span class="block text-[13px] font-semibold text-slate-900 truncate"><span class="font-mono text-indigo-600">#${p.id_pesanan}</span> · ${esc(pola?.nama_pola || '-')}</span>
-            <span class="block text-[11px] text-slate-500">Deadline ${fmtDate(dl)} · ${p.status_pesanan}</span>
-          </span>
-          <span class="badge ${urg} font-mono">${sisa < 0 ? 'Lewat ' + Math.abs(sisa) : sisa} hr</span>
-        </button>`;
-    }).join('') || '<p class="text-xs text-slate-400 py-6 text-center">Tidak ada pesanan dalam antrean.</p>';
-
-    const sel = Q.pesanan(state.selectedEdf);
-    const edfSel = $('#edf-selected');
-    if (edfSel) {
-      edfSel.innerHTML = sel ? `
-        <div class="flex items-center gap-3 p-3 rounded-lg bg-indigo-50/60 border border-indigo-100">
-          <i data-lucide="crosshair" class="w-4 h-4 text-indigo-600"></i>
-          <p class="text-xs text-slate-600">Pesanan terpilih: <b class="font-mono text-indigo-700">#${sel.id_pesanan}</b> · ${esc(Q.pola(sel.id_pola)?.nama_pola || '')} · Nota bahan <b class="font-mono">#${esc(Q.penerimaan(sel.id_penerimaan)?.no_nota || '-')}</b></p>
-        </div>` : '';
-    }
-  }
-
-  function renderShellMeta() {
-    const st = $('#db-status');
-    if (st) st.textContent = `14 tabel · ${fmtNum(BongDB.totalRecords())} record`;
-    const nr = $('#next-roll-id');
-    if (nr) nr.textContent = BongDB.nextId('Detail_Roll_Bahan');
-    const np = $('#next-potong-id');
-    if (np) np.textContent = BongDB.nextId('Pemotongan_Seri');
-    const nq = $('#next-qc-id');
-    if (nq) nq.textContent = BongDB.nextId('Kerusakan');
-  }
-
-  /* --------------------------------------------------------------------------
-   * 9B. STEP 2: SCREEN 2 (KELOLA PESANAN & POLA) LOGIC
-   * ------------------------------------------------------------------------ */
-  function updateSmartJenisPesanan() {
-    const inp = $('#inp-jenis-pesanan');
-    if (!inp) return;
-    let polaName = '';
-    if (state.pesanan.polaMode === 'new') {
-      polaName = $('#inp-nama-pola')?.value.trim() || 'Pola Pakaian Baru';
+    const edfBody = $('#dash-edf-tbody');
+    if (edfTop5.length === 0) {
+      edfBody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-slate-400">Tidak ada antrean pesanan aktif saat ini.</td></tr>';
     } else {
-      const p = Q.pola(state.pesanan.selectedPolaId) || BongDB.data.Pola[0];
-      polaName = p ? p.nama_pola : 'Pola Pakaian';
-    }
-
-    let suggestion = '';
-    if (state.selectedSumber === 1) {
-      const mitra = $('#inp-nama-mitra')?.value.trim();
-      suggestion = `${polaName} - Pesanan Mitra${mitra ? ' ' + mitra : ''} 2026`;
-    } else if (state.selectedSumber === 2) {
-      suggestion = `${polaName} - Stok Abadi Seri Produksi 2026`;
-    } else {
-      suggestion = `${polaName} - Inisiatif Tren Pasar Seri 2026`;
-    }
-
-    if (!inp.value || inp.dataset.auto === '1' || inp.dataset.prevPola !== polaName) {
-      inp.value = suggestion;
-      inp.dataset.auto = '1';
-      inp.dataset.prevPola = polaName;
-    }
-  }
-
-  function renderNewPolaSpecGrid(isCelana = false) {
-    const tbody = $('#tbl-spec-new-body');
-    if (!tbody) return;
-    const defaults = isCelana ? [
-      { uk: 'S', ld: '', pj: 98, lb: '', pl: '', lp: 72 },
-      { uk: 'M', ld: '', pj: 100, lb: '', pl: '', lp: 76 },
-      { uk: 'L', ld: '', pj: 102, lb: '', pl: '', lp: 80 },
-      { uk: 'XL', ld: '', pj: 104, lb: '', pl: '', lp: 84 },
-    ] : [
-      { uk: 'S', ld: 96, pj: 70, lb: 42, pl: 60, lp: '' },
-      { uk: 'M', ld: 102, pj: 72, lb: 44, pl: 61, lp: '' },
-      { uk: 'L', ld: 108, pj: 74, lb: 46, pl: 62, lp: '' },
-      { uk: 'XL', ld: 114, pj: 76, lb: 48, pl: 63, lp: '' },
-    ];
-    tbody.innerHTML = defaults.map((d) => `
-      <tr id="spec-row-${d.uk}" class="hover:bg-slate-50/60 transition-colors">
-        <td class="px-3 py-2.5 font-bold font-mono text-slate-800">${d.uk}</td>
-        <td class="px-2 py-1.5"><input type="number" class="field-input h-8 text-center font-mono inp-ld" value="${d.ld}" placeholder="—" /></td>
-        <td class="px-2 py-1.5"><input type="number" class="field-input h-8 text-center font-mono inp-pj" value="${d.pj}" placeholder="—" /></td>
-        <td class="px-2 py-1.5"><input type="number" class="field-input h-8 text-center font-mono inp-lb" value="${d.lb}" placeholder="—" /></td>
-        <td class="px-2 py-1.5"><input type="number" class="field-input h-8 text-center font-mono inp-pl" value="${d.pl}" placeholder="—" /></td>
-        <td class="px-2 py-1.5"><input type="number" class="field-input h-8 text-center font-mono inp-lp" value="${d.lp}" placeholder="—" /></td>
-      </tr>`).join('');
-  }
-
-  function renderPesananScreen() {
-    const sec = $('#screen-pesanan');
-    if (!sec) return;
-
-    // 1. Next Pesanan ID badge
-    const nextOrderId = BongDB.nextId('Pesanan');
-    const badgeOrderId = $('#next-pesanan-id');
-    if (badgeOrderId) badgeOrderId.textContent = nextOrderId;
-
-    // 2. Card 1 - Sumber & Mitra
-    const pill = $('#sumber-selected-pill');
-    if (pill) {
-      const s = Q.sumber(state.selectedSumber);
-      pill.textContent = `# Selected ID: ${state.selectedSumber} (${s?.nama_sumber || '-'})`;
-    }
-    const isMitra = state.selectedSumber === 1;
-    const mitraFields = $('#sumber-mitra-fields');
-    if (mitraFields) mitraFields.classList.toggle('hidden', !isMitra);
-    const internalNote = $('#sumber-internal-note');
-    if (internalNote) internalNote.classList.toggle('hidden', isMitra);
-    const internalText = $('#sumber-internal-text');
-    if (internalText) {
-      const nm = Q.sumber(state.selectedSumber)?.nama_sumber || '';
-      internalText.textContent = `${nm} — produksi internal, tidak memerlukan data mitra. Nama mitra disimpan sebagai null.`;
-    }
-
-    // Mitra Quick Chips & Datalist
-    const mitraList = ['PT Busana Indah', 'PT Seragam Nusantara', 'CV Maju Garmindo', 'CV Sport Wear Indo', 'Distro Urban Kasual'];
-    const dlMitra = $('#dl-mitra');
-    if (dlMitra) {
-      dlMitra.innerHTML = mitraList.map((m) => `<option value="${esc(m)}"></option>`).join('');
-    }
-    const chipsHost = $('#mitra-quick-chips');
-    if (chipsHost) {
-      chipsHost.innerHTML = mitraList.map((m) => `
-        <button type="button" data-action="select-mitra-chip" data-mitra="${esc(m)}" class="chip text-[11px] bg-white border border-indigo-200/80 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700">
-          + ${esc(m)}
-        </button>`).join('');
-    }
-
-    // Deadline badge & default dates
-    const inpDeadlineMitra = $('#inp-deadline-mitra');
-    if (inpDeadlineMitra && !inpDeadlineMitra.value) {
-      inpDeadlineMitra.value = addDays(APP_TODAY, 14);
-    }
-    if (inpDeadlineMitra && inpDeadlineMitra.value) {
-      const diff = diffDays(APP_TODAY, inpDeadlineMitra.value);
-      const remBadge = $('#deadline-remaining-badge');
-      if (remBadge) {
-        remBadge.textContent = diff < 0 ? `Lewat ${Math.abs(diff)} Hari` : `${diff} Hari Kerja Tersisa`;
-        remBadge.className = `badge font-mono ${diff <= 7 ? 'bg-rose-50 text-rose-700 ring-rose-200' : 'bg-indigo-50 text-indigo-700 ring-indigo-200'}`;
-      }
-    }
-
-    // 3. Card 2 - Pola Mode Toggle & Controls
-    const btnModeExisting = $('#btn-pola-mode-existing');
-    const btnModeNew = $('#btn-pola-mode-new');
-    const isExistingMode = state.pesanan.polaMode === 'existing';
-    if (btnModeExisting) btnModeExisting.classList.toggle('is-active', isExistingMode);
-    if (btnModeNew) btnModeNew.classList.toggle('is-active', !isExistingMode);
-
-    const wrapExisting = $('#pola-mode-existing-wrap');
-    const wrapNew = $('#pola-mode-new-wrap');
-    if (wrapExisting) wrapExisting.classList.toggle('hidden', !isExistingMode);
-    if (wrapNew) wrapNew.classList.toggle('hidden', isExistingMode);
-
-    // Existing Pola dropdown
-    const selPolaExisting = $('#sel-pola-existing');
-    if (selPolaExisting) {
-      const polas = BongDB.data.Pola;
-      const curVal = selPolaExisting.value || String(state.pesanan.selectedPolaId || polas[0]?.id_pola || '');
-      selPolaExisting.innerHTML = polas.map((p) => {
-        const kat = Q.kategori(p.id_kategori);
-        return `<option value="${p.id_pola}">[ID: ${p.id_pola}] ${esc(p.nama_pola)} (${esc(p.kode_pola)} · ${esc(kat?.nama_kategori || '-')})</option>`;
-      }).join('');
-      if (curVal) {
-        selPolaExisting.value = curVal;
-        state.pesanan.selectedPolaId = Number(curVal);
-      }
-    }
-
-    // Pola preview strip
-    const previewStrip = $('#pola-preview-strip');
-    if (previewStrip) {
-      const selId = Number(selPolaExisting?.value || state.pesanan.selectedPolaId || BongDB.data.Pola[0]?.id_pola);
-      const curPola = Q.pola(selId);
-      if (curPola) {
-        const specs = BongDB.where('Spesifikasi_Ukuran', (s) => s.id_pola === curPola.id_pola);
-        const kat = Q.kategori(curPola.id_kategori);
-        const isCelana = specs.some((s) => s.lingkar_pinggang !== null);
-        previewStrip.innerHTML = `
-          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5 mb-2.5">
-            <div class="flex items-center gap-2">
-              <span class="font-bold text-slate-800 text-sm">${esc(curPola.nama_pola)}</span>
-              <span class="font-mono text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">${esc(curPola.kode_pola)}</span>
-              <span class="badge bg-slate-100 text-slate-600 ring-slate-200">${esc(kat?.nama_kategori || '-')}</span>
-            </div>
-            <span class="font-mono text-[11px] text-slate-400">${specs.length} Ukuran Standar (S–XL)</span>
-          </div>
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            ${specs.map((s) => `
-              <div class="p-2.5 rounded-lg bg-white border border-slate-200">
-                <p class="font-bold font-mono text-slate-900">${s.nama_ukuran}</p>
-                <p class="text-[11px] text-slate-500 mt-0.5">
-                  ${isCelana
-                    ? `Pinggang: <b class="font-mono text-slate-700">${s.lingkar_pinggang ?? '-'}</b> cm · Pjg: <b class="font-mono text-slate-700">${s.panjang ?? '-'}</b> cm`
-                    : `Dada: <b class="font-mono text-slate-700">${s.lingkar_dada ?? '-'}</b> cm · Pjg: <b class="font-mono text-slate-700">${s.panjang ?? '-'}</b> cm`}
-                </p>
-              </div>`).join('')}
-          </div>`;
-      }
-    }
-
-    // New Pola Form elements
-    const nextPolaId = BongDB.nextId('Pola');
-    const badgePolaId = $('#next-pola-id');
-    if (badgePolaId) badgePolaId.textContent = nextPolaId;
-
-    const selKategori = $('#sel-pola-kategori');
-    if (selKategori && selKategori.children.length === 0) {
-      selKategori.innerHTML = BongDB.data.Kategori_Pola.map((k) => `
-        <option value="${k.id_kategori}">${esc(k.nama_kategori)}</option>
-      `).join('');
-    }
-
-    const inpKodePola = $('#inp-kode-pola');
-    if (inpKodePola && !inpKodePola.value) {
-      inpKodePola.value = `KMJ-NEW-${String(nextPolaId).padStart(2, '0')}`;
-    }
-
-    const specTbody = $('#tbl-spec-new-body');
-    if (specTbody && specTbody.children.length === 0) {
-      renderNewPolaSpecGrid(false);
-    }
-
-    // 4. Card 3 - Transaksi Pesanan
-    const inpTglOrder = $('#inp-tgl-order');
-    if (inpTglOrder && !inpTglOrder.value) inpTglOrder.value = APP_TODAY;
-
-    const inpDeadlineOrder = $('#inp-deadline-order');
-    if (inpDeadlineOrder && !inpDeadlineOrder.value) {
-      inpDeadlineOrder.value = isMitra
-        ? (inpDeadlineMitra?.value || addDays(APP_TODAY, 14))
-        : addDays(APP_TODAY, 21);
-    }
-
-    // Dropdown Penerimaan Bahan
-    const selPen = $('#sel-penerimaan-order');
-    if (selPen) {
-      const curPenVal = selPen.value;
-      const opts = [
-        '<option value="">— Belum Dialokasikan (Menunggu Bahan) —</option>',
-        ...BongDB.data.Penerimaan_Bahan.map((p) => {
-          const wids = new Set(BongDB.where('Detail_Bahan_Warna', (w) => w.id_penerimaan === p.id_penerimaan).map((w) => w.id_detail_warna));
-          const countTersedia = BongDB.where('Detail_Roll_Bahan', (r) => wids.has(r.id_detail_warna) && r.status_roll === 'Tersedia').length;
-          return `<option value="${p.id_penerimaan}">Nota #${esc(p.no_nota)} · ${esc(p.nama_kain)} (${countTersedia} roll tersedia)</option>`;
-        }),
-      ];
-      selPen.innerHTML = opts.join('');
-      selPen.value = curPenVal;
-    }
-
-    // Initial status indicators
-    const hasPen = Boolean(selPen?.value);
-    const initStatusText = $('#pesanan-initial-status-text');
-    if (initStatusText) {
-      initStatusText.textContent = hasPen ? 'ANTREAN · 15% Persiapan Gelar' : 'ANTREAN · 0% Menunggu Bahan';
-    }
-    const initBadge = $('#pesanan-initial-badge');
-    if (initBadge) {
-      initBadge.className = hasPen ? 'badge bg-indigo-50 text-indigo-700 ring-indigo-200' : 'badge bg-slate-100 text-slate-700 ring-slate-200';
-    }
-
-    updateSmartJenisPesanan();
-
-    // 5. Mini-Table Pesanan All
-    const allPesanan = [...BongDB.data.Pesanan].sort((a, b) => b.id_pesanan - a.id_pesanan);
-    const countBadge = $('#total-pesanan-badge');
-    if (countBadge) countBadge.textContent = `${allPesanan.length} Pesanan`;
-
-    const tblPesananBody = $('#tbl-pesanan-all-body');
-    if (tblPesananBody) {
-      tblPesananBody.innerHTML = allPesanan.map((p) => {
-        const pola = Q.pola(p.id_pola);
-        const s = Q.sumber(p.id_sumber);
-        const sm = SUMBER_META[p.id_sumber] || SUMBER_META.default;
-        const st = STATUS_META[p.status_pesanan] || STATUS_META.ANTREAN;
-        const dl = p.deadline || addDays(p.tgl_order || APP_TODAY, 14);
-        const isFlash = p.id_pesanan === state.pesanan.flashOrderId;
+      edfBody.innerHTML = edfTop5.map((q) => {
+        const pola = Q.pola(q.id_pola);
+        const dAwal = fmtDateDmy(q.deadline_awal);
+        const dBaru = fmtDateDmy(q.deadline_terbaru || q.deadline_awal);
+        const revised = dBaru !== dAwal;
+        const badgeCls = q.status_pesanan === 'Pemotongan' ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-700';
         return `
-          <tr class="cursor-pointer hover:bg-slate-50/80 transition-colors ${isFlash ? 'row-flash' : ''}" data-action="open-order" data-id="${p.id_pesanan}">
-            <td class="pl-5 pr-3 py-3 font-mono font-bold text-indigo-600">#${p.id_pesanan}</td>
-            <td class="px-3 py-3">
-              <p class="font-medium text-slate-900">${esc(pola?.nama_pola || '-')}</p>
-              <p class="font-mono text-[10.5px] text-slate-400">${esc(pola?.kode_pola || '')}</p>
+          <tr class="hover:bg-slate-50">
+            <td class="py-3 font-mono font-semibold text-indigo-600">#${q.id_pesanan}</td>
+            <td class="py-3">
+              <p class="font-medium text-slate-800">${esc(q.nama_mitra || 'Non-Mitra (Produk Abadi/Tren)')}</p>
+              <p class="text-[11px] text-slate-400">${esc(q.jenis_pesanan)}</p>
             </td>
-            <td class="px-3 py-3">
-              <span class="inline-flex items-center gap-1.5 text-xs ${sm.text}">
-                <span class="w-5 h-5 rounded grid place-items-center ${sm.bg}"><i data-lucide="${sm.icon}" class="w-3 h-3"></i></span>
-                ${esc(s?.nama_sumber || '-')}
-              </span>
+            <td class="py-3 text-slate-600">${esc(pola?.nama_pola || '-')}</td>
+            <td class="py-3 font-mono">
+              ${revised
+                ? `<span class="text-amber-600 font-semibold">${esc(dBaru)}</span><span class="text-[10px] text-slate-400 block">(Revisi dari ${esc(dAwal)})</span>`
+                : `<span class="text-slate-600">${esc(dBaru)}</span>`}
             </td>
-            <td class="px-3 py-3 text-xs ${p.nama_mitra ? 'text-slate-800 font-medium' : 'text-slate-400'}">${esc(p.nama_mitra || '-')}</td>
-            <td class="px-3 py-3 text-xs text-slate-600">${fmtDate(p.tgl_order)}</td>
-            <td class="px-3 py-3 text-xs text-slate-600">${fmtDate(dl)}</td>
-            <td class="px-3 py-3">
-              <div class="flex items-center gap-2">
-                <div class="w-16 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                  <div class="h-full ${st.bar}" style="width:${p.progress_pct}%"></div>
-                </div>
-                <span class="font-mono text-[11px] text-slate-600">${p.progress_pct}%</span>
-              </div>
-            </td>
-            <td class="pl-3 pr-5 py-3 text-right"><span class="badge ${st.badge}">${p.status_pesanan}</span></td>
+            <td class="py-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${badgeCls}">${esc(q.status_pesanan)}</span></td>
           </tr>`;
       }).join('');
     }
-  }
 
-  function submitPesanan() {
-    let namaMitra = null;
-    let deadline = null;
-
-    if (state.selectedSumber === 1) {
-      namaMitra = $('#inp-nama-mitra')?.value.trim();
-      deadline = $('#inp-deadline-mitra')?.value;
-      if (!namaMitra) {
-        showToast('Nama Mitra / Klien wajib diisi untuk Sumber Request Mitra.', { type: 'error' });
-        $('#inp-nama-mitra')?.focus();
-        return;
-      }
-      if (!deadline) {
-        showToast('Target Deadline Pengiriman wajib ditentukan.', { type: 'error' });
-        $('#inp-deadline-mitra')?.focus();
-        return;
-      }
+    const recentQc = [...DB.all('QC')]
+      .sort((a, b) => String(b.tgl_pemeriksaan || '').localeCompare(String(a.tgl_pemeriksaan || '')) || b.id_qc - a.id_qc)
+      .slice(0, 5);
+    const qcWrap = $('#dash-recent-qc');
+    if (recentQc.length === 0) {
+      qcWrap.innerHTML = '<p class="text-center text-slate-400 text-xs py-4">Belum ada catatan inspeksi QC.</p>';
     } else {
-      deadline = $('#inp-deadline-order')?.value || addDays(APP_TODAY, 21);
+      qcWrap.innerHTML = recentQc.map((qc) => {
+        const badgeCls = qc.status_qc === 'Lolos QC'
+          ? 'bg-emerald-100 text-emerald-800'
+          : qc.status_qc === 'Need Rework'
+            ? 'bg-amber-100 text-amber-800'
+            : 'bg-blue-100 text-blue-800';
+        return `
+          <div class="p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs">
+            <div class="flex items-center justify-between">
+              <span class="font-semibold text-slate-800">Pesanan #${qc.id_pesanan} (${esc(qc.tahap_qc)})</span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold ${badgeCls}">${esc(qc.status_qc)}</span>
+            </div>
+            <div class="flex items-center justify-between mt-2 text-slate-500 text-[11px]">
+              <span>Lolos: <b class="text-slate-700">${qc.jumlah_lolos}</b> / Cacat: <b class="text-rose-600">${qc.jumlah_cacat}</b></span>
+              <span class="font-mono text-[10px]">${fmtDateDmy(qc.tgl_pemeriksaan)}</span>
+            </div>
+          </div>`;
+      }).join('');
     }
-
-    let idPola = null;
-    let kodePolaBaru = null;
-
-    if (state.pesanan.polaMode === 'new') {
-      const idKategori = Number($('#sel-pola-kategori')?.value);
-      const kodePola = $('#inp-kode-pola')?.value.trim().toUpperCase();
-      const namaPola = $('#inp-nama-pola')?.value.trim();
-
-      if (!idKategori) {
-        showToast('Kategori Pola wajib dipilih.', { type: 'error' });
-        $('#sel-pola-kategori')?.focus();
-        return;
-      }
-      if (!kodePola) {
-        showToast('Kode Pola Unik wajib diisi.', { type: 'error' });
-        $('#inp-kode-pola')?.focus();
-        return;
-      }
-      if (BongDB.data.Pola.some((p) => p.kode_pola.toUpperCase() === kodePola)) {
-        showToast(`Kode Pola <b>${esc(kodePola)}</b> sudah terdaftar dalam database. Gunakan kode unik lain.`, { type: 'error' });
-        $('#inp-kode-pola')?.focus();
-        return;
-      }
-      if (!namaPola) {
-        showToast('Nama Master Pola wajib diisi.', { type: 'error' });
-        $('#inp-nama-pola')?.focus();
-        return;
-      }
-
-      // Insert new Pola
-      const newPola = BongDB.insert('Pola', {
-        id_kategori: idKategori,
-        kode_pola: kodePola,
-        nama_pola: namaPola,
-      });
-      idPola = newPola.id_pola;
-      kodePolaBaru = kodePola;
-
-      // Insert 4 size specifications (S, M, L, XL)
-      const specs = ['S', 'M', 'L', 'XL'].map((uk) => {
-        const row = $(`#spec-row-${uk}`);
-        const ld = row?.querySelector('.inp-ld')?.value;
-        const pj = row?.querySelector('.inp-pj')?.value;
-        const lb = row?.querySelector('.inp-lb')?.value;
-        const pl = row?.querySelector('.inp-pl')?.value;
-        const lp = row?.querySelector('.inp-lp')?.value;
-
-        return {
-          id_pola: idPola,
-          nama_ukuran: uk,
-          lingkar_dada: ld ? Number(ld) : null,
-          panjang: pj ? Number(pj) : 70,
-          lebar_bahu: lb ? Number(lb) : null,
-          panjang_pundak: lb ? Number(lb) : null,
-          panjang_lengan: pl ? Number(pl) : null,
-          panjang_tangan: pl ? Number(pl) : null,
-          lingkar_pinggang: lp ? Number(lp) : null,
-        };
-      });
-      BongDB.insertMany('Spesifikasi_Ukuran', specs);
-    } else {
-      idPola = Number($('#sel-pola-existing')?.value || state.pesanan.selectedPolaId || 1);
-    }
-
-    const jenisPesanan = $('#inp-jenis-pesanan')?.value.trim();
-    if (!jenisPesanan) {
-      showToast('Jenis Pesanan / Deskripsi Item wajib diisi.', { type: 'error' });
-      $('#inp-jenis-pesanan')?.focus();
-      return;
-    }
-
-    const tglOrder = $('#inp-tgl-order')?.value || APP_TODAY;
-    const idPenerimaanVal = $('#sel-penerimaan-order')?.value;
-    const idPenerimaan = idPenerimaanVal ? Number(idPenerimaanVal) : null;
-
-    // Insert Pesanan record
-    const newPesanan = BongDB.insert('Pesanan', {
-      id_pola: idPola,
-      id_sumber: state.selectedSumber,
-      id_penerimaan: idPenerimaan,
-      id_user_admin: 1,
-      jenis_pesanan: jenisPesanan,
-      nama_mitra: namaMitra,
-      tgl_order: tglOrder,
-      deadline: deadline,
-      status_pesanan: 'ANTREAN',
-      progress_pct: idPenerimaan ? 15 : 0,
-    });
-
-    state.pesanan.flashOrderId = newPesanan.id_pesanan;
-
-    const toastMsg = kodePolaBaru
-      ? `Pesanan <b>#${newPesanan.id_pesanan}</b> dan Master Pola <b>${esc(kodePolaBaru)}</b> (#${idPola}) berhasil diinisiasi!`
-      : `Pesanan <b>#${newPesanan.id_pesanan}</b> (${esc(jenisPesanan)}) berhasil diinisiasi!`;
-
-    showToast(toastMsg, { title: 'Pesanan Berhasil Disimpan' });
-
-    // Reset form fields cleanly
-    resetPesananForm();
-    state.pesanan.flashOrderId = newPesanan.id_pesanan;
-    renderPesananScreen();
-
-    const tableCard = $('#tbl-pesanan-all-body');
-    if (tableCard) {
-      tableCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-  }
-
-  function resetPesananForm() {
-    state.selectedSumber = 1;
-    state.pesanan.polaMode = 'existing';
-    state.pesanan.selectedPolaId = BongDB.data.Pola[0]?.id_pola || 1;
-    state.pesanan.flashOrderId = null;
-
-    if ($('#inp-nama-mitra')) $('#inp-nama-mitra').value = '';
-    if ($('#inp-deadline-mitra')) $('#inp-deadline-mitra').value = addDays(APP_TODAY, 14);
-    if ($('#inp-tgl-order')) $('#inp-tgl-order').value = APP_TODAY;
-    if ($('#inp-deadline-order')) $('#inp-deadline-order').value = addDays(APP_TODAY, 14);
-    if ($('#sel-penerimaan-order')) $('#sel-penerimaan-order').value = '';
-    if ($('#inp-nama-pola')) $('#inp-nama-pola').value = '';
-    if ($('#inp-kode-pola')) {
-      const nextPolaId = BongDB.nextId('Pola');
-      $('#inp-kode-pola').value = `KMJ-NEW-${String(nextPolaId).padStart(2, '0')}`;
-    }
-    renderNewPolaSpecGrid(false);
-    updateSmartJenisPesanan();
-    renderPesananScreen();
   }
 
   /* --------------------------------------------------------------------------
-   * 9C. STEP 2: SCREEN 3 (PENERIMAAN & ROLL BAHAN) LOGIC
+   * SCREEN 2: KELOLA PESANAN & POLA
    * ------------------------------------------------------------------------ */
-  function renderColorGroups() {
-    const host = $('#color-groups-container');
-    if (!host) return;
-    host.innerHTML = state.penerimaan.colorGroups.map((cg) => {
-      const rollsInGroup = state.penerimaan.draftRolls.filter((r) => r.colorGroupId === cg.id);
-      const totalKgInGroup = sum(rollsInGroup, (r) => r.beratKg);
+  function syncSelectOptions(selectEl, optionsHtml, preserve = true) {
+    if (!selectEl) return;
+    const prev = selectEl.value;
+    selectEl.innerHTML = optionsHtml;
+    if (preserve && prev && Array.from(selectEl.options).some((o) => o.value === prev)) {
+      selectEl.value = prev;
+    }
+  }
+
+  function refreshPesananDropdowns() {
+    const sumbers = DB.all('Sumber_Inisiasi');
+    const polas = DB.all('Pola');
+    const kats = DB.all('Kategori_Pola');
+    const pens = DB.all('Penerimaan_Bahan');
+
+    const sumberOpts = sumbers.map((s) => `<option value="${s.id_sumber}">${esc(s.nama_sumber)}</option>`).join('');
+    syncSelectOptions($('#pesanan-sumber'), sumberOpts);
+    syncSelectOptions($('#edit-id-sumber'), sumberOpts);
+
+    const polaOpts = polas.map((p) => {
+      const k = Q.kategori(p.id_kategori);
+      return `<option value="${p.id_pola}">${esc(p.kode_pola)} - ${esc(p.nama_pola)} (${esc(k?.nama_kategori || 'Umum')})</option>`;
+    }).join('');
+    syncSelectOptions($('#sel-pola-existing'), polaOpts);
+    syncSelectOptions($('#edit-id-pola'), polas.map((p) => `<option value="${p.id_pola}">${esc(p.kode_pola)} - ${esc(p.nama_pola)}</option>`).join(''));
+
+    const katOpts = kats.map((k) => `<option value="${k.id_kategori}">${esc(k.nama_kategori)}</option>`).join('');
+    syncSelectOptions($('#new-pola-kategori'), katOpts);
+    syncSelectOptions($('#edit-pola-kategori'), katOpts);
+
+    const penOpts = '<option value="">-- Pilih Nota Kain (Opsional, Dapat Diisi Nanti Saat Kain Tiba) --</option>' +
+      pens.map((pn) => `<option value="${pn.id_penerimaan}">#${pn.id_penerimaan} - ${esc(pn.no_nota)} - ${esc(pn.nama_kain)} (Tgl: ${fmtDateDmy(pn.tgl_nota)})</option>`).join('');
+    syncSelectOptions($('#sel-pesanan-penerimaan'), penOpts);
+
+    const editPenOpts = '<option value="">-- Tanpa Nota / Belum Ada Bahan Kain (Menunggu Kedatangan) --</option>' +
+      pens.map((pn) => `<option value="${pn.id_penerimaan}">#${pn.id_penerimaan} - ${esc(pn.no_nota)} - ${esc(pn.nama_kain)} (Tgl: ${fmtDateDmy(pn.tgl_nota)})</option>`).join('');
+    syncSelectOptions($('#edit-id-penerimaan'), editPenOpts);
+  }
+
+  function syncCreateMitraField() {
+    const sel = $('#pesanan-sumber');
+    const wrap = $('#field-nama-mitra');
+    const inp = $('#input-nama-mitra');
+    if (!sel || !wrap) return;
+    const isMitra = sel.value === '1';
+    wrap.style.display = isMitra ? '' : 'none';
+    if (!isMitra && inp) inp.value = '';
+  }
+
+  function syncEditMitraField() {
+    const sel = $('#edit-id-sumber');
+    const wrap = $('#edit-field-nama-mitra');
+    const inp = $('#edit-nama-mitra');
+    if (!sel || !wrap) return;
+    const isMitra = sel.value === '1';
+    wrap.style.display = isMitra ? '' : 'none';
+    if (!isMitra && inp) inp.value = '';
+  }
+
+  function setPolaMode(mode) {
+    state.polaMode = mode;
+    $('#inp-pola-mode').value = mode;
+    const secExisting = $('#section-pola-existing');
+    const secNew = $('#section-pola-new');
+    const btnExisting = $('#btn-mode-existing');
+    const btnNew = $('#btn-mode-new');
+    if (mode === 'new') {
+      secExisting.classList.add('hidden');
+      secNew.classList.remove('hidden');
+      btnNew.className = 'px-3 py-1.5 rounded-md text-xs font-semibold transition-all bg-white text-indigo-700 shadow-sm inline-flex items-center gap-1.5';
+      btnExisting.className = 'px-3 py-1.5 rounded-md text-xs font-semibold transition-all text-slate-600 hover:text-slate-900 inline-flex items-center gap-1.5';
+      renderNewPolaSpecs();
+      renderNewPolaAccs();
+    } else {
+      secNew.classList.add('hidden');
+      secExisting.classList.remove('hidden');
+      btnExisting.className = 'px-3 py-1.5 rounded-md text-xs font-semibold transition-all bg-white text-indigo-700 shadow-sm inline-flex items-center gap-1.5';
+      btnNew.className = 'px-3 py-1.5 rounded-md text-xs font-semibold transition-all text-slate-600 hover:text-slate-900 inline-flex items-center gap-1.5';
+    }
+    refreshIcons();
+  }
+
+  function renderNewPolaSpecs() {
+    const tbody = $('#tbody-new-pola-specs');
+    if (!tbody) return;
+    const fields = ['lingkar_dada', 'panjang_baju_celana', 'lebar_baju', 'panjang_pundak', 'panjang_tangan', 'lingkar_lengan', 'diameter_leher', 'lingkar_pinggang', 'lingkar_selangkang', 'lingkar_paha', 'lebar_kaki'];
+    tbody.innerHTML = state.newPolaSpecs.map((sp, idx) => {
+      const cells = fields.map((f) => {
+        const val = sp[f] !== undefined && sp[f] !== null ? sp[f] : '';
+        return `<td class="p-1"><input type="number" step="0.1" lang="en-US" value="${esc(val)}" data-idx="${idx}" data-field="${f}" class="inp-spec-metric w-14 text-center font-mono text-[11px] p-1 border border-slate-200 rounded focus:ring-1 focus:ring-indigo-500" placeholder="-" /></td>`;
+      }).join('');
       return `
-        <div class="p-4 rounded-xl border border-slate-200 bg-white grid grid-cols-1 md:grid-cols-4 gap-4 items-end" data-cg-card="${cg.id}">
-          <div>
-            <label class="field-label">Nama Warna Kain <span class="text-rose-500">*</span></label>
-            <div class="flex items-center gap-2">
-              <input type="color" value="${cg.hexColor || '#1E293B'}" class="w-9 h-10 p-0.5 rounded border border-slate-200 cursor-pointer color-picker" data-cg-id="${cg.id}" title="Pilih warna representasi" />
-              <input type="text" value="${esc(cg.namaWarna)}" class="field-input inp-cg-nama" data-cg-id="${cg.id}" placeholder="cth. Black Jet" />
+        <tr>
+          <td class="p-1.5"><input type="text" value="${esc(sp.nama_ukuran)}" placeholder="All" data-idx="${idx}" data-field="nama_ukuran" class="inp-spec-metric w-14 font-mono font-bold text-indigo-700 text-center text-[11px] p-1 border border-slate-200 rounded bg-indigo-50/40" /></td>
+          ${cells}
+          <td class="p-1 text-center">
+            <button type="button" data-action="remove-pola-spec" data-idx="${idx}" class="text-slate-400 hover:text-rose-600 p-1" ${state.newPolaSpecs.length <= 1 ? 'disabled' : ''}>
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </td>
+        </tr>`;
+    }).join('');
+    refreshIcons();
+  }
+
+  function renderNewPolaAccs() {
+    const container = $('#container-new-pola-acc');
+    if (!container) return;
+    if (state.newPolaAccs.length === 0) {
+      container.classList.add('hidden');
+      container.innerHTML = '';
+      return;
+    }
+    container.classList.remove('hidden');
+    const accList = DB.all('Aksesoris');
+    container.innerHTML = state.newPolaAccs.map((item, idx) => {
+      const opts = accList.map((a) => `<option value="${a.id_aksesoris}" ${Number(item.id_aksesoris) === Number(a.id_aksesoris) ? 'selected' : ''}>${esc(a.nama_aksesoris)} (${esc(a.ukuran || '-')}) - Stok: ${a.stok} ${esc(a.satuan)}</option>`).join('');
+      return `
+        <div class="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200">
+          <select data-idx="${idx}" class="sel-new-acc flex-1 text-xs p-1.5 border border-slate-200 rounded">${opts}</select>
+          <div class="flex items-center gap-1.5">
+            <span class="text-[11px] text-slate-500">Kebutuhan/Pcs:</span>
+            <input type="number" min="1" value="${item.jumlah_digunakan || 1}" data-idx="${idx}" class="inp-new-acc-qty w-16 text-xs font-mono p-1.5 border border-slate-200 rounded text-center" />
+          </div>
+          <button type="button" data-action="remove-pola-acc" data-idx="${idx}" class="p-1.5 text-slate-400 hover:text-rose-600">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>`;
+    }).join('');
+    refreshIcons();
+  }
+
+  function renderKategoriModalList() {
+    const list = $('#kategori-modal-list');
+    if (!list) return;
+    list.innerHTML = DB.all('Kategori_Pola').map((kat) => `
+      <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200/80 text-xs">
+        <span class="font-medium text-slate-800"><span class="font-mono text-slate-400 mr-1">#${kat.id_kategori}</span>${esc(kat.nama_kategori)}</span>
+        <div class="flex items-center gap-1">
+          <button type="button" data-action="edit-kategori-modal" data-id="${kat.id_kategori}" class="px-2 py-0.5 bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-slate-200 rounded text-[10px] font-semibold">Edit</button>
+          <button type="button" data-action="delete-kategori-modal" data-id="${kat.id_kategori}" class="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-semibold">Hapus</button>
+        </div>
+      </div>`).join('');
+  }
+
+  function renderSumberModalList() {
+    const list = $('#sumber-modal-list');
+    if (!list) return;
+    list.innerHTML = DB.all('Sumber_Inisiasi').map((s) => `
+      <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200/80 text-xs">
+        <span class="font-medium text-slate-800"><span class="font-mono text-slate-400 mr-1">#${s.id_sumber}</span>${esc(s.nama_sumber)}</span>
+        <div class="flex items-center gap-1">
+          <button type="button" data-action="edit-sumber-modal" data-id="${s.id_sumber}" class="px-2 py-0.5 bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-slate-200 rounded text-[10px] font-semibold">Edit</button>
+          <button type="button" data-action="delete-sumber-modal" data-id="${s.id_sumber}" class="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-semibold">Hapus</button>
+        </div>
+      </div>`).join('');
+  }
+
+  function renderPesanan() {
+    refreshPesananDropdowns();
+    syncCreateMitraField();
+
+    const tglOrderInp = $('#inp-tgl-order');
+    if (tglOrderInp && !tglOrderInp.value) tglOrderInp.value = todayIso();
+    const dlAwalInp = $('#inp-deadline-awal');
+    if (dlAwalInp && !dlAwalInp.value) dlAwalInp.value = addDays(todayIso(), 14);
+
+    if (state.polaMode === 'new') {
+      renderNewPolaSpecs();
+      renderNewPolaAccs();
+    }
+
+    const orders = Q.edfSortOrders(DB.all('Pesanan'));
+    $('#pesanan-total-badge').textContent = `Total: ${orders.length} Pesanan`;
+
+    const statusColors = {
+      Antrean: 'bg-indigo-50 text-indigo-700 border-indigo-100',
+      Pemotongan: 'bg-amber-50 text-amber-700 border-amber-100',
+      'Dalam QC': 'bg-rose-50 text-rose-700 border-rose-100',
+      Jahit: 'bg-purple-50 text-purple-700 border-purple-100',
+      Finishing: 'bg-blue-50 text-blue-700 border-blue-100',
+      Selesai: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+      Dibatalkan: 'bg-rose-50 text-rose-700 border-rose-100',
+    };
+
+    const tbody = $('#pesanan-list-tbody');
+    if (orders.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" class="py-8 text-center text-slate-400">Belum ada data pesanan.</td></tr>';
+    } else {
+      tbody.innerHTML = orders.map((item) => {
+        const pola = Q.pola(item.id_pola);
+        const sumber = Q.sumber(item.id_sumber);
+        const pen = item.id_penerimaan ? Q.penerimaan(item.id_penerimaan) : null;
+        const dlAwal = fmtDateDmy(item.deadline_awal);
+        const dlTerbaru = fmtDateDmy(item.deadline_terbaru || item.deadline_awal);
+        const isRevised = dlTerbaru !== dlAwal && dlAwal !== '-';
+        const badgeStyle = statusColors[item.status_pesanan] || 'bg-slate-100 text-slate-700 border-slate-200';
+        return `
+          <tr class="hover:bg-slate-50">
+            <td class="py-3 font-mono font-semibold text-indigo-600">#${item.id_pesanan}</td>
+            <td class="py-3">
+              <span class="font-medium text-slate-900">${esc(item.nama_mitra || 'Non-Mitra')}</span>
+              <span class="text-[10px] text-slate-400 block">${esc(sumber?.nama_sumber || '-')}</span>
+            </td>
+            <td class="py-3">
+              <span class="font-medium text-slate-800">${esc(pola?.nama_pola || '-')}</span>
+              <span class="text-[10px] text-slate-400 block">${esc(item.jenis_pesanan)}</span>
+            </td>
+            <td class="py-3">
+              ${pen ? `
+                <div class="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                  <i data-lucide="file-text" class="w-3 h-3 text-indigo-500"></i>
+                  #${pen.id_penerimaan} &bull; ${esc(pen.no_nota)}
+                </div>
+                <span class="text-[10px] text-slate-400 block mt-0.5">${esc(pen.nama_kain)}</span>
+              ` : `
+                <span class="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-medium">
+                  <i data-lucide="alert-circle" class="w-3 h-3 text-amber-500"></i> Belum Ditautkan
+                </span>
+              `}
+            </td>
+            <td class="py-3 font-mono text-slate-500">${fmtDateDmy(item.tgl_order)}</td>
+            <td class="py-3 font-mono text-slate-500">${esc(dlAwal)}</td>
+            <td class="py-3 font-mono">
+              ${isRevised
+                ? `<span class="text-amber-600 font-semibold">${esc(dlTerbaru)}</span><span class="text-[9px] text-amber-500 block font-sans">(Revisi)</span>`
+                : `<span class="text-slate-600">${esc(dlTerbaru)}</span>`}
+            </td>
+            <td class="py-3"><span class="px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${badgeStyle}">${esc(item.status_pesanan)}</span></td>
+            <td class="py-3 text-right">
+              <div class="flex items-center justify-end gap-1.5">
+                <button type="button" data-action="edit-pesanan" data-id="${item.id_pesanan}" class="px-2.5 py-1 text-[11px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-md font-semibold inline-flex items-center gap-1 transition-colors">
+                  <i data-lucide="edit-3" class="w-3 h-3"></i> Edit
+                </button>
+                <button type="button" data-action="revise-deadline" data-id="${item.id_pesanan}" class="px-2.5 py-1 text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-medium transition-colors">Revisi</button>
+                <button type="button" data-action="delete-pesanan" data-id="${item.id_pesanan}" class="px-2 py-1 text-[11px] bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-md font-semibold inline-flex items-center gap-1 transition-colors">
+                  <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
+                </button>
+              </div>
+            </td>
+          </tr>`;
+      }).join('');
+    }
+
+    const polas = DB.all('Pola');
+    $('#pola-total-badge').textContent = `${polas.length} Master Pola`;
+    const grid = $('#pola-catalog-grid');
+    if (polas.length === 0) {
+      grid.innerHTML = '<p class="col-span-full text-center text-xs text-slate-400 py-6">Belum ada Master Pola terdaftar.</p>';
+    } else {
+      grid.innerHTML = polas.map((p) => {
+        const kat = Q.kategori(p.id_kategori);
+        const specs = Q.specsOfPola(p.id_pola);
+        const accs = Q.aksesorisOfPola(p.id_pola);
+        return `
+          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <span class="font-mono text-xs font-bold text-indigo-600">${esc(p.kode_pola)}</span>
+                <h4 class="font-bold text-slate-900 text-sm">${esc(p.nama_pola)}</h4>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-white border border-slate-200 text-slate-600">${esc(kat?.nama_kategori || 'Umum')}</span>
+                <button type="button" data-action="edit-pola" data-id="${p.id_pola}" class="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 inline-flex items-center gap-1">
+                  <i data-lucide="edit-3" class="w-3 h-3"></i> Edit Pola
+                </button>
+                <button type="button" data-action="delete-pola" data-id="${p.id_pola}" class="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 inline-flex items-center gap-1">
+                  <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
+                </button>
+              </div>
             </div>
+            <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+              <table class="w-full text-[10px] text-left">
+                <thead class="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold">
+                  <tr>
+                    <th class="py-1.5 px-2">Ukuran</th>
+                    <th class="py-1.5 px-2">L. Dada</th>
+                    <th class="py-1.5 px-2">P. Baju/Cln</th>
+                    <th class="py-1.5 px-2">P. Pundak</th>
+                    <th class="py-1.5 px-2">P. Tangan</th>
+                    <th class="py-1.5 px-2">L. Pinggang</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 font-mono">
+                  ${specs.length ? specs.map((sp) => `
+                    <tr>
+                      <td class="py-1 px-2 font-bold text-indigo-600">${esc(sp.nama_ukuran)}</td>
+                      <td class="py-1 px-2">${sp.lingkar_dada ?? '-'}</td>
+                      <td class="py-1 px-2">${sp.panjang_baju_celana ?? '-'}</td>
+                      <td class="py-1 px-2">${sp.panjang_pundak ?? '-'}</td>
+                      <td class="py-1 px-2">${sp.panjang_tangan ?? '-'}</td>
+                      <td class="py-1 px-2">${sp.lingkar_pinggang ?? '-'}</td>
+                    </tr>`).join('') : '<tr><td colspan="6" class="py-2 text-center text-slate-400">Belum ada spesifikasi ukuran.</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5 pt-1">
+              <span class="text-[10px] font-semibold text-slate-500">Aksesoris / Pcs:</span>
+              ${accs.length ? accs.map((d) => `
+                <span class="px-2 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-medium text-slate-700">
+                  ${esc(d.aksesoris?.nama_aksesoris || `Aksesoris #${d.id_aksesoris}`)}: <b class="font-mono text-indigo-600">${d.jumlah_digunakan} ${esc(d.aksesoris?.satuan || 'pcs')}</b>
+                </span>`).join('') : '<span class="text-[10px] text-slate-400 italic">Tidak ada aksesoris khusus</span>'}
+            </div>
+          </div>`;
+      }).join('');
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+   * SCREEN 3: PENERIMAAN & ROLL BAHAN
+   * ------------------------------------------------------------------------ */
+  function refreshSupplierSelects() {
+    const suppliers = DB.all('Supplier');
+    const opts = suppliers.map((sp) => `<option value="${sp.id_supplier}">${esc(sp.nama_supplier)}</option>`).join('');
+    syncSelectOptions($('#sel-supplier'), opts);
+    syncSelectOptions($('#edit-nota-supplier'), opts);
+    syncSelectOptions($('#edit-acc-supplier'), opts);
+    const addAccOpts = '<option value="" disabled>-- Pilih Supplier --</option>' +
+      suppliers.map((sp) => `<option value="${sp.id_supplier}">${esc(sp.nama_supplier)} (${esc(sp.kontak || '-')})</option>`).join('');
+    syncSelectOptions($('#add-acc-supplier'), addAccOpts);
+  }
+
+  function renderSupplierModalList() {
+    const list = $('#supplier-modal-list');
+    if (!list) return;
+    list.innerHTML = DB.all('Supplier').map((sp) => `
+      <div class="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 text-xs">
+        <div>
+          <p class="font-semibold text-slate-800">${esc(sp.nama_supplier)}</p>
+          <p class="text-[11px] text-slate-500 font-mono">${esc(sp.kontak || 'Tanpa kontak')}${sp.alamat ? ' • ' + esc(sp.alamat) : ''}</p>
+        </div>
+        <div class="flex items-center gap-1 shrink-0">
+          <button type="button" data-action="edit-supplier-modal" data-id="${sp.id_supplier}" class="px-2 py-1 bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-slate-200 rounded text-[10px] font-semibold">Edit</button>
+          <button type="button" data-action="delete-supplier-modal" data-id="${sp.id_supplier}" class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-semibold">Hapus</button>
+        </div>
+      </div>`).join('') || '<p class="text-xs text-slate-400 italic py-2">Belum ada supplier terdaftar.</p>';
+  }
+
+  function updateDraftRollsSummary() {
+    const totalRolls = state.draftRolls.length;
+    const totalsByUnit = {};
+    state.draftRolls.forEach((r) => {
+      const cg = state.colorGroups.find((c) => Number(c.id) === Number(r.colorGroupId)) || state.colorGroups[0];
+      const unit = cg ? (cg.satuanUkur || 'Kg') : 'Kg';
+      totalsByUnit[unit] = (totalsByUnit[unit] || 0) + (parseFloat(r.berat) || 0);
+    });
+    const countEl = $('#summary-rolls-count');
+    if (countEl) countEl.textContent = `${totalRolls} Roll Terdaftar`;
+    const weightEl = $('#summary-rolls-weight');
+    if (weightEl) {
+      const parts = Object.keys(totalsByUnit).map((u) => `${totalsByUnit[u].toFixed(2)} ${u}`);
+      const fallbackUnit = state.colorGroups[0]?.satuanUkur || 'Kg';
+      weightEl.textContent = 'Total: ' + (parts.length > 0 ? parts.join(' + ') : `0.00 ${fallbackUnit}`);
+    }
+    state.colorGroups.forEach((cg) => {
+      const badgeEl = document.querySelector(`.badge-cg-summary[data-cg-id="${cg.id}"]`);
+      if (badgeEl) {
+        const rollsInGroup = state.draftRolls.filter((r) => Number(r.colorGroupId) === Number(cg.id));
+        const totalSize = sum(rollsInGroup, (r) => r.berat);
+        badgeEl.textContent = `${rollsInGroup.length} Roll (${totalSize.toFixed(2)} ${cg.satuanUkur || 'Kg'})`;
+      }
+    });
+  }
+
+  function renderColorGroups() {
+    const container = $('#color-groups-container');
+    if (!container) return;
+    container.innerHTML = state.colorGroups.map((cg) => {
+      const rollsInGroup = state.draftRolls.filter((r) => Number(r.colorGroupId) === Number(cg.id));
+      const totalSize = sum(rollsInGroup, (r) => r.berat);
+      return `
+        <div class="p-4 rounded-xl border border-slate-200 bg-white grid grid-cols-1 md:grid-cols-4 gap-4 items-end" data-cg-id="${cg.id}">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Warna Kain <span class="text-rose-500">*</span></label>
+            <input type="text" value="${esc(cg.namaWarna)}" class="inp-cg-nama w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="Hitam" data-cg-id="${cg.id}" />
           </div>
           <div>
-            <label class="field-label">Kode Lab / Lot Warna <span class="text-rose-500">*</span></label>
-            <input type="text" value="${esc(cg.kodeWarna)}" class="field-input font-mono uppercase inp-cg-kode" data-cg-id="${cg.id}" placeholder="cth. BLK-30S-01" />
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Kode Lab / Lot Warna</label>
+            <input type="text" value="${esc(cg.kodeWarna)}" class="inp-cg-kode w-full text-xs p-2.5 border border-slate-200 rounded-lg font-mono uppercase placeholder:normal-case focus:ring-2 focus:ring-indigo-500" placeholder="WD2605226" data-cg-id="${cg.id}" />
           </div>
           <div>
-            <label class="field-label">Rak Alokasi Default</label>
-            <input type="text" value="${esc(cg.rakDefault)}" class="field-input font-mono uppercase inp-cg-rak" data-cg-id="${cg.id}" placeholder="cth. B-04" />
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Satuan Ukur</label>
+            <select class="sel-cg-satuan w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500" data-cg-id="${cg.id}">
+              <option value="Kg" ${cg.satuanUkur === 'Kg' ? 'selected' : ''}>Kg (Kilogram)</option>
+              <option value="Yard" ${cg.satuanUkur === 'Yard' ? 'selected' : ''}>Yard</option>
+              <option value="Meter" ${cg.satuanUkur === 'Meter' ? 'selected' : ''}>Meter</option>
+            </select>
           </div>
           <div class="flex items-center justify-between gap-2">
-            <span class="badge bg-indigo-50 text-indigo-700 ring-indigo-200 font-mono py-1.5 px-3">
-              ${rollsInGroup.length} Roll (${totalKgInGroup.toFixed(1)} kg)
+            <span class="badge-cg-summary inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-mono font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100" data-cg-id="${cg.id}">
+              ${rollsInGroup.length} Roll (${totalSize.toFixed(2)} ${cg.satuanUkur || 'Kg'})
             </span>
-            ${state.penerimaan.colorGroups.length > 1 ? `
-              <button type="button" data-action="remove-color-group" data-id="${cg.id}" class="btn btn-outline btn-sm text-rose-600 hover:bg-rose-50 border-rose-200" title="Hapus Kelompok Warna">
-                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>Hapus
+            ${state.colorGroups.length > 1 ? `
+              <button type="button" data-action="remove-color-group" data-cg-id="${cg.id}" class="px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg inline-flex items-center gap-1 transition-colors">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus
               </button>` : ''}
           </div>
         </div>`;
@@ -1771,2101 +916,2779 @@
   function renderDraftRollsTable() {
     const tbody = $('#tbl-draft-rolls-body');
     if (!tbody) return;
-    const baseId = BongDB.nextId('Detail_Roll_Bahan');
-
-    tbody.innerHTML = state.penerimaan.draftRolls.map((r, i) => {
-      const rollPk = baseId + i;
-      const colorOpts = state.penerimaan.colorGroups.map((cg) => `
-        <option value="${cg.id}" ${r.colorGroupId === cg.id ? 'selected' : ''}>${esc(cg.namaWarna)} (${esc(cg.kodeWarna)})</option>
-      `).join('');
-
+    tbody.innerHTML = state.draftRolls.map((r, i) => {
+      const colorOptions = state.colorGroups.map((cg) => {
+        const selected = Number(r.colorGroupId) === Number(cg.id) ? 'selected' : '';
+        const label = (cg.namaWarna || `Warna ${cg.id}`) + (cg.kodeWarna ? ` (${cg.kodeWarna})` : '');
+        return `<option value="${cg.id}" ${selected}>${esc(label)}</option>`;
+      }).join('');
+      const activeCg = state.colorGroups.find((c) => Number(c.id) === Number(r.colorGroupId)) || state.colorGroups[0];
+      const unitLabel = activeCg ? (activeCg.satuanUkur || 'Kg') : 'Kg';
       return `
-        <tr class="hover:bg-slate-50/60 transition-colors" data-roll-idx="${i}">
+        <tr class="hover:bg-slate-50/80 transition-colors" data-roll-idx="${i}">
           <td class="pl-4 py-2.5 font-bold font-mono text-slate-800">Roll #${i + 1}</td>
           <td class="px-3 py-2.5">
-            <span class="badge bg-indigo-50 text-indigo-700 ring-indigo-200 font-mono"># id_roll: ${rollPk}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100"># id_roll: Auto</span>
           </td>
           <td class="px-3 py-2.5">
-            <select class="field-input h-8 text-xs sel-roll-color" data-index="${i}">
-              ${colorOpts}
-            </select>
+            <select class="sel-roll-color w-full h-8 text-xs p-1.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500" data-roll-idx="${i}">${colorOptions}</select>
           </td>
           <td class="px-3 py-2.5">
-            <div class="relative flex items-center">
-              <input type="number" step="0.1" min="1" class="field-input h-8 text-xs font-mono pr-7 inp-roll-weight" data-index="${i}" value="${Number(r.beratKg).toFixed(2)}" />
-              <span class="absolute right-2.5 text-xs text-slate-400 font-mono pointer-events-none">kg</span>
+            <div class="flex items-stretch border border-slate-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 bg-white">
+              <input type="number" step="0.01" min="0.1" lang="en-US" class="inp-roll-weight flex-1 min-w-0 h-8 text-xs font-mono px-2.5 py-1.5 border-0 focus:outline-none" data-roll-idx="${i}" value="${Number(r.berat).toFixed(2)}" />
+              <span class="px-2.5 bg-slate-50 border-l border-slate-200 text-[11px] text-slate-600 font-mono font-semibold flex items-center select-none">${esc(unitLabel)}</span>
             </div>
           </td>
-          <td class="px-3 py-2.5">
-            <input type="text" class="field-input h-8 text-xs font-mono uppercase inp-roll-rak" data-index="${i}" value="${esc(r.rakAlokasi)}" />
-          </td>
           <td class="px-3 py-2.5 text-center">
-            <span class="badge bg-emerald-50 text-emerald-700 ring-emerald-200">• Tersedia</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">&bull; Tersedia</span>
           </td>
           <td class="pr-4 py-2.5 text-center">
-            <button type="button" data-action="remove-roll-row" data-index="${i}" class="icon-btn w-7 h-7 text-slate-400 hover:text-rose-600 rounded" ${state.penerimaan.draftRolls.length <= 1 ? 'disabled style="opacity:0.25;cursor:not-allowed"' : ''} title="Hapus roll">
+            <button type="button" data-action="remove-draft-roll" data-roll-idx="${i}" class="w-7 h-7 text-slate-400 hover:text-rose-600 rounded flex items-center justify-center transition-colors ${state.draftRolls.length <= 1 ? 'opacity-30 cursor-not-allowed' : ''}" ${state.draftRolls.length <= 1 ? 'disabled' : ''}>
               <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
             </button>
           </td>
         </tr>`;
     }).join('');
-
     updateDraftRollsSummary();
     refreshIcons();
   }
 
-  function updateDraftRollsSummary() {
-    const totalRolls = state.penerimaan.draftRolls.length;
-    const totalKg = sum(state.penerimaan.draftRolls, (r) => r.beratKg);
+  function renderPenerimaan() {
+    refreshSupplierSelects();
+    const tglNotaInp = $('#inp-tgl-nota');
+    if (tglNotaInp && !tglNotaInp.value) tglNotaInp.value = todayIso();
 
-    const countEl = $('#summary-rolls-count');
-    if (countEl) countEl.textContent = `${totalRolls} Roll Terdaftar`;
-
-    const weightEl = $('#summary-rolls-weight');
-    if (weightEl) weightEl.textContent = `Total: ${totalKg.toFixed(2)} kg`;
-  }
-
-  function renderInventoryRollsTable() {
-    const allRolls = BongDB.data.Detail_Roll_Bahan;
-    const filter = state.penerimaan.rollFilter;
-
-    // Filter counts
-    const countAll = $('#filter-count-roll-all');
-    if (countAll) countAll.textContent = allRolls.length;
-    const countTersedia = $('#filter-count-roll-tersedia');
-    if (countTersedia) countTersedia.textContent = allRolls.filter((r) => r.status_roll === 'Tersedia').length;
-    const countDipotong = $('#filter-count-roll-dipotong');
-    if (countDipotong) countDipotong.textContent = allRolls.filter((r) => r.status_roll === 'Dipotong').length;
-    const countHabis = $('#filter-count-roll-habis');
-    if (countHabis) countHabis.textContent = allRolls.filter((r) => r.status_roll === 'Habis').length;
-    const countRetur = $('#filter-count-roll-retur');
-    if (countRetur) countRetur.textContent = allRolls.filter((r) => r.status_roll === 'Retur').length;
-
-    // Filter buttons is-active toggle
-    $$('#penerimaan-roll-filters [data-filter]').forEach((b) => {
-      b.classList.toggle('is-active', b.dataset.filter === filter);
-    });
-
-    const filtered = filter === 'ALL' ? allRolls : allRolls.filter((r) => r.status_roll === filter);
-    const sorted = [...filtered].sort((a, b) => b.id_roll - a.id_roll);
-
-    const tbody = $('#tbl-inventory-rolls-body');
-    if (!tbody) return;
-
-    tbody.innerHTML = sorted.map((r) => {
-      const info = Q.rollInfo(r);
-      const sup = info.penerimaan ? Q.supplier(info.penerimaan.id_supplier) : null;
-      const meta = ROLL_META[r.status_roll] || ROLL_META.Habis;
-      const isFlash = r.id_roll === state.penerimaan.flashRollId;
-
-      return `
-        <tr class="cursor-pointer hover:bg-slate-50/80 transition-colors ${isFlash ? 'row-flash' : ''}" data-action="open-roll" data-id="${r.id_roll}">
-          <td class="pl-5 pr-3 py-3 font-mono font-bold text-indigo-600">#${r.id_roll}</td>
-          <td class="px-3 py-3">
-            <p class="font-medium text-slate-900">${esc(info.label)}</p>
-            <p class="font-mono text-[10.5px] text-slate-400">${esc(info.warna?.kode_warna || '')}</p>
-          </td>
-          <td class="px-3 py-3 text-xs text-slate-600">
-            <p class="font-mono">Nota #${esc(info.penerimaan?.no_nota || '-')}</p>
-            <p class="text-[11px] text-slate-400 truncate max-w-[140px]">${esc(sup?.nama_supplier || '-')}</p>
-          </td>
-          <td class="px-3 py-3 text-xs font-mono font-semibold text-slate-800">${fmtNum(r.berat_kg, 1)} kg</td>
-          <td class="px-3 py-3 text-xs font-mono text-slate-600">${r.no_roll_ke} / ${r.total_roll}</td>
-          <td class="px-3 py-3 text-xs font-mono text-slate-700">${esc(r.rak_alokasi)}</td>
-          <td class="pl-3 pr-5 py-3 text-right"><span class="badge ${meta.badge}">${r.status_roll}</span></td>
-        </tr>`;
-    }).join('') || `<tr><td colspan="7" class="px-5 py-8 text-center text-sm text-slate-400">Tidak ada roll kain pada filter ini.</td></tr>`;
-  }
-
-  function renderPenerimaanScreen(opts = {}) {
-    const sec = $('#screen-penerimaan');
-    if (!sec) return;
-
-    // 1. Next Penerimaan ID badge
-    const nextPenId = BongDB.nextId('Penerimaan_Bahan');
-    const badgePenId = $('#next-penerimaan-id');
-    if (badgePenId) badgePenId.textContent = nextPenId;
-
-    // Next Roll ID badge
-    const nextRollId = BongDB.nextId('Detail_Roll_Bahan');
-    const badgeRollId = $('#next-roll-id');
-    if (badgeRollId) badgeRollId.textContent = nextRollId;
-
-    // 2. Card 1 - Supplier & Master fields
-    const selSupplier = $('#sel-supplier');
-    if (selSupplier) {
-      const prevVal = opts.selectedSupplierId || selSupplier.value || '1';
-      selSupplier.innerHTML = BongDB.data.Supplier.map((s) => `
-        <option value="${s.id_supplier}">[ID: ${s.id_supplier}] ${esc(s.nama_supplier)}</option>
-      `).join('');
-      selSupplier.value = prevVal;
-
-      const sup = Q.supplier(Number(selSupplier.value));
-      const box = $('#supplier-info-box');
-      if (box) {
-        box.innerHTML = sup ? `
-          <div class="flex items-center gap-2 truncate">
-            <span class="font-semibold text-slate-800">${esc(sup.nama_supplier)}</span>
-            <span class="text-slate-300">|</span>
-            <span class="text-slate-600"><i data-lucide="phone" class="w-3 h-3 inline mr-1 text-slate-400"></i>${esc(sup.kontak)}</span>
-            <span class="text-slate-300">|</span>
-            <span class="text-slate-600 truncate"><i data-lucide="map-pin" class="w-3 h-3 inline mr-1 text-slate-400"></i>${esc(sup.alamat)}</span>
-          </div>` : 'Pilih supplier di atas untuk melihat kontak & alamat.';
-      }
-    }
-
-    // Auto-suggest next nota number
-    const inpNoNota = $('#inp-no-nota');
-    if (inpNoNota && !inpNoNota.value) {
-      const maxNota = BongDB.data.Penerimaan_Bahan.reduce((m, p) => {
-        const n = parseInt(String(p.no_nota).replace(/\D/g, ''), 10);
-        return !isNaN(n) ? Math.max(m, n) : m;
-      }, 805);
-      inpNoNota.value = String(maxNota + 1);
-    }
-
-    // Default dates & text fields
-    const inpTglNota = $('#inp-tgl-nota');
-    if (inpTglNota && !inpTglNota.value) inpTglNota.value = APP_TODAY;
-
-    const inpNamaKain = $('#inp-nama-kain');
-    if (inpNamaKain && !inpNamaKain.value) inpNamaKain.value = 'Cotton Combed 30s';
-
-    const kainQuickChips = $('#kain-quick-chips');
-    if (kainQuickChips && kainQuickChips.children.length === 0) {
-      const kainList = ['Cotton Combed 30s', 'Flanel Yarn Dyed', 'Canvas 12 oz', 'Twill Drill', 'Cotton Oxford', 'Fleece Cotton'];
-      kainQuickChips.innerHTML = kainList.map((k) => `
-        <button type="button" data-action="select-kain-chip" data-kain="${esc(k)}" class="chip text-[11px] bg-white border border-indigo-200/80 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700">
-          + ${esc(k)}
-        </button>`).join('');
-    }
-
-    const inpLebar = $('#inp-lebar-gramasi');
-    if (inpLebar && !inpLebar.value) inpLebar.value = '72" · 180 gsm';
-
-    const inpKendaraan = $('#inp-no-kendaraan');
-    if (inpKendaraan && !inpKendaraan.value) inpKendaraan.value = 'B 9821 TXA';
-
-    const inpPenerima = $('#inp-penerima');
-    if (inpPenerima && !inpPenerima.value) inpPenerima.value = 'Dedi Kurniawan (Staf Gudang)';
-
-    // 3. Card 2 - Color Groups
     renderColorGroups();
-
-    // 4. Card 3 - Draft Rolls
     renderDraftRollsTable();
 
-    // 5. Mini-Table Inventory Rolls
-    renderInventoryRollsTable();
-  }
-
-  function submitPenerimaan() {
-    const idSupplier = Number($('#sel-supplier')?.value);
-    const noNota = $('#inp-no-nota')?.value.trim();
-    const tglNota = $('#inp-tgl-nota')?.value || APP_TODAY;
-    const namaKain = $('#inp-nama-kain')?.value.trim();
-    const lebarGramasi = $('#inp-lebar-gramasi')?.value.trim();
-    const noKendaraan = $('#inp-no-kendaraan')?.value.trim() || '-';
-    const penerima = $('#inp-penerima')?.value.trim();
-
-    if (!idSupplier) {
-      showToast('Supplier Kain wajib dipilih.', { type: 'error' });
-      $('#sel-supplier')?.focus();
-      return;
-    }
-    if (!noNota) {
-      showToast('Nomor Nota / Surat Jalan wajib diisi.', { type: 'error' });
-      $('#inp-no-nota')?.focus();
-      return;
-    }
-    if (!namaKain) {
-      showToast('Nama / Jenis Kain wajib diisi.', { type: 'error' });
-      $('#inp-nama-kain')?.focus();
-      return;
-    }
-    if (!lebarGramasi) {
-      showToast('Lebar & Gramasi kain wajib diisi.', { type: 'error' });
-      $('#inp-lebar-gramasi')?.focus();
-      return;
-    }
-    if (!penerima) {
-      showToast('Petugas Penerima Gudang wajib diisi.', { type: 'error' });
-      $('#inp-penerima')?.focus();
+    const list = [...DB.all('Penerimaan_Bahan')].sort((a, b) => b.id_penerimaan - a.id_penerimaan);
+    $('#penerimaan-total-badge').textContent = `Total: ${list.length} Nota Masuk`;
+    const wrap = $('#penerimaan-cards-list');
+    if (list.length === 0) {
+      wrap.innerHTML = '<p class="text-center text-slate-400 text-xs py-8">Belum ada nota penerimaan bahan terdaftar.</p>';
       return;
     }
 
-    if (!state.penerimaan.colorGroups.length) {
-      showToast('Minimal harus ada 1 kelompok variasi warna.', { type: 'error' });
-      return;
-    }
-    for (const cg of state.penerimaan.colorGroups) {
-      if (!cg.namaWarna?.trim()) {
-        showToast('Nama Warna pada seluruh kelompok warna wajib diisi.', { type: 'error' });
-        return;
-      }
-    }
-
-    if (!state.penerimaan.draftRolls.length) {
-      showToast('Minimal harus ada 1 roll kain fisik terdaftar.', { type: 'error' });
-      return;
-    }
-    for (let i = 0; i < state.penerimaan.draftRolls.length; i++) {
-      const r = state.penerimaan.draftRolls[i];
-      if (!r.beratKg || Number(r.beratKg) <= 0) {
-        showToast(`Berat roll pada baris Roll #${i + 1} tidak valid (harus > 0 kg).`, { type: 'error' });
-        return;
-      }
-    }
-
-    // 1. Insert Penerimaan_Bahan
-    const newPen = BongDB.insert('Penerimaan_Bahan', {
-      id_supplier: idSupplier,
-      no_nota: noNota,
-      tgl_nota: tglNota,
-      nama_kain: namaKain,
-      lebar_gramasi: lebarGramasi,
-      no_kendaraan: noKendaraan,
-      penerima: penerima,
-    });
-
-    // 2. Insert Detail_Bahan_Warna & Detail_Roll_Bahan
-    const allRollsToInsert = [];
-    state.penerimaan.colorGroups.forEach((cg) => {
-      const groupRolls = state.penerimaan.draftRolls.filter((r) => r.colorGroupId === cg.id);
-      if (!groupRolls.length) return;
-
-      const totalRoll = groupRolls.length;
-      const totalKg = round1(sum(groupRolls, (r) => r.beratKg));
-
-      const newWarna = BongDB.insert('Detail_Bahan_Warna', {
-        id_penerimaan: newPen.id_penerimaan,
-        nama_warna: cg.namaWarna,
-        kode_warna: cg.kodeWarna || 'LOT-01',
-        total_roll: totalRoll,
-        total_kg: totalKg,
-      });
-
-      groupRolls.forEach((r, idx) => {
-        allRollsToInsert.push({
-          id_detail_warna: newWarna.id_detail_warna,
-          no_roll_ke: idx + 1,
-          berat_kg: round1(r.beratKg),
-          total_roll: totalRoll,
-          status_roll: 'Tersedia',
-          rak_alokasi: r.rakAlokasi || cg.rakDefault || 'A-01',
-        });
-      });
-    });
-
-    const insertedRolls = BongDB.insertMany('Detail_Roll_Bahan', allRollsToInsert);
-    const minId = insertedRolls[0]?.id_roll;
-    const maxId = insertedRolls[insertedRolls.length - 1]?.id_roll;
-    const idRangeStr = minId === maxId ? `#${minId}` : `#${minId} s/d #${maxId}`;
-
-    showToast(`Penerimaan Nota <b>#${esc(noNota)}</b> berhasil disimpan! <b>${insertedRolls.length} roll</b> (${sum(allRollsToInsert, (r) => r.berat_kg).toFixed(1)} kg) teregistrasi dengan integer PK id_roll: <b>${idRangeStr}</b>.`, { title: 'Penerimaan Bahan Berhasil' });
-
-    state.penerimaan.flashRollId = minId;
-
-    // Reset form to fresh state
-    resetPenerimaanForm();
-    state.penerimaan.flashRollId = minId;
-    renderPenerimaanScreen();
-
-    const invTable = $('#tbl-inventory-rolls-body');
-    if (invTable) {
-      invTable.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-  }
-
-  function resetPenerimaanForm() {
-    state.penerimaan.nextColorGroupId = 1;
-    state.penerimaan.colorGroups = [
-      { id: 1, namaWarna: 'Black Jet', kodeWarna: 'BLK-30S-01', rakDefault: 'B-04', hexColor: '#1E293B' },
-    ];
-    state.penerimaan.draftRolls = [
-      { colorGroupId: 1, beratKg: 24.50, rakAlokasi: 'B-04' },
-      { colorGroupId: 1, beratKg: 25.00, rakAlokasi: 'B-04' },
-      { colorGroupId: 1, beratKg: 25.00, rakAlokasi: 'B-04' },
-    ];
-    state.penerimaan.flashRollId = null;
-
-    if ($('#sel-supplier')) $('#sel-supplier').value = '1';
-    if ($('#inp-no-nota')) {
-      const maxNota = BongDB.data.Penerimaan_Bahan.reduce((m, p) => {
-        const n = parseInt(String(p.no_nota).replace(/\D/g, ''), 10);
-        return !isNaN(n) ? Math.max(m, n) : m;
-      }, 805);
-      $('#inp-no-nota').value = String(maxNota + 1);
-    }
-    if ($('#inp-tgl-nota')) $('#inp-tgl-nota').value = APP_TODAY;
-    if ($('#inp-nama-kain')) $('#inp-nama-kain').value = 'Cotton Combed 30s';
-    if ($('#inp-lebar-gramasi')) $('#inp-lebar-gramasi').value = '72" · 180 gsm';
-    if ($('#inp-no-kendaraan')) $('#inp-no-kendaraan').value = 'B 9821 TXA';
-    if ($('#inp-penerima')) $('#inp-penerima').value = 'Dedi Kurniawan (Staf Gudang)';
-
-    renderPenerimaanScreen();
-  }
-
-  function modalAddSupplier() {
-    openModal({
-      title: 'Tambah Supplier Kain Baru',
-      subtitle: 'Mendaftarkan rekanan supplier ke tabel Supplier',
-      icon: 'truck',
-      size: 'max-w-md',
-      body: `
-        <div class="space-y-4">
-          <div>
-            <label for="inp-new-sup-nama" class="field-label">Nama Supplier / Perusahaan <span class="text-rose-500">*</span></label>
-            <input id="inp-new-sup-nama" type="text" class="field-input" placeholder="cth. CV Tekstil Perkasa Abadi" />
+    wrap.innerHTML = list.map((pn) => {
+      const sup = Q.supplier(pn.id_supplier);
+      const warnas = Q.warnaOfPenerimaan(pn.id_penerimaan);
+      return `
+        <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 transition-all">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-bold bg-indigo-100 text-indigo-700 mr-1.5">#${pn.id_penerimaan}</span>
+              <span class="font-mono font-bold text-sm text-indigo-600">${esc(pn.no_nota)}</span>
+              <span class="text-xs font-semibold text-slate-700 ml-2">${esc(pn.nama_kain)}</span>
+              ${pn.lebar_gramasi ? `<span class="text-[11px] text-slate-500 ml-1">(${esc(pn.lebar_gramasi)})</span>` : ''}
+              <span class="text-[11px] text-slate-400 block">
+                ${esc(sup?.nama_supplier || '-')} &bull; ${fmtDateDmy(pn.tgl_nota)}${pn.penerima ? ` &bull; Penerima: ${esc(pn.penerima)}` : ''}
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-mono bg-white px-2.5 py-1 rounded-md border border-slate-200 text-slate-600">Kendaraan: ${esc(pn.no_kendaraan || '-')}</span>
+              <button type="button" data-action="edit-nota" data-id="${pn.id_penerimaan}" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-md text-xs font-semibold inline-flex items-center gap-1 transition-colors">
+                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i> Edit Nota
+              </button>
+              <button type="button" data-action="delete-nota" data-id="${pn.id_penerimaan}" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-md text-xs font-semibold inline-flex items-center gap-1 transition-colors">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Hapus Nota
+              </button>
+            </div>
           </div>
-          <div>
-            <label for="inp-new-sup-kontak" class="field-label">Nomor Kontak / Telepon <span class="text-rose-500">*</span></label>
-            <input id="inp-new-sup-kontak" type="text" class="field-input" placeholder="cth. 0812-3456-7890" />
+          <div class="mt-3 pt-3 border-t border-slate-200 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            ${warnas.map((bw) => {
+              const rolls = Q.rollsOfWarna(bw.id_detail_warna);
+              return `
+                <div class="bg-white p-3 rounded-lg border border-slate-200 text-xs">
+                  <div class="flex items-center justify-between gap-1">
+                    <div>
+                      <span class="font-semibold text-slate-800">${esc(bw.nama_warna)}</span>
+                      ${bw.kode_warna ? `<span class="text-[10px] font-mono text-slate-400 ml-1">(${esc(bw.kode_warna)})</span>` : ''}
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">${esc(bw.satuan_ukur)}</span>
+                      <button type="button" data-action="edit-warna" data-id="${bw.id_detail_warna}" class="px-1.5 py-0.5 bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 rounded text-[10px] font-semibold">Edit Warna</button>
+                      <button type="button" data-action="add-roll-existing" data-id="${bw.id_detail_warna}" class="px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[10px] font-semibold">+ Roll</button>
+                      <button type="button" data-action="delete-warna" data-id="${bw.id_detail_warna}" class="px-1.5 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-semibold">Hapus</button>
+                    </div>
+                  </div>
+                  <div class="mt-1.5 text-[11px] text-slate-500">Total: ${bw.total_roll} roll &bull; ${Number(bw.total_ukuran).toFixed(2)} ${esc(bw.satuan_ukur)}</div>
+                  <div class="mt-2 space-y-1">
+                    ${rolls.map((roll) => {
+                      const stCls = roll.status_roll === 'Tersedia' ? 'bg-emerald-100 text-emerald-800' : (roll.status_roll === 'Dipotong' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800');
+                      return `
+                        <div class="flex items-center justify-between text-[10px] font-mono bg-slate-50 p-1.5 rounded border border-slate-100">
+                          <span>Roll #${roll.no_roll_ke} (#${roll.id_roll})</span>
+                          <span>Sisa: <b>${Number(roll.ukuran_sisa).toFixed(2)}</b> / ${Number(roll.ukuran_awal).toFixed(2)} ${esc(roll.satuan)}</span>
+                          <div class="flex items-center gap-1">
+                            <span class="px-1.5 py-0.5 rounded font-semibold ${stCls}">${esc(roll.status_roll)}</span>
+                            <button type="button" data-action="edit-roll" data-id="${roll.id_roll}" class="px-1.5 py-0.5 bg-white hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-slate-200 rounded font-sans font-semibold">Edit</button>
+                            <button type="button" data-action="delete-roll" data-id="${roll.id_roll}" class="px-1.5 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded font-sans font-semibold">Hapus</button>
+                          </div>
+                        </div>`;
+                    }).join('')}
+                  </div>
+                </div>`;
+            }).join('')}
           </div>
-          <div>
-            <label for="inp-new-sup-alamat" class="field-label">Alamat Lengkap Gudang / Pabrik <span class="text-rose-500">*</span></label>
-            <textarea id="inp-new-sup-alamat" rows="2" class="field-input h-auto py-2" placeholder="cth. Jl. Industri Raya No. 45, Bandung"></textarea>
-          </div>
-        </div>`,
-      footer: `
-        <button type="button" class="btn btn-outline" data-action="close-modal">Batal</button>
-        <button type="button" class="btn btn-primary" data-action="save-new-supplier"><i data-lucide="plus" class="w-4 h-4"></i>Simpan Supplier</button>`,
-    });
+        </div>`;
+    }).join('');
   }
 
   /* --------------------------------------------------------------------------
-   * 9C. STEP 4: SCREEN 4 (PEMOTONGAN SERI & GELARAN) LOGIC
+   * SCREEN 4: PEMOTONGAN SERI & GELARAN
    * ------------------------------------------------------------------------ */
-  function renderPemotonganScreen(opts = {}) {
-    const selPesanan = $('#sel-potong-pesanan');
-    if (!selPesanan) return;
-
-    // 1. Populate Target Orders (priority: ANTREAN / PEMOTONGAN with id_penerimaan)
-    const activeOrders = BongDB.data.Pesanan
-      .filter((p) => (p.status_pesanan === 'ANTREAN' || p.status_pesanan === 'PEMOTONGAN') && p.id_penerimaan)
-      .sort((a, b) => {
-        const da = a.deadline || addDays(a.tgl_order || APP_TODAY, 14);
-        const db = b.deadline || addDays(b.tgl_order || APP_TODAY, 14);
-        return da.localeCompare(db) || a.id_pesanan - b.id_pesanan;
-      });
-
-    // Also include any other active orders if none in queue
-    const allEligible = activeOrders.length ? activeOrders : BongDB.data.Pesanan.filter((p) => p.status_pesanan !== 'SELESAI');
-
-    const curSelId = opts.selectedOrderId || state.selectedEdf || (allEligible[0] ? allEligible[0].id_pesanan : 1);
-    state.selectedEdf = curSelId;
-
-    selPesanan.innerHTML = allEligible.map((p) => {
-      const pola = Q.pola(p.id_pola);
-      const sumber = Q.sumber(p.id_sumber);
-      const pen = Q.penerimaan(p.id_penerimaan);
-      const mitraText = p.nama_mitra ? ` (${p.nama_mitra})` : '';
-      return `<option value="${p.id_pesanan}" ${p.id_pesanan === curSelId ? 'selected' : ''}>#${p.id_pesanan} · ${esc(pola?.nama_pola || '-')} — ${esc(sumber?.nama_sumber || '')}${esc(mitraText)}${pen ? ' [Nota #' + esc(pen.no_nota) + ']' : ''}</option>`;
-    }).join('');
-
-    const currentOrder = Q.pesanan(curSelId) || allEligible[0];
-
-    // 2. Auto-suggest Kode Seri
-    const inpKode = $('#inp-kode-seri');
-    if (inpKode && (!inpKode.value || inpKode.dataset.auto === '1' || inpKode.dataset.prevOrder !== String(curSelId))) {
-      const existingSeriCount = BongDB.where('Pemotongan_Seri', (s) => s.id_pesanan === curSelId).length;
-      inpKode.value = `SR-${curSelId}-${String(existingSeriCount + 1).padStart(2, '0')}`;
-      inpKode.dataset.auto = '1';
-      inpKode.dataset.prevOrder = String(curSelId);
-    }
-
-    // 3. Tanggal Potong
-    const inpTgl = $('#inp-tgl-potong');
-    if (inpTgl && !inpTgl.value) inpTgl.value = APP_TODAY;
-
-    // 4. Operator Pemotong
-    const selCutter = $('#sel-user-pemotong');
-    if (selCutter) {
-      const cutters = BongDB.where('User', (u) => u.role === 'Pemotong');
-      selCutter.innerHTML = cutters.map((u) => `<option value="${u.id_user}">[ID: ${u.id_user}] ${esc(u.nama_user)} — ${esc(u.role)}</option>`).join('');
-    }
-
-    // 5. Populate Detail Warna Bahan
-    const selWarna = $('#sel-potong-warna');
-    if (selWarna) {
-      const penId = currentOrder?.id_penerimaan;
-      const orderColors = penId ? BongDB.where('Detail_Bahan_Warna', (w) => w.id_penerimaan === penId) : [];
-      const otherColors = BongDB.data.Detail_Bahan_Warna.filter((w) => w.id_penerimaan !== penId);
-
-      const colorOptions = [...orderColors, ...otherColors].map((w) => {
-        const pen = Q.penerimaan(w.id_penerimaan);
-        const rolls = BongDB.where('Detail_Roll_Bahan', (r) => r.id_detail_warna === w.id_detail_warna);
-        const availCount = rolls.filter((r) => r.status_roll === 'Tersedia' || r.status_roll === 'Dipotong').length;
-        const isFromOrder = w.id_penerimaan === penId;
-        return {
-          id: w.id_detail_warna,
-          label: `[ID: ${w.id_detail_warna}] ${esc(pen?.nama_kain || 'Kain')} · ${esc(w.nama_warna)} (Lot: ${esc(w.kode_warna || '-')} · ${availCount} Roll Tersedia)${isFromOrder ? ' ★ Nota Pesanan' : ''}`,
-          availCount,
-        };
-      });
-
-      const prevVal = selWarna.value ? Number(selWarna.value) : null;
-      selWarna.innerHTML = colorOptions.map((opt, i) => `<option value="${opt.id}" ${(prevVal === opt.id || (!prevVal && i === 0)) ? 'selected' : ''}>${opt.label}</option>`).join('');
-    }
-
-    // 6. Ensure draft rows are initialized
-    if (!state.pemotongan.draftGelarRows || !state.pemotongan.draftGelarRows.length) {
-      const selectedWarnaId = Number($('#sel-potong-warna')?.value || 1);
-      const availRolls = BongDB.where('Detail_Roll_Bahan', (r) => (r.status_roll === 'Tersedia' || r.status_roll === 'Dipotong'));
-      const preferredRoll = availRolls.find((r) => r.id_detail_warna === selectedWarnaId) || availRolls[0];
-      state.pemotongan.draftGelarRows = [
-        {
-          id_roll: preferredRoll ? preferredRoll.id_roll : 4503,
-          panjang_gelar: 2.2,
-          jumlah_tumpuk: 50,
-          total_lembar_gelar: 60,
-          status_akhir: 'Dipotong',
-        },
-      ];
-    }
-
-    renderDraftGelarTable();
-    updateCuttingYieldSummary();
-    renderCuttingSeriesTable();
+  function updateUnitBadgeFromWarna() {
+    const sel = $('#sel-warna-bahan');
+    const opt = sel?.options[sel.selectedIndex];
+    const satuan = opt?.getAttribute('data-satuan') || 'Kg';
+    const badge = $('#badge-satuan-kain');
+    if (badge) badge.textContent = satuan;
   }
 
-  function getAvailableRollOptions(selectedWarnaId) {
-    const rolls = BongDB.where('Detail_Roll_Bahan', (r) => r.status_roll === 'Tersedia' || r.status_roll === 'Dipotong');
-    rolls.sort((a, b) => {
-      const matchA = a.id_detail_warna === selectedWarnaId ? 0 : 1;
-      const matchB = b.id_detail_warna === selectedWarnaId ? 0 : 1;
-      return matchA - matchB || a.id_roll - b.id_roll;
+  function syncTotalHasil() {
+    let totalLembar = 0;
+    let totalKainEst = 0;
+    state.gelaranRows.forEach((r) => {
+      totalLembar += parseInt(r.total_lembar_gelar, 10) || 0;
+      totalKainEst += (parseFloat(r.panjang_gelar) || 0) * (parseInt(r.jumlah_tumpuk, 10) || 0) * 0.36;
     });
-    return rolls;
+    const hasilInp = $('#inp-total-hasil');
+    if (hasilInp && totalLembar > 0) hasilInp.value = totalLembar;
+    const kainInp = $('#inp-kain-terpakai');
+    if (kainInp && totalKainEst > 0) kainInp.value = totalKainEst.toFixed(2);
   }
 
-  function renderDraftGelarTable() {
-    const tbody = $('#tbl-draft-gelar-body');
+  function renderGelaranRows() {
+    const tbody = $('#gelaran-rows-body');
     if (!tbody) return;
+    const activeRolls = DB.where('Detail_Roll_Bahan', (r) => r.status_roll !== 'Habis').sort((a, b) => a.id_roll - b.id_roll);
+    if (state.gelaranRows.length && (!state.gelaranRows[0].id_roll || !activeRolls.some((r) => Number(r.id_roll) === Number(state.gelaranRows[0].id_roll)))) {
+      state.gelaranRows[0].id_roll = activeRolls[0]?.id_roll || '';
+    }
+    const selectedWarnaId = Number($('#sel-warna-bahan')?.value || 0);
 
-    const selectedWarnaId = Number($('#sel-potong-warna')?.value || 1);
-    const availRolls = getAvailableRollOptions(selectedWarnaId);
-
-    const rows = state.pemotongan.draftGelarRows || [];
-    tbody.innerHTML = rows.map((r, idx) => {
-      const statusAkhir = state.pemotongan.rollStatusMap[r.id_roll] || r.status_akhir || 'Dipotong';
-      r.status_akhir = statusAkhir;
-
-      const rollOptionsHtml = availRolls.map((ar) => {
-        const info = Q.rollInfo(ar);
-        const isMatch = ar.id_detail_warna === selectedWarnaId;
-        return `<option value="${ar.id_roll}" ${ar.id_roll === r.id_roll ? 'selected' : ''}>[ID Roll: ${ar.id_roll}] ${esc(info.label)} (${ar.berat_kg} kg · ${ar.status_roll} · Rak ${esc(ar.rak_alokasi || '-')})${isMatch ? ' ★' : ''}</option>`;
+    tbody.innerHTML = state.gelaranRows.map((row, idx) => {
+      const rollOpts = activeRolls.map((r) => {
+        const w = Q.warna(r.id_detail_warna);
+        const prefix = Number(r.id_detail_warna) === selectedWarnaId ? '★ ' : '';
+        const selected = Number(row.id_roll) === Number(r.id_roll) ? 'selected' : '';
+        return `<option value="${r.id_roll}" ${selected}>${prefix}#id_roll: ${r.id_roll} - Roll #${r.no_roll_ke} (${esc(w?.nama_warna || '-')} · Sisa: ${Number(r.ukuran_sisa).toFixed(2)}/${Number(r.ukuran_awal).toFixed(2)} ${esc(r.satuan)}) [${esc(r.status_roll)}]</option>`;
       }).join('');
-
       return `
-        <tr class="hover:bg-slate-50/70 transition-colors">
-          <td class="pl-5 py-2.5">
-            <select class="field-select font-mono text-xs sel-gelar-roll" data-index="${idx}">
-              ${rollOptionsHtml || `<option value="${r.id_roll}">[ID Roll: ${r.id_roll}]</option>`}
+        <tr class="hover:bg-slate-50/70">
+          <td class="py-2.5 pl-4">
+            <select class="sel-gelar-roll w-full text-xs p-2 border border-slate-200 rounded-lg font-mono bg-white" data-idx="${idx}" required>
+              ${rollOpts || '<option value="">-- Tidak ada roll aktif --</option>'}
             </select>
           </td>
-          <td class="py-2.5">
-            <div class="relative">
-              <input type="number" step="0.1" min="0.1" class="field-input font-mono text-xs pr-6 inp-panjang-gelar" data-index="${idx}" value="${r.panjang_gelar}" />
-              <span class="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-mono">m</span>
+          <td class="py-2.5 px-3">
+            <div class="flex items-stretch border border-slate-200 rounded-lg overflow-hidden bg-white">
+              <input type="number" step="0.01" min="0.1" lang="en-US" class="inp-panjang-gelar flex-1 min-w-0 text-xs font-mono p-2 border-0 focus:outline-none" data-idx="${idx}" value="${Number(row.panjang_gelar).toFixed(2)}" />
+              <span class="px-2 bg-slate-50 border-l border-slate-200 text-[10px] font-mono text-slate-500 flex items-center">m/yd</span>
             </div>
           </td>
-          <td class="py-2.5">
-            <div class="relative">
-              <input type="number" min="1" class="field-input font-mono text-xs pr-8 inp-jumlah-tumpuk" data-index="${idx}" value="${r.jumlah_tumpuk}" />
-              <span class="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-mono">Ply</span>
+          <td class="py-2.5 px-3">
+            <div class="flex items-stretch border border-slate-200 rounded-lg overflow-hidden bg-white">
+              <input type="number" min="1" class="inp-jumlah-tumpuk flex-1 min-w-0 text-xs font-mono p-2 border-0 focus:outline-none" data-idx="${idx}" value="${row.jumlah_tumpuk}" />
+              <span class="px-2 bg-slate-50 border-l border-slate-200 text-[10px] font-mono text-slate-500 flex items-center">Ply</span>
             </div>
           </td>
-          <td class="py-2.5">
-            <div class="relative">
-              <input type="number" min="1" class="field-input font-mono text-xs pr-14 font-semibold text-indigo-700 inp-lembar-gelar" data-index="${idx}" value="${r.total_lembar_gelar}" />
-              <span class="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-mono">Lembar</span>
+          <td class="py-2.5 px-3">
+            <div class="flex items-stretch border border-slate-200 rounded-lg overflow-hidden bg-white">
+              <input type="number" min="1" class="inp-lembar-gelar flex-1 min-w-0 text-xs font-mono font-bold text-indigo-700 p-2 border-0 focus:outline-none" data-idx="${idx}" value="${row.total_lembar_gelar}" />
+              <span class="px-2 bg-slate-50 border-l border-slate-200 text-[10px] font-mono text-slate-500 flex items-center">Lembar</span>
             </div>
           </td>
-          <td class="py-2.5">
-            <select class="field-select font-mono text-xs sel-gelar-status" data-index="${idx}" data-roll-id="${r.id_roll}">
-              <option value="Dipotong" ${statusAkhir === 'Dipotong' ? 'selected' : ''}>• Dipotong (Masih Sisa di Meja)</option>
-              <option value="Habis" ${statusAkhir === 'Habis' ? 'selected' : ''}>• Habis (Terpakai Penuh)</option>
+          <td class="py-2.5 px-3">
+            <select class="sel-status-roll w-full text-xs p-2 border border-slate-200 rounded-lg bg-white font-semibold" data-idx="${idx}">
+              <option value="Dipotong" ${row.status_roll_baru === 'Dipotong' ? 'selected' : ''}>Dipotong (Masih Tersisa)</option>
+              <option value="Habis" ${row.status_roll_baru === 'Habis' ? 'selected' : ''}>Habis (Tuntas 0.00)</option>
             </select>
           </td>
-          <td class="pr-5 py-2.5 text-center">
-            <button type="button" data-action="remove-gelar-row" data-index="${idx}" class="p-1.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Hapus baris gelaran">
-              <i data-lucide="trash-2" class="w-4 h-4"></i>
+          <td class="py-2.5 pr-4 text-center">
+            <button type="button" data-action="remove-gelaran-row" data-idx="${idx}" class="w-7 h-7 text-slate-400 hover:text-rose-600 rounded inline-flex items-center justify-center ${state.gelaranRows.length <= 1 ? 'opacity-30 cursor-not-allowed' : ''}" ${state.gelaranRows.length <= 1 ? 'disabled' : ''}>
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
             </button>
           </td>
         </tr>`;
     }).join('');
-
-    const totalRowsEl = $('#lbl-total-gelaran-rows');
-    if (totalRowsEl) totalRowsEl.textContent = String(rows.length);
-
-    const totalPanjang = rows.reduce((t, r) => t + (Number(r.panjang_gelar) || 0), 0);
-    const totalPanjangEl = $('#lbl-total-panjang-m');
-    if (totalPanjangEl) totalPanjangEl.textContent = totalPanjang.toFixed(1);
-
+    syncTotalHasil();
     refreshIcons();
   }
 
-  function updateCuttingYieldSummary() {
-    const rows = state.pemotongan.draftGelarRows || [];
-    const totalLembar = sum(rows, (r) => r.total_lembar_gelar);
-    const inpTotalHasil = $('#inp-total-lembar-hasil');
-    if (inpTotalHasil) inpTotalHasil.value = totalLembar;
+  function renderPemotongan() {
+    const orders = Q.edfSortOrders(DB.all('Pesanan'));
+    const cutters = DB.where('User', (u) => ['Pemotong', 'Admin'].includes(u.role));
+    const warnaList = DB.all('Detail_Bahan_Warna');
+    const allRolls = [...DB.all('Detail_Roll_Bahan')].sort((a, b) => a.id_roll - b.id_roll);
 
-    const planned = Number($('#inp-lembar-rencana')?.value) || 120;
-    const yieldVsPlanned = $('#yield-vs-planned');
-    if (yieldVsPlanned) {
-      const pct = Math.round((totalLembar / Math.max(planned, 1)) * 100);
-      const uniqueRolls = new Set(rows.map((r) => r.id_roll)).size;
-      const avg = uniqueRolls ? Math.round(totalLembar / uniqueRolls) : 0;
-      yieldVsPlanned.innerHTML = `
-        <i data-lucide="${pct >= 100 ? 'check' : 'alert-circle'}" class="w-3.5 h-3.5 ${pct >= 100 ? 'text-emerald-600' : 'text-amber-500'}"></i>
-        <span>${pct}% dari rencana (${planned} Lembar) · Rata-rata ${avg} Pcs/Roll (${rows.length} Gelaran)</span>`;
-      refreshIcons();
-    }
+    const dtInput = $('#inp-tgl-potong');
+    if (dtInput && !dtInput.value) dtInput.value = nowLocalIsoMin();
 
-    const uniqueRollIds = [...new Set(rows.map((r) => r.id_roll))];
-    const inpBerat = $('#inp-berat-terpakai');
-    if (inpBerat && (!inpBerat.value || inpBerat.dataset.auto === '1')) {
-      const totalRollKg = sum(uniqueRollIds.map((id) => Q.roll(id)), (r) => r?.berat_kg || 24);
-      inpBerat.value = (Math.round(totalRollKg * 10) / 10).toFixed(1);
-      inpBerat.dataset.auto = '1';
-    }
-
-    const host = $('#cutting-rolls-status-cards');
-    if (host) {
-      if (!uniqueRollIds.length) {
-        host.innerHTML = '<p class="text-xs text-slate-400 py-4 text-center">Pilih roll fisik pada tabel gelaran.</p>';
-        return;
-      }
-      host.innerHTML = uniqueRollIds.map((idRoll) => {
-        const roll = Q.roll(idRoll);
-        const info = roll ? Q.rollInfo(roll) : { label: `Roll #${idRoll}` };
-        const curStatus = state.pemotongan.rollStatusMap[idRoll] || 'Dipotong';
-        const isDipotong = curStatus === 'Dipotong';
+    $('#pm-queue-badge').textContent = `${orders.length} Pesanan Terjadwal`;
+    const queueBody = $('#pm-edf-tbody');
+    if (orders.length === 0) {
+      queueBody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-slate-400">Belum ada antrean pesanan untuk dipotong.</td></tr>';
+    } else {
+      queueBody.innerHTML = orders.map((ord, idx) => {
+        const pola = Q.pola(ord.id_pola);
+        const sumber = Q.sumber(ord.id_sumber);
+        const pen = ord.id_penerimaan ? Q.penerimaan(ord.id_penerimaan) : null;
+        const warnas = pen ? Q.warnaOfPenerimaan(pen.id_penerimaan) : [];
+        const firstWarna = warnas[0] || null;
+        const firstRoll = firstWarna ? Q.rollsOfWarna(firstWarna.id_detail_warna).find((r) => r.status_roll !== 'Habis') : null;
+        const prioCls = idx === 0 ? 'bg-rose-100 text-rose-700 border border-rose-200' : (idx === 1 ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700');
+        const stCls = ord.status_pesanan === 'Selesai' ? 'bg-emerald-100 text-emerald-800' : (ord.status_pesanan === 'Pemotongan' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-700');
         return `
-          <div class="flex items-center justify-between p-2.5 rounded-lg border border-slate-200 bg-white">
-            <div class="min-w-0 pr-2">
-              <p class="text-xs font-semibold font-mono text-slate-800 truncate">Roll ID: #${idRoll} (${esc(info.label)})</p>
-              <p class="text-[11px] text-slate-400 font-mono">${roll?.berat_kg || '-'} kg · Rak ${esc(roll?.rak_alokasi || '-')}</p>
-            </div>
-            <div class="flex items-center gap-1 shrink-0">
-              <button type="button" data-action="set-roll-post-status" data-roll-id="${idRoll}" data-status="Dipotong" class="px-2.5 py-1 text-[11px] font-mono rounded font-semibold transition ${isDipotong ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">• Dipotong</button>
-              <button type="button" data-action="set-roll-post-status" data-roll-id="${idRoll}" data-status="Habis" class="px-2.5 py-1 text-[11px] font-mono rounded font-semibold transition ${!isDipotong ? 'bg-slate-700 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">• Habis</button>
-            </div>
-          </div>`;
+          <tr class="hover:bg-indigo-50/40 transition-colors">
+            <td class="py-3"><span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono font-bold ${prioCls}">#${idx + 1} ${idx === 0 ? 'PRIORITAS UTAMA' : 'ANTREAN'}</span></td>
+            <td class="py-3">
+              <span class="font-mono font-bold text-indigo-600">#${ord.id_pesanan}</span>
+              <span class="font-semibold text-slate-800 ml-1">${esc(ord.nama_mitra || 'Internal (Produk Abadi)')}</span>
+              <span class="text-[10px] text-slate-400 block">${esc(sumber?.nama_sumber || '-')} &bull; ${esc(ord.jenis_pesanan)}</span>
+            </td>
+            <td class="py-3 text-slate-700 font-medium">${esc(pola?.nama_pola || '-')}<span class="text-[10px] font-mono text-slate-400 block">${esc(pola?.kode_pola || '')}</span></td>
+            <td class="py-3 text-[11px] text-slate-600">
+              ${pen ? `<span class="font-mono font-semibold text-indigo-700">#${pen.id_penerimaan} &bull; ${esc(pen.no_nota)}</span><span class="block text-[10px] text-slate-400">${esc(warnas.map((w) => w.nama_warna).join(', ') || pen.nama_kain)}</span>` : '<span class="text-slate-400 italic">Belum terhubung nota</span>'}
+            </td>
+            <td class="py-3 font-mono text-slate-500">${fmtDateDmy(ord.deadline_awal)}</td>
+            <td class="py-3 font-mono font-bold text-amber-600">
+              ${fmtDateDmy(ord.deadline_terbaru || ord.deadline_awal)}
+              ${ord.alasan_perubahan_deadline ? `<span class="block text-[10px] font-sans font-normal text-slate-400">Revisi: ${esc(ord.alasan_perubahan_deadline)}</span>` : ''}
+            </td>
+            <td class="py-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${stCls}">${esc(ord.status_pesanan)}</span></td>
+            <td class="py-3 text-right">
+              <button type="button" data-action="select-order-queue" data-pesanan="${ord.id_pesanan}" data-warna="${firstWarna?.id_detail_warna || ''}" data-roll="${firstRoll?.id_roll || ''}" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-semibold shadow-sm transition-colors inline-flex items-center gap-1">
+                <i data-lucide="scissors" class="w-3 h-3"></i> Pilih Potong
+              </button>
+            </td>
+          </tr>`;
+      }).join('');
+    }
+
+    syncSelectOptions($('#sel-pm-pesanan'), '<option value="" disabled selected>-- Pilih Pesanan Target --</option>' +
+      orders.map((ord, idx) => {
+        const pola = Q.pola(ord.id_pola);
+        const wId = ord.id_penerimaan ? (Q.warnaOfPenerimaan(ord.id_penerimaan)[0]?.id_detail_warna || '') : '';
+        return `<option value="${ord.id_pesanan}" data-default-warna="${wId}">[Prioritas #${idx + 1}] Pesanan #${ord.id_pesanan} - ${esc(pola?.nama_pola || ord.jenis_pesanan)} (${esc(ord.nama_mitra || 'Internal')})</option>`;
+      }).join(''));
+
+    const cutterOpts = cutters.map((u) => `<option value="${u.id_user}">${esc(u.nama_user)} (${esc(u.role)} - @ ${esc(u.username)})</option>`).join('');
+    syncSelectOptions($('#sel-pm-cutter'), cutterOpts);
+    syncSelectOptions($('#edit-pm-cutter'), cutters.map((u) => `<option value="${u.id_user}">${esc(u.nama_user)} (${esc(u.role)})</option>`).join(''));
+    syncSelectOptions($('#edit-pm-pesanan'), orders.map((o) => `<option value="${o.id_pesanan}">Pesanan #${o.id_pesanan} - ${esc(Q.pola(o.id_pola)?.nama_pola || o.jenis_pesanan)} (${esc(o.nama_mitra || 'Internal')})</option>`).join(''));
+
+    const warnaOpts = warnaList.map((w) => {
+      const pn = Q.penerimaan(w.id_penerimaan);
+      return `<option value="${w.id_detail_warna}" data-satuan="${esc(w.satuan_ukur)}">#${w.id_detail_warna} - ${esc(w.nama_warna)} (#${w.id_penerimaan} - ${esc(pn?.no_nota || 'Nota')} · ${esc(pn?.nama_kain || '')} · ${Number(w.total_ukuran).toFixed(2)} ${esc(w.satuan_ukur)})</option>`;
+    }).join('');
+    syncSelectOptions($('#sel-warna-bahan'), warnaOpts);
+    syncSelectOptions($('#edit-pm-warna'), warnaList.map((w) => `<option value="${w.id_detail_warna}">#${w.id_detail_warna} - ${esc(w.nama_warna)} (#${w.id_penerimaan} - ${esc(Q.penerimaan(w.id_penerimaan)?.no_nota || 'Nota')} · ${esc(w.satuan_ukur)})</option>`).join(''));
+    syncSelectOptions($('#edit-pm-roll'), allRolls.map((r) => `<option value="${r.id_roll}">#id_roll: ${r.id_roll} - Roll #${r.no_roll_ke} (${esc(Q.warna(r.id_detail_warna)?.nama_warna || '-')} · Sisa: ${Number(r.ukuran_sisa).toFixed(2)} ${esc(r.satuan)})</option>`).join(''));
+
+    updateUnitBadgeFromWarna();
+    renderGelaranRows();
+
+    const history = [...DB.all('Pemotongan_Seri')].sort((a, b) => String(b.tgl_potong || '').localeCompare(String(a.tgl_potong || '')) || b.id_potong - a.id_potong);
+    const histBody = $('#pm-history-tbody');
+    if (history.length === 0) {
+      histBody.innerHTML = '<tr><td colspan="8" class="py-6 text-center text-slate-400">Belum ada catatan pemotongan seri.</td></tr>';
+    } else {
+      histBody.innerHTML = history.map((pm) => {
+        const ord = Q.pesanan(pm.id_pesanan);
+        const pola = ord ? Q.pola(ord.id_pola) : null;
+        const cutter = Q.user(pm.id_user_pemotong);
+        const pws = DB.where('Detail_Pemotongan_Warna', (pw) => Number(pw.id_potong) === Number(pm.id_potong));
+        const totalRencana = sum(pws, (pw) => pw.total_lembar_direncanakan) || pm.total_lembar_hasil;
+        const gelaranAll = [];
+        pws.forEach((pw) => {
+          DB.where('Detail_Gelaran_Kain', (g) => Number(g.id_potong_warna) === Number(pw.id_potong_warna)).forEach((g) => gelaranAll.push(g));
+        });
+        return `
+          <tr class="hover:bg-slate-50">
+            <td class="py-3 font-mono font-bold text-indigo-600">
+              ${esc(pm.kode_seri)}
+              ${pm.jenis_variasi ? `<span class="block text-[10px] font-sans font-normal text-slate-400">${esc(pm.jenis_variasi)}</span>` : ''}
+            </td>
+            <td class="py-3">
+              <span class="font-medium text-slate-800">Pesanan #${pm.id_pesanan}</span>
+              <span class="text-[10px] text-slate-400 block">${esc(pola?.nama_pola || '-')}</span>
+            </td>
+            <td class="py-3 text-slate-600">${esc(cutter?.nama_user || '-')}</td>
+            <td class="py-3 font-mono">
+              <span class="text-slate-500">${fmtNum(totalRencana)}</span>
+              <span class="text-slate-400">/</span>
+              <span class="font-bold text-emerald-700">${fmtNum(pm.total_lembar_hasil)} Pcs</span>
+            </td>
+            <td class="py-3 font-mono text-slate-500">${fmtDateTimeDmy(pm.tgl_potong)}</td>
+            <td class="py-3 text-[11px] text-slate-600">
+              ${pws.map((pw) => {
+                const w = Q.warna(pw.id_detail_warna);
+                return `<div><span class="font-semibold">${esc(w?.nama_warna || '-')}</span>: <span class="font-mono font-bold text-indigo-700">${Number(pw.kain_terpakai).toFixed(2)} ${esc(w?.satuan_ukur || 'Kg')}</span></div>`;
+              }).join('')}
+            </td>
+            <td class="py-3 text-[11px] text-slate-600 space-y-1">
+              ${gelaranAll.map((gk) => {
+                const rl = Q.roll(gk.id_roll);
+                const rlCls = rl?.status_roll === 'Habis' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-800';
+                return `
+                  <div class="bg-slate-50 border border-slate-200 rounded px-2 py-1 font-mono text-[10px]">
+                    <span class="font-bold text-indigo-700">Roll #${rl?.no_roll_ke ?? '?'} (#${gk.id_roll})</span>
+                    &bull; Gelar: <b>${Number(gk.panjang_gelar).toFixed(2)}m</b>
+                    &bull; Ply: <b>${gk.jumlah_tumpuk} lapis</b>
+                    &bull; Hasil: <b>${gk.total_lembar_gelar} lbr</b>
+                    ${rl ? `<span class="ml-1 px-1.5 py-0.2 rounded ${rlCls}">${esc(rl.status_roll)} (Sisa: ${Number(rl.ukuran_sisa).toFixed(2)})</span>` : ''}
+                  </div>`;
+              }).join('')}
+            </td>
+            <td class="py-3 text-right">
+              <div class="inline-flex items-center justify-end gap-1.5">
+                <button type="button" data-action="edit-pemotongan" data-id="${pm.id_potong}" class="px-2.5 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1">
+                  <i data-lucide="edit-3" class="w-3 h-3"></i> Edit
+                </button>
+                <button type="button" data-action="delete-pemotongan" data-id="${pm.id_potong}" class="px-2.5 py-1 bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1">
+                  <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
+                </button>
+              </div>
+            </td>
+          </tr>`;
       }).join('');
     }
   }
 
-  function renderCuttingSeriesTable() {
-    const tbody = $('#tbl-cutting-history-body');
-    if (!tbody) return;
-
-    const list = [...BongDB.data.Pemotongan_Seri].sort((a, b) => b.id_potong - a.id_potong).slice(0, 10);
-    tbody.innerHTML = list.map((ps) => {
-      const p = Q.pesanan(ps.id_pesanan);
-      const pola = p ? Q.pola(p.id_pola) : null;
-      const pemotong = Q.user(ps.id_user_pemotong);
-      const pwList = BongDB.where('Detail_Pemotongan_Warna', (w) => w.id_potong === ps.id_potong);
-      const pwIds = new Set(pwList.map((w) => w.id_potong_warna));
-      const gelaran = BongDB.where('Detail_Gelaran_Kain', (g) => pwIds.has(g.id_potong_warna));
-      const rollsUsed = [...new Set(gelaran.map((g) => g.id_roll))];
-
-      return `
-        <tr class="hover:bg-slate-50/70 transition-colors">
-          <td class="pl-5 py-3 font-mono font-bold text-indigo-700">#${ps.id_potong}</td>
-          <td class="py-3 font-mono font-semibold text-slate-800">${esc(ps.kode_seri)}</td>
-          <td class="py-3">
-            <span class="font-medium text-slate-900 cursor-pointer hover:text-indigo-600" data-action="open-order" data-id="${ps.id_pesanan}">#${ps.id_pesanan} · ${esc(pola?.nama_pola || '-')}</span>
-            <span class="block text-[11px] text-slate-400">${esc(ps.jenis_variasi || 'Badan Utama')}</span>
-          </td>
-          <td class="py-3 text-slate-600">${esc(pemotong?.nama_user || '-')}</td>
-          <td class="py-3">
-            <div class="flex flex-wrap gap-1">
-              ${rollsUsed.map((rid) => `<button type="button" data-action="open-roll" data-id="${rid}" class="badge font-mono bg-slate-100 hover:bg-slate-200 text-slate-700">#${rid}</button>`).join('') || '<span class="text-slate-400">-</span>'}
-            </div>
-          </td>
-          <td class="py-3 text-center font-mono font-semibold text-slate-700">${gelaran.length}</td>
-          <td class="py-3 text-right font-mono font-bold text-slate-900">${fmtNum(ps.total_lembar_hasil)} Pcs</td>
-          <td class="pr-5 py-3 text-right font-mono text-slate-500">${fmtDate(ps.tgl_potong)}</td>
-        </tr>`;
-    }).join('') || '<tr><td colspan="8" class="text-center py-6 text-slate-400">Belum ada seri pemotongan.</td></tr>';
-  }
-
-  function submitPemotongan() {
-    const idPesanan = Number($('#sel-potong-pesanan')?.value);
-    const kodeSeri = $('#inp-kode-seri')?.value.trim();
-    const jenisVariasi = $('#inp-jenis-variasi')?.value || 'Badan Utama + Lengan';
-    const tglPotong = $('#inp-tgl-potong')?.value || APP_TODAY;
-    const idUserPemotong = Number($('#sel-user-pemotong')?.value || 2);
-    const idDetailWarna = Number($('#sel-potong-warna')?.value || 1);
-    const lembarRencana = Number($('#inp-lembar-rencana')?.value) || 120;
-    const beratTerpakai = Number($('#inp-berat-terpakai')?.value) || 24.0;
-    const totalLembarHasil = Number($('#inp-total-lembar-hasil')?.value) || 0;
-    const advanceQc = $('#chk-advance-qc')?.checked;
-
-    if (!idPesanan) {
-      showToast('Pilih Pesanan Target terlebih dahulu.', { type: 'error' });
-      $('#sel-potong-pesanan')?.focus();
-      return;
-    }
-    if (!kodeSeri) {
-      showToast('Kode Seri Potong wajib diisi.', { type: 'error' });
-      $('#inp-kode-seri')?.focus();
-      return;
-    }
-
-    const rows = state.pemotongan.draftGelarRows || [];
-    if (!rows.length) {
-      showToast('Minimal harus ada 1 baris gelaran roll kain fisik.', { type: 'error' });
-      return;
-    }
-
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
-      if (!r.id_roll) { showToast(`Baris gelaran #${i + 1} belum memilih roll kain fisik.`, { type: 'error' }); return; }
-      if (Number(r.panjang_gelar) <= 0) { showToast(`Baris gelaran #${i + 1}: Panjang Gelar harus > 0 meter.`, { type: 'error' }); return; }
-      if (Number(r.jumlah_tumpuk) <= 0) { showToast(`Baris gelaran #${i + 1}: Jumlah Tumpuk harus > 0 ply.`, { type: 'error' }); return; }
-      if (Number(r.total_lembar_gelar) <= 0) { showToast(`Baris gelaran #${i + 1}: Total Lembar Gelar harus > 0 lembar.`, { type: 'error' }); return; }
-    }
-
-    // 1. Insert into Pemotongan_Seri
-    const newSeri = BongDB.insert('Pemotongan_Seri', {
-      id_pesanan: idPesanan,
-      id_user_pemotong: idUserPemotong,
-      kode_seri: kodeSeri,
-      jenis_variasi: jenisVariasi,
-      total_lembar_hasil: totalLembarHasil,
-      tgl_potong: tglPotong,
-    });
-
-    // 2. Insert into Detail_Pemotongan_Warna
-    const newPW = BongDB.insert('Detail_Pemotongan_Warna', {
-      id_potong: newSeri.id_potong,
-      id_detail_warna: idDetailWarna,
-      total_lembar_direncanakan: lembarRencana,
-      berat_terpakai_kg: beratTerpakai,
-    });
-
-    // 3. Insert into Detail_Gelaran_Kain
-    const gelaranToInsert = rows.map((r) => ({
-      id_potong_warna: newPW.id_potong_warna,
-      id_roll: Number(r.id_roll),
-      panjang_gelar: Number(r.panjang_gelar),
-      jumlah_tumpuk: Number(r.jumlah_tumpuk),
-      total_lembar_gelar: Number(r.total_lembar_gelar),
-    }));
-    BongDB.insertMany('Detail_Gelaran_Kain', gelaranToInsert);
-
-    // 4. Update status of each used physical roll
-    const uniqueRollIds = [...new Set(rows.map((r) => Number(r.id_roll)))];
-    uniqueRollIds.forEach((rid) => {
-      const chosenStatus = state.pemotongan.rollStatusMap[rid] || 'Dipotong';
-      BongDB.update('Detail_Roll_Bahan', rid, {
-        status_roll: chosenStatus,
-        rak_alokasi: chosenStatus === 'Dipotong' ? 'Meja Potong 01' : '-',
-      });
-    });
-
-    // 5. Update Pesanan progress & status
-    const targetOrder = Q.pesanan(idPesanan);
-    const newStatus = advanceQc ? 'DALAM QC' : 'PEMOTONGAN';
-    const newPct = advanceQc ? 90 : Math.min(85, Math.max(70, Number(targetOrder?.progress_pct || 0) + 20));
-    const orderUpdates = {
-      status_pesanan: newStatus,
-      progress_pct: newPct,
-    };
-    if (targetOrder && !targetOrder.id_penerimaan) {
-      const w = Q.warna(idDetailWarna);
-      if (w) orderUpdates.id_penerimaan = w.id_penerimaan;
-    }
-    BongDB.update('Pesanan', idPesanan, orderUpdates);
-
-    showToast(`Seri Pemotongan <b>${esc(kodeSeri)}</b> (#${newSeri.id_potong}) berhasil disimpan! <b>${fmtNum(totalLembarHasil)} pcs</b> dipotong across <b>${rows.length} gelaran</b>. Pesanan #${idPesanan} diperbarui ke status <b>${newStatus}</b> (${newPct}%).`, { title: 'Pemotongan Seri Berhasil' });
-
-    resetPemotonganForm();
-    renderAll();
-  }
-
-  function resetPemotonganForm() {
-    state.pemotongan.draftGelarRows = [];
-    state.pemotongan.rollStatusMap = {};
-    const inpKode = $('#inp-kode-seri');
-    if (inpKode) {
-      inpKode.value = '';
-      delete inpKode.dataset.auto;
-      delete inpKode.dataset.prevOrder;
-    }
-    const chk = $('#chk-advance-qc');
-    if (chk) chk.checked = false;
-    renderPemotonganScreen();
-  }
-
   /* --------------------------------------------------------------------------
-   * 9D. STEP 5: SCREEN 5 (QUALITY CONTROL & KERUSAKAN) LOGIC
+   * SCREEN 5: QUALITY CONTROL & KERUSAKAN
    * ------------------------------------------------------------------------ */
-  function renderQcScreen(opts = {}) {
-    const selPesanan = $('#sel-qc-pesanan');
-    if (!selPesanan) return;
+  function updateQcStokIndicator() {
+    const idPesanan = $('#sel-qc-pesanan')?.value;
+    const ord = idPesanan ? Q.pesanan(idPesanan) : null;
+    const box = $('#box-integrasi-stok');
+    const isAbadi = Q.isProdukAbadi(ord);
+    if (box) box.classList.toggle('hidden', !isAbadi);
+    if (!isAbadi) return;
 
-    // 1. Populate Target Orders (prioritizing DALAM QC and PEMOTONGAN)
-    const orders = [...BongDB.data.Pesanan].sort((a, b) => {
-      const prio = (s) => (s === 'DALAM QC' ? 1 : s === 'PEMOTONGAN' ? 2 : s === 'ANTREAN' ? 3 : 4);
-      return prio(a.status_pesanan) - prio(b.status_pesanan) || a.id_pesanan - b.id_pesanan;
-    });
-
-    const curSelId = opts.selectedOrderId || state.qc.selectedOrderId || (orders[0] ? orders[0].id_pesanan : 1);
-    state.qc.selectedOrderId = curSelId;
-
-    selPesanan.innerHTML = orders.map((p) => {
-      const pola = Q.pola(p.id_pola);
-      const mitraText = p.nama_mitra ? ` · ${p.nama_mitra}` : '';
-      return `<option value="${p.id_pesanan}" ${p.id_pesanan === curSelId ? 'selected' : ''}>[ID: ${p.id_pesanan}] ${esc(pola?.nama_pola || '-')} (${p.status_pesanan})${esc(mitraText)}</option>`;
-    }).join('');
-
-    // Update Order Info Box
-    const selectedOrder = Q.pesanan(curSelId);
-    const box = $('#qc-order-info-box');
-    if (box && selectedOrder) {
-      const seri = BongDB.where('Pemotongan_Seri', (s) => s.id_pesanan === curSelId);
-      const gel = Q.gelaranOfPotong(seri);
-      const totalCutPcs = sum(seri, (s) => s.total_lembar_hasil);
-      const rollsCount = new Set(gel.map((g) => g.id_roll)).size;
-      const meta = STATUS_META[selectedOrder.status_pesanan] || STATUS_META['ANTREAN'];
-
-      box.innerHTML = `
-        <span class="badge ${meta.badge} font-mono font-bold">${selectedOrder.status_pesanan} · ${selectedOrder.progress_pct}%</span>
-        <span class="text-slate-600 font-mono">${fmtNum(totalCutPcs)} Pcs (${rollsCount} Roll)</span>`;
+    const tahap = $('#sel-tahap-qc')?.value;
+    const lolos = parseInt($('#inp-qc-lolos')?.value, 10) || 0;
+    const badge = $('#badge-indikator-stok');
+    const warna = $('#inp-qc-warna')?.value || 'Hitam';
+    const specSel = $('#sel-qc-spesifikasi');
+    const specText = specSel?.options[specSel.selectedIndex]?.text || 'Ukuran Default';
+    if (!badge) return;
+    if (tahap === 'Jahit Akhir' && lolos > 0) {
+      badge.className = 'px-3 py-1.5 rounded-full text-xs font-mono font-bold bg-emerald-600 text-white shadow-sm';
+      badge.textContent = `✓ AKTIF: +${lolos} Pcs Masuk Stok_Barang_Jadi (${specText} · ${warna})`;
+    } else {
+      badge.className = 'px-3 py-1.5 rounded-full text-xs font-mono font-semibold bg-slate-200 text-slate-600';
+      badge.textContent = 'Non-Aktif (Hanya Tahap "Jahit Akhir" yang menambah Stok_Barang_Jadi)';
     }
+  }
 
-    // 2. Date input
-    const inpTgl = $('#inp-tgl-temuan');
-    if (inpTgl && !inpTgl.value) inpTgl.value = APP_TODAY;
-
-    // 3. User QC dropdown
-    const selQcUser = $('#sel-user-qc');
-    if (selQcUser) {
-      const qcUsers = BongDB.where('User', (u) => u.role === 'QC' || u.role === 'Admin');
-      selQcUser.innerHTML = qcUsers.map((u) => `<option value="${u.id_user}">[ID: ${u.id_user}] ${esc(u.nama_user)} — ${esc(u.role)}</option>`).join('');
-    }
-
-    // 4. Update Defect Category quick-picks & select
-    const cat = state.qc.selectedDefectCat || 'Cacat Potong';
-    $$('.defect-cat-btn').forEach((btn) => {
-      const bcat = btn.dataset.cat;
-      const on = bcat === cat;
-      btn.className = `defect-cat-btn p-3.5 rounded-xl border text-left transition flex items-start gap-3 ${on ? 'border-rose-400 bg-rose-50/70 ring-2 ring-rose-500/20' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`;
-    });
-    const selCat = $('#sel-jenis-cacat');
-    if (selCat) selCat.value = cat;
-
-    const unitLabel = $('#qc-unit-label');
-    if (unitLabel) unitLabel.textContent = cat === 'Cacat Bahan' ? 'Roll' : 'Pcs';
-
-    // 5. Populate Referensi Roll Kain Fisik
-    const selRoll = $('#sel-qc-roll');
-    if (selRoll) {
-      const seri = BongDB.where('Pemotongan_Seri', (s) => s.id_pesanan === curSelId);
-      const gel = Q.gelaranOfPotong(seri);
-      const usedRollIds = [...new Set(gel.map((g) => g.id_roll))];
-
-      let availableRolls = [];
-      if (usedRollIds.length) {
-        availableRolls = usedRollIds.map((rid) => Q.roll(rid)).filter(Boolean);
-      } else {
-        availableRolls = BongDB.data.Detail_Roll_Bahan.slice(0, 15);
+  function syncQcOrderInfo() {
+    const idPesanan = $('#sel-qc-pesanan')?.value;
+    const ord = idPesanan ? Q.pesanan(idPesanan) : null;
+    const dispPola = $('#inp-display-pola');
+    const specSel = $('#sel-qc-spesifikasi');
+    const warnaInp = $('#inp-qc-warna');
+    if (ord) {
+      const pola = Q.pola(ord.id_pola);
+      const specs = Q.specsOfPola(ord.id_pola);
+      const firstWarna = ord.id_penerimaan ? Q.warnaOfPenerimaan(ord.id_penerimaan)[0]?.nama_warna : null;
+      if (dispPola) dispPola.value = pola?.nama_pola || '-';
+      if (warnaInp && firstWarna) warnaInp.value = firstWarna;
+      if (specSel) {
+        specSel.innerHTML = specs.map((s) => `<option value="${s.id_spesifikasi}">Ukuran ${esc(s.nama_ukuran)} (#id_spesifikasi: ${s.id_spesifikasi})</option>`).join('') || '<option value="">-- Ukuran Default --</option>';
       }
-
-      selRoll.innerHTML = `<option value="">— Tidak Spesifik Roll —</option>` +
-        availableRolls.map((r) => {
-          const info = Q.rollInfo(r);
-          return `<option value="${r.id_roll}">[ID: ${r.id_roll}] ${esc(info.label)} (${r.berat_kg} kg · ${r.status_roll})</option>`;
-        }).join('');
     }
-
-    // 6. Update Decision Cards highlight
-    const dec = state.qc.selectedDecision || 'Need Rework';
-    $$('.qc-decision-btn').forEach((btn) => {
-      const bdec = btn.dataset.decision;
-      const on = bdec === dec;
-      btn.className = `qc-decision-btn p-3.5 rounded-xl border text-left transition ${on ? 'border-indigo-500 bg-indigo-50/70 ring-2 ring-indigo-500/20' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`;
-    });
-
-    // 7. Update PIC Rework default
-    const selPic = $('#sel-pic-rework');
-    if (selPic && (!selPic.dataset.manual || selPic.dataset.prevCat !== cat)) {
-      if (cat === 'Cacat Potong') selPic.value = 'Tim Potong A (Budi Santoso)';
-      else if (cat === 'Cacat Jahit') selPic.value = 'Tim Jahit Eksternal A';
-      else if (cat === 'Cacat Bahan') selPic.value = 'Gudang · Retur Supplier';
-      selPic.dataset.prevCat = cat;
-    }
-
-    renderQcTable();
+    updateQcStokIndicator();
   }
 
-  function renderQcTable() {
-    const tbody = $('#tbl-qc-log-body');
-    if (!tbody) return;
+  function renderQc() {
+    const orders = [...DB.all('Pesanan')].sort((a, b) => b.id_pesanan - a.id_pesanan);
+    const qcUsers = DB.where('User', (u) => ['QC', 'Admin'].includes(u.role));
 
-    const filter = state.qc.tableFilter || 'ALL';
-    $$('.qc-tbl-filter').forEach((btn) => {
-      const on = btn.dataset.filter === filter;
-      btn.className = `qc-tbl-filter btn btn-outline h-7 px-2.5 text-xs font-mono ${on ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold' : ''}`;
-    });
+    const dtInput = $('#inp-tgl-pemeriksaan');
+    if (dtInput && !dtInput.value) dtInput.value = nowLocalIsoMin();
 
-    const items = BongDB.data.Kerusakan.filter((k) => {
-      if (filter === 'Need Rework') return k.status === 'Need Rework';
-      if (filter === 'Rework Selesai') return k.status === 'Rework Selesai' || k.status === 'Finished';
-      if (filter === 'Retur / Scrapped') return k.status === 'Retur Supplier' || k.status === 'Scrapped';
-      return true;
-    }).sort((a, b) => b.id_qc - a.id_qc);
+    const ordOpts = '<option value="" disabled selected>-- Pilih Pesanan Produksi --</option>' +
+      orders.map((ord) => {
+        const pola = Q.pola(ord.id_pola);
+        const sumber = Q.sumber(ord.id_sumber);
+        return `<option value="${ord.id_pesanan}">Pesanan #${ord.id_pesanan} - ${esc(pola?.nama_pola || ord.jenis_pesanan)} (${esc(ord.nama_mitra || (sumber?.nama_sumber || 'Internal Produk Abadi'))} · ${esc(sumber?.nama_sumber || 'Umum')} · Status: ${esc(ord.status_pesanan)})</option>`;
+      }).join('');
+    syncSelectOptions($('#sel-qc-pesanan'), ordOpts);
+    syncSelectOptions($('#edit-qc-pesanan'), orders.map((o) => `<option value="${o.id_pesanan}">Pesanan #${o.id_pesanan} - ${esc(Q.pola(o.id_pola)?.nama_pola || o.jenis_pesanan)}</option>`).join(''));
 
-    tbody.innerHTML = items.map((k) => {
-      const p = Q.pesanan(k.id_pesanan);
-      const pola = p ? Q.pola(p.id_pola) : null;
-      const meta = QC_META[k.status] || QC_META['Need Rework'];
-      const unit = qcUnit(k);
-      const isNeedRework = k.status === 'Need Rework';
+    const activeUid = Auth.getUser()?.id_user;
+    const userOpts = qcUsers.map((u) => `<option value="${u.id_user}" ${Number(activeUid) === Number(u.id_user) ? 'selected' : ''}>${esc(u.nama_user)} (${esc(u.role)} - @ ${esc(u.username)})</option>`).join('');
+    syncSelectOptions($('#sel-user-qc'), userOpts);
+    syncSelectOptions($('#edit-qc-user'), qcUsers.map((u) => `<option value="${u.id_user}">${esc(u.nama_user)} (${esc(u.role)})</option>`).join(''));
 
+    syncQcOrderInfo();
+
+    const records = [...DB.all('QC')].sort((a, b) => String(b.tgl_pemeriksaan || '').localeCompare(String(a.tgl_pemeriksaan || '')) || b.id_qc - a.id_qc);
+    const tbody = $('#qc-history-tbody');
+    if (records.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" class="py-6 text-center text-slate-400">Belum ada data inspeksi QC.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = records.map((qc) => {
+      const ord = Q.pesanan(qc.id_pesanan);
+      const pola = ord ? Q.pola(ord.id_pola) : null;
+      const usr = Q.user(qc.id_user_qc);
+      const isAbadi = Q.isProdukAbadi(ord);
+      const stCls = qc.status_qc === 'Lolos QC' ? 'bg-emerald-100 text-emerald-800' : (qc.status_qc === 'Need Rework' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800');
       return `
-        <tr class="hover:bg-slate-50/70 transition-colors">
-          <td class="pl-5 py-3">
-            <span class="font-mono font-bold text-slate-800">#${k.id_qc}</span>
-            <span class="block text-[11px] text-slate-400 font-mono">${fmtDate(k.tgl_temuan)}</span>
+        <tr class="hover:bg-slate-50">
+          <td class="py-3 font-mono font-semibold text-indigo-600">#${qc.id_qc}</td>
+          <td class="py-3">
+            <span class="font-mono text-slate-700 block">${fmtDateTimeDmy(qc.tgl_pemeriksaan)}</span>
+            <span class="text-[10px] text-slate-500 font-semibold">Oleh: ${esc(usr?.nama_user || `User #${qc.id_user_qc}`)}</span>
           </td>
           <td class="py-3">
-            <span class="font-medium text-slate-900 cursor-pointer hover:text-indigo-600" data-action="open-order" data-id="${k.id_pesanan}">#${k.id_pesanan} · ${esc(pola?.nama_pola || '-')}</span>
-            <span class="block text-[11px] text-slate-500 truncate max-w-xs">${esc(k.catatan)}</span>
+            <span class="font-semibold text-slate-800">Pesanan #${qc.id_pesanan}</span>
+            <span class="text-[10px] text-slate-400 block">${esc(pola?.nama_pola || '-')}</span>
           </td>
           <td class="py-3">
-            <span class="badge ${k.jenis_cacat === 'Cacat Potong' ? 'bg-rose-50 text-rose-700 ring-rose-200' : k.jenis_cacat === 'Cacat Jahit' ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-indigo-50 text-indigo-700 ring-indigo-200'} font-semibold">${esc(k.jenis_cacat)}</span>
+            <span class="px-2 py-0.5 rounded font-mono font-semibold text-[10px] ${qc.tahap_qc === 'Jahit Akhir' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-700'}">${esc(qc.tahap_qc)}</span>
+            ${isAbadi && qc.tahap_qc === 'Jahit Akhir' && qc.jumlah_lolos > 0 ? `<span class="block text-[10px] text-emerald-600 font-semibold mt-0.5">+${qc.jumlah_lolos} Pcs ke Stok Jadi</span>` : ''}
           </td>
-          <td class="py-3 font-mono font-bold text-slate-900">${k.jumlah_pcs} ${unit}</td>
+          <td class="py-3 font-mono">
+            <span class="text-slate-600">${qc.jumlah_diperiksa}</span> /
+            <span class="text-emerald-600 font-bold">${qc.jumlah_lolos}</span> /
+            <span class="text-rose-600 font-bold">${qc.jumlah_cacat}</span>
+          </td>
           <td class="py-3">
-            <span class="text-xs text-slate-700">${esc(k.pic_rework || '-')}</span>
-            ${k.tgl_selesai_perbaikan ? `<span class="block text-[10px] text-emerald-600 font-mono">Selesai: ${fmtDate(k.tgl_selesai_perbaikan)}</span>` : ''}
+            <span class="font-semibold text-slate-700">${esc(qc.jenis_cacat)}</span>
+            ${qc.catatan_qc ? `<span class="block text-[10px] text-slate-500 mt-0.5">${esc(qc.catatan_qc)}</span>` : ''}
           </td>
-          <td class="py-3">
-            <span class="badge ${meta.badge} font-bold">${esc(k.status)}</span>
+          <td class="py-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${stCls}">${esc(qc.status_qc)}</span></td>
+          <td class="py-3 font-mono text-[11px]">
+            <div class="text-slate-500">Target: ${fmtDateDmy(qc.tgl_target_perbaikan)}</div>
+            ${qc.tgl_selesai_perbaikan ? `<div class="text-emerald-700 font-bold mt-0.5">Selesai: ${fmtDateTimeDmy(qc.tgl_selesai_perbaikan)}</div>` : ''}
           </td>
-          <td class="pr-5 py-3 text-right">
-            ${isNeedRework ? `
-              <button type="button" data-action="resolve-qc" data-id="${k.id_qc}" class="btn btn-outline h-7 px-2.5 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50" title="Tandai Rework Selesai">
-                <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-600"></i>Selesaikan
-              </button>` : `
-              <span class="text-[11px] text-slate-400 font-mono">✓ Closed</span>`}
+          <td class="py-3 text-right">
+            <div class="inline-flex items-center justify-end gap-1.5">
+              ${qc.status_qc === 'Need Rework' ? `<button type="button" data-action="complete-rework" data-id="${qc.id_qc}" class="px-2.5 py-1.5 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold shadow-sm">Selesaikan Rework</button>` : ''}
+              <button type="button" data-action="edit-qc" data-id="${qc.id_qc}" class="px-2.5 py-1.5 text-[11px] bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg font-semibold inline-flex items-center gap-1">
+                <i data-lucide="edit-3" class="w-3 h-3"></i> Edit
+              </button>
+              <button type="button" data-action="delete-qc" data-id="${qc.id_qc}" class="px-2.5 py-1.5 text-[11px] bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 rounded-lg font-semibold inline-flex items-center gap-1">
+                <i data-lucide="trash-2" class="w-3 h-3"></i> Hapus
+              </button>
+            </div>
           </td>
         </tr>`;
-    }).join('') || '<tr><td colspan="7" class="text-center py-6 text-slate-400">Tidak ada data inspeksi QC yang sesuai filter.</td></tr>';
-
-    refreshIcons();
-  }
-
-  function submitQc() {
-    const idPesanan = Number($('#sel-qc-pesanan')?.value);
-    const tglTemuan = $('#inp-tgl-temuan')?.value || APP_TODAY;
-    const idUserQc = Number($('#sel-user-qc')?.value || 3);
-    const jenisCacat = state.qc.selectedDefectCat || $('#sel-jenis-cacat')?.value || 'Cacat Potong';
-    const jumlahPcs = Number($('#inp-jumlah-cacat')?.value) || 0;
-    const idRoll = $('#sel-qc-roll')?.value ? Number($('#sel-qc-roll').value) : null;
-    const catatan = $('#inp-catatan-qc')?.value.trim();
-    const decision = state.qc.selectedDecision || 'Need Rework';
-    const tglSelesai = $('#inp-tgl-selesai-qc')?.value || addDays(APP_TODAY, 1);
-    const picRework = $('#sel-pic-rework')?.value || 'Tim Potong A (Budi Santoso)';
-
-    if (!idPesanan) { showToast('Pilih pesanan target inspeksi.', { type: 'error' }); return; }
-    if (jumlahPcs <= 0) { showToast('Jumlah terkena cacat harus lebih dari 0.', { type: 'error' }); $('#inp-jumlah-cacat')?.focus(); return; }
-    if (!catatan) { showToast('Catatan detail temuan kerusakan wajib diisi.', { type: 'error' }); $('#inp-catatan-qc')?.focus(); return; }
-
-    const newQc = BongDB.insert('Kerusakan', {
-      id_pesanan: idPesanan,
-      id_user_qc: idUserQc,
-      jenis_cacat: jenisCacat,
-      jumlah_pcs: jumlahPcs,
-      catatan: catatan + (idRoll ? ` [Roll ID: #${idRoll}]` : ''),
-      tgl_temuan: tglTemuan,
-      status: decision === 'Finished' ? 'Rework Selesai' : decision,
-      tgl_selesai_perbaikan: (decision === 'Finished' || decision === 'Rework Selesai') ? tglSelesai : null,
-      pic_rework: picRework,
-    });
-
-    if (decision === 'Need Rework') {
-      BongDB.update('Pesanan', idPesanan, {
-        status_pesanan: 'DALAM QC',
-        progress_pct: 85,
-      });
-    }
-
-    if (jenisCacat === 'Cacat Bahan' && idRoll) {
-      BongDB.update('Detail_Roll_Bahan', idRoll, {
-        status_roll: 'Retur',
-        rak_alokasi: 'Karantina BS',
-      });
-    }
-
-    showToast(`Temuan QC <b>#${newQc.id_qc}</b> (${esc(jenisCacat)}) berhasil dicatat dengan keputusan <b>${esc(newQc.status)}</b>. Disposisi PIC: <b>${esc(picRework)}</b>.`, { title: 'Inspeksi QC Tersimpan' });
-
-    resetQcForm();
-    renderAll();
-  }
-
-  function approveQcPass() {
-    const idPesanan = Number($('#sel-qc-pesanan')?.value);
-    if (!idPesanan) { showToast('Pilih pesanan target terlebih dahulu.', { type: 'error' }); return; }
-
-    const p = Q.pesanan(idPesanan);
-    const pola = p ? Q.pola(p.id_pola) : null;
-
-    BongDB.update('Pesanan', idPesanan, {
-      status_pesanan: 'SELESAI',
-      progress_pct: 100,
-    });
-
-    showToast(`QC Passed: Pesanan <b>#${idPesanan}</b> (${esc(pola?.nama_pola || '')}) dinyatakan <b>Lolos QC (Tanpa Cacat)</b> dan berstatus <b>SELESAI (100%)</b>.`, { title: 'Pesanan Selesai Produksi' });
-
-    renderAll();
-  }
-
-  function resolveQc(idQc) {
-    const qc = BongDB.find('Kerusakan', Number(idQc));
-    if (!qc) return;
-
-    BongDB.update('Kerusakan', Number(idQc), {
-      status: 'Rework Selesai',
-      tgl_selesai_perbaikan: APP_TODAY,
-    });
-
-    showToast(`Rework untuk temuan QC <b>#${idQc}</b> telah diselesaikan dan diverifikasi. Pending counter berkurang.`, { title: 'Rework Selesai' });
-    renderAll();
-  }
-
-  function resetQcForm() {
-    state.qc.selectedDefectCat = 'Cacat Potong';
-    state.qc.selectedDecision = 'Need Rework';
-    if ($('#inp-jumlah-cacat')) $('#inp-jumlah-cacat').value = '12';
-    if ($('#inp-catatan-qc')) $('#inp-catatan-qc').value = 'Terjadi pergeseran pola kain pada gelaran layer 4 saat mesin potong berjalan. Membutuhkan pemotongan ulang lembar kain komponen lengan.';
-    if ($('#inp-tgl-selesai-qc')) $('#inp-tgl-selesai-qc').value = addDays(APP_TODAY, 1);
-    renderQcScreen();
+    }).join('');
   }
 
   /* --------------------------------------------------------------------------
-   * 9E. STEP 6: SCREEN 6 (LAPORAN EKSEKUTIF) LOGIC
+   * SCREEN 6: GUDANG & STOK BARANG JADI
    * ------------------------------------------------------------------------ */
-  function renderLaporanScreen() {
-    const hostKpis = $('#laporan-kpis-grid');
-    if (!hostKpis) return;
+  function populateModalSpecsForPola(selectEl, idPola, selectedSpecId = null) {
+    if (!selectEl) return;
+    const specs = Q.specsOfPola(idPola);
+    selectEl.innerHTML = specs.map((s) => {
+      const sel = Number(selectedSpecId) === Number(s.id_spesifikasi) ? 'selected' : '';
+      return `<option value="${s.id_spesifikasi}" ${sel}>Ukuran ${esc(s.nama_ukuran)} (#${s.id_spesifikasi})</option>`;
+    }).join('');
+  }
 
-    // 1. Populate filter controls if empty
-    const inpStart = $('#inp-lap-start');
-    const inpEnd = $('#inp-lap-end');
-    if (inpStart && !inpStart.value) inpStart.value = state.laporan.startDate;
-    if (inpEnd && !inpEnd.value) inpEnd.value = state.laporan.endDate;
-
-    const selJenis = $('#sel-lap-jenis');
-    if (selJenis && selJenis.value !== state.laporan.jenis) selJenis.value = state.laporan.jenis;
-    const selSumber = $('#sel-lap-sumber');
-    if (selSumber && selSumber.value !== state.laporan.sumber) selSumber.value = state.laporan.sumber;
-    const selStatus = $('#sel-lap-status');
-    if (selStatus && selStatus.value !== state.laporan.status) selStatus.value = state.laporan.status;
-
-    // 2. Filter dataset
-    const start = state.laporan.startDate;
-    const end = state.laporan.endDate;
-    const sumberFilter = state.laporan.sumber;
-    const statusFilter = state.laporan.status;
-
-    const filteredOrders = BongDB.data.Pesanan.filter((p) => {
-      const tgl = p.tgl_order || APP_TODAY;
-      if (tgl < start || tgl > end) return false;
-      if (sumberFilter !== 'ALL' && String(p.id_sumber) !== String(sumberFilter)) return false;
-      if (statusFilter !== 'ALL' && p.status_pesanan !== statusFilter) return false;
-      return true;
-    });
-
-    // 3. Compute Aggregates
-    const orderIds = new Set(filteredOrders.map((p) => p.id_pesanan));
-    const seriList = BongDB.where('Pemotongan_Seri', (s) => orderIds.has(s.id_pesanan));
-    const seriIds = new Set(seriList.map((s) => s.id_potong));
-    const pwList = BongDB.where('Detail_Pemotongan_Warna', (w) => seriIds.has(w.id_potong));
-    const pwIds = new Set(pwList.map((w) => w.id_potong_warna));
-    const gelaranList = BongDB.where('Detail_Gelaran_Kain', (g) => pwIds.has(g.id_potong_warna));
-    const usedRollIds = new Set(gelaranList.map((g) => g.id_roll));
-    const usedRolls = [...usedRollIds].map((id) => Q.roll(id)).filter(Boolean);
-
-    const totalKgUsed = round1(sum(usedRolls, (r) => r.berat_kg));
-    const totalYieldPcs = sum(seriList, (s) => s.total_lembar_hasil);
-    const avgYield = usedRollIds.size ? Math.round(totalYieldPcs / usedRollIds.size) : 0;
-    const totalGelaran = gelaranList.length;
-
-    const qcList = BongDB.where('Kerusakan', (k) => orderIds.has(k.id_pesanan));
-    const totalDefectPcs = sum(qcList, (k) => k.jumlah_pcs);
-    const rejectRate = totalYieldPcs ? ((totalDefectPcs / totalYieldPcs) * 100).toFixed(1) : '0.0';
-
-    const potongDefects = sum(qcList.filter((k) => k.jenis_cacat === 'Cacat Potong'), (k) => k.jumlah_pcs);
-    const jahitDefects = sum(qcList.filter((k) => k.jenis_cacat === 'Cacat Jahit'), (k) => k.jumlah_pcs);
-    const bahanDefects = sum(qcList.filter((k) => k.jenis_cacat === 'Cacat Bahan'), (k) => k.jumlah_pcs);
-
-    const completedCount = filteredOrders.filter((p) => p.status_pesanan === 'SELESAI').length;
-    const activeCount = filteredOrders.length - completedCount;
-    const tersediaCount = BongDB.where('Detail_Roll_Bahan', (r) => r.status_roll === 'Tersedia').length;
-
-    // 4. Render 4 Executive KPI Cards
-    hostKpis.innerHTML = `
-      <article class="p-4 rounded-xl bg-slate-50 border border-slate-200">
-        <div class="flex items-start justify-between">
-          <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Total Roll Kain Dikonsumsi</p>
-          <span class="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 grid place-items-center"><i data-lucide="package" class="w-4 h-4"></i></span>
-        </div>
-        <p class="mt-2 text-2xl font-bold font-mono text-slate-900">${usedRollIds.size} <span class="text-sm font-sans font-medium text-slate-500">Roll</span></p>
-        <p class="mt-1 text-[11px] text-slate-500 truncate">Total ${totalKgUsed} kg · ${tersediaCount} Roll Tersedia di Gudang</p>
-      </article>
-
-      <article class="p-4 rounded-xl bg-slate-50 border border-slate-200">
-        <div class="flex items-start justify-between">
-          <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Total Lembar Potong Hasil</p>
-          <span class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 grid place-items-center"><i data-lucide="scissors" class="w-4 h-4"></i></span>
-        </div>
-        <p class="mt-2 text-2xl font-bold font-mono text-emerald-700">${fmtNum(totalYieldPcs)} <span class="text-sm font-sans font-medium text-slate-500">Pcs</span></p>
-        <p class="mt-1 text-[11px] text-slate-500 truncate">Rata-rata Yield: ${avgYield} Pcs/Roll (${totalGelaran} Gelaran)</p>
-      </article>
-
-      <article class="p-4 rounded-xl bg-slate-50 border border-slate-200">
-        <div class="flex items-start justify-between">
-          <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Tingkat Cacat QC (Reject Rate)</p>
-          <span class="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 grid place-items-center"><i data-lucide="shield-alert" class="w-4 h-4"></i></span>
-        </div>
-        <p class="mt-2 text-2xl font-bold font-mono text-rose-600">${rejectRate}%</p>
-        <p class="mt-1 text-[11px] text-slate-500 truncate">${totalDefectPcs} Pcs Terdampak (${potongDefects} Potong · ${jahitDefects} Jahit · ${bahanDefects} Bahan)</p>
-      </article>
-
-      <article class="p-4 rounded-xl bg-slate-50 border border-slate-200">
-        <div class="flex items-start justify-between">
-          <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Total Pesanan Selesai &amp; Ketepatan</p>
-          <span class="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 grid place-items-center"><i data-lucide="check-circle-2" class="w-4 h-4"></i></span>
-        </div>
-        <p class="mt-2 text-2xl font-bold font-mono text-indigo-700">${completedCount} <span class="text-sm font-sans font-medium text-slate-500">Pesanan</span></p>
-        <p class="mt-1 text-[11px] text-slate-500 truncate">100% On-Time Delivery · ${activeCount} Pesanan Aktif Berjalan</p>
-      </article>`;
-
-    // 5. Render Detail Table
-    const tbody = $('#tbl-laporan-body');
-    if (tbody) {
-      tbody.innerHTML = filteredOrders.map((p) => {
-        const pola = Q.pola(p.id_pola);
-        const sumber = Q.sumber(p.id_sumber);
-        const orderSeri = BongDB.where('Pemotongan_Seri', (s) => s.id_pesanan === p.id_pesanan);
-        const orderGel = Q.gelaranOfPotong(orderSeri);
-        const orderRolls = [...new Set(orderGel.map((g) => g.id_roll))];
-        const yieldPcs = sum(orderSeri, (s) => s.total_lembar_hasil);
-        const orderQc = BongDB.where('Kerusakan', (k) => k.id_pesanan === p.id_pesanan);
-        const meta = STATUS_META[p.status_pesanan] || STATUS_META['ANTREAN'];
-
-        return `
-          <tr class="hover:bg-slate-50/70 transition-colors">
-            <td class="pl-5 py-3">
-              <button type="button" data-action="open-order" data-id="${p.id_pesanan}" class="font-mono font-bold text-indigo-600 hover:underline">#${p.id_pesanan}</button>
-              <span class="block text-[10px] text-slate-400 font-mono">${fmtDate(p.tgl_order)}</span>
-            </td>
-            <td class="py-3">
-              <span class="font-semibold text-slate-900">${esc(pola?.nama_pola || '-')}</span>
-              <span class="block text-[11px] text-slate-400 font-mono">${esc(pola?.kode_pola || '')} · Pola #${p.id_pola}</span>
-            </td>
-            <td class="py-3">
-              <span class="badge bg-slate-100 text-slate-700">${esc(sumber?.nama_sumber || '-')}</span>
-              ${p.nama_mitra ? `<span class="block text-[11px] text-slate-500 mt-0.5 truncate max-w-[140px]">${esc(p.nama_mitra)}</span>` : ''}
-            </td>
-            <td class="py-3">
-              <div class="flex flex-wrap gap-1 max-w-[180px]">
-                ${orderRolls.map((rid) => `<button type="button" data-action="open-roll" data-id="${rid}" class="badge font-mono bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px]">#${rid}</button>`).join('') || '<span class="text-slate-400 text-xs">Belum Gelar</span>'}
-              </div>
-            </td>
-            <td class="py-3 text-right">
-              <span class="font-mono font-bold text-slate-900">${fmtNum(yieldPcs)} Pcs</span>
-              <span class="block text-[10px] text-slate-400 font-mono">${orderSeri.length} seri potong</span>
-            </td>
-            <td class="py-3">
-              ${orderQc.length ? orderQc.map((k) => `
-                <span class="badge ${k.status === 'Need Rework' ? 'bg-rose-50 text-rose-700 ring-rose-200' : 'bg-emerald-50 text-emerald-700 ring-emerald-200'} font-mono text-[10px] mb-0.5 mr-1" title="${esc(k.catatan)}">QC #${k.id_qc}: ${k.jumlah_pcs} ${qcUnit(k)} (${esc(k.jenis_cacat.replace('Cacat ', ''))})</span>`).join('') : '<span class="text-slate-400 text-xs">— (0 Pcs)</span>'}
-            </td>
-            <td class="pr-5 py-3 text-right">
-              <span class="badge ${meta.badge} font-bold">${p.status_pesanan}</span>
-              <span class="block text-[10px] text-slate-400 font-mono mt-0.5">${p.progress_pct}% Selesai</span>
-            </td>
-          </tr>`;
-      }).join('') || '<tr><td colspan="7" class="text-center py-8 text-slate-400">Tidak ada pesanan dalam rentang filter laporan.</td></tr>';
+  function toggleMitraFieldRequirement() {
+    const alasan = $('#adj-alasan')?.value || '';
+    const mitraInp = $('#adj-nama-mitra');
+    const mitraLabel = $('#adj-mitra-label');
+    if (!mitraInp || !mitraLabel) return;
+    if (alasan.toLowerCase().includes('mitra')) {
+      mitraInp.required = true;
+      mitraInp.placeholder = 'Jupiter';
+      mitraInp.className = 'w-full text-xs p-2.5 border border-indigo-200 bg-indigo-50/30 rounded-lg focus:ring-2 focus:ring-indigo-500';
+      mitraLabel.innerHTML = '7. Nama Mitra Pengambil Barang (<code class="font-mono">nama_mitra</code>) <span class="text-rose-500">*</span>';
+    } else {
+      mitraInp.required = false;
+      mitraInp.placeholder = 'Pembeli Retail (Opsional)';
+      mitraInp.className = 'w-full text-xs p-2.5 border border-slate-200 bg-white rounded-lg focus:ring-2 focus:ring-indigo-500';
+      mitraLabel.innerHTML = '7. Nama Mitra / Penerima (<code class="font-mono">nama_mitra</code>) <span class="text-slate-400 font-normal">(Opsional)</span>';
     }
+  }
 
-    // 6. Left Breakdown: Rekapitulasi Klasifikasi Cacat QC
-    const hostCacat = $('#laporan-cacat-breakdown');
-    if (hostCacat) {
-      const potongCount = qcList.filter((k) => k.jenis_cacat === 'Cacat Potong').length;
-      const jahitCount = qcList.filter((k) => k.jenis_cacat === 'Cacat Jahit').length;
-      const bahanCount = qcList.filter((k) => k.jenis_cacat === 'Cacat Bahan').length;
-      const totalCount = qcList.length || 1;
+  function renderGudang() {
+    refreshSupplierSelects();
+    const cfg = DB.config().thresholds;
+    const minJadi = Number(cfg.min_stok_jadi ?? 20);
+    const minAcc = Number(cfg.min_stok_aksesoris ?? 500);
+    $('#inp-threshold-jadi').value = minJadi;
+    $('#inp-threshold-aksesoris').value = minAcc;
 
-      hostCacat.innerHTML = `
-        <div class="space-y-3">
-          <div>
-            <div class="flex items-center justify-between text-xs mb-1">
-              <span class="font-semibold text-slate-800">Cacat Potong (Stasiun Cutting Internal)</span>
-              <span class="font-mono text-slate-600"><b>${potongDefects} Pcs</b> (${potongCount} Kasus · ${Math.round(potongCount / totalCount * 100)}%)</span>
-            </div>
-            <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-              <div class="h-full bg-rose-500 rounded-full" style="width:${(potongCount / totalCount * 100).toFixed(1)}%"></div>
-            </div>
+    const stok = [...DB.all('Stok_Barang_Jadi')].sort((a, b) => String(b.tgl_update_terakhir || '').localeCompare(String(a.tgl_update_terakhir || '')));
+    const aksesoris = DB.all('Aksesoris');
+    const polas = DB.all('Pola');
+
+    const lowStokJadi = stok.filter((s) => Number(s.jumlah_stok_pcs) <= minJadi);
+    const lowAcc = aksesoris.filter((a) => Number(a.stok) < minAcc);
+    const banner = $('#gudang-low-stock-banner');
+    if (lowStokJadi.length > 0 || lowAcc.length > 0) {
+      banner.innerHTML = `
+        <div class="p-4 rounded-xl bg-rose-50 border-2 border-rose-200 flex items-start gap-3 shadow-sm">
+          <div class="w-8 h-8 rounded-lg bg-rose-600 text-white flex items-center justify-center shrink-0 mt-0.5"><i data-lucide="alert-triangle" class="w-4 h-4"></i></div>
+          <div class="text-xs text-rose-900 space-y-1 flex-1">
+            <div class="font-bold text-sm text-rose-800">Peringatan Stok Rendah / Habis (Perlu Restock Segera!)</div>
+            ${lowStokJadi.length > 0 ? `<div><span class="font-semibold">Stok Barang Jadi Menipis / Habis (&le; ${fmtNum(minJadi)} Pcs):</span> ${lowStokJadi.map((ls) => `<span class="inline-flex items-center px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-mono font-bold text-[11px] mr-1 mt-1 border border-rose-300">${esc(Q.pola(ls.id_pola)?.nama_pola || 'Pola')} (${esc(Q.spec(ls.id_spesifikasi)?.nama_ukuran || '-')} · ${esc(ls.nama_warna)}): ${ls.jumlah_stok_pcs} Pcs</span>`).join('')}</div>` : ''}
+            ${lowAcc.length > 0 ? `<div><span class="font-semibold">Stok Aksesoris Menipis / Habis (&lt; ${fmtNum(minAcc)} Unit):</span> ${lowAcc.map((la) => `<span class="inline-flex items-center px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-mono font-bold text-[11px] mr-1 mt-1 border border-rose-300">${esc(la.nama_aksesoris)}: ${fmtNum(la.stok)} ${esc(la.satuan)}</span>`).join('')}</div>` : ''}
           </div>
-          <div>
-            <div class="flex items-center justify-between text-xs mb-1">
-              <span class="font-semibold text-slate-800">Cacat Jahit (Penjahit CMT Eksternal)</span>
-              <span class="font-mono text-slate-600"><b>${jahitDefects} Pcs</b> (${jahitCount} Kasus · ${Math.round(jahitCount / totalCount * 100)}%)</span>
-            </div>
-            <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-              <div class="h-full bg-amber-500 rounded-full" style="width:${(jahitCount / totalCount * 100).toFixed(1)}%"></div>
-            </div>
-          </div>
-          <div>
-            <div class="flex items-center justify-between text-xs mb-1">
-              <span class="font-semibold text-slate-800">Cacat Bahan (Supplier Fabric &amp; Lot BS)</span>
-              <span class="font-mono text-slate-600"><b>${bahanDefects} Roll</b> (${bahanCount} Kasus · ${Math.round(bahanCount / totalCount * 100)}%)</span>
-            </div>
-            <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-              <div class="h-full bg-indigo-500 rounded-full" style="width:${(bahanCount / totalCount * 100).toFixed(1)}%"></div>
-            </div>
-          </div>
-        </div>
-        <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-          <span>Total Kejadian Cacat: <b class="font-mono text-slate-800">${qcList.length}</b></span>
-          <span>Total Kerugian Garmen: <b class="font-mono text-rose-600">${totalDefectPcs} Pcs</b></span>
+        </div>`;
+    } else {
+      banner.innerHTML = `
+        <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex flex-wrap items-center justify-between gap-2 text-xs text-emerald-800">
+          <div class="flex items-center gap-2 font-semibold"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>Seluruh Stok Barang Jadi &amp; Inventori Aksesoris berada di atas batas aman minimum.</span></div>
+          <span class="text-[11px] font-mono text-emerald-700">Indikator Merah aktif otomatis saat stok &le; ${fmtNum(minJadi)} Pcs (Barang Jadi) atau &lt; ${fmtNum(minAcc)} Unit (Aksesoris)</span>
         </div>`;
     }
 
-    // 7. Right Breakdown: Ringkasan Stok Roll Kain per Kategori Status
-    const hostStok = $('#laporan-stok-breakdown');
-    if (hostStok) {
-      const allRolls = BongDB.data.Detail_Roll_Bahan;
-      const statuses = ['Tersedia', 'Dipotong', 'Habis', 'Retur'];
-      const stData = statuses.map((st) => {
-        const group = allRolls.filter((r) => r.status_roll === st);
-        return {
-          status: st,
-          count: group.length,
-          kg: round1(sum(group, (r) => r.berat_kg)),
-          meta: ROLL_META[st] || ROLL_META['Tersedia'],
-        };
-      });
+    const stokBody = $('#gudang-stok-tbody');
+    stokBody.innerHTML = stok.length ? stok.map((st) => {
+      const pola = Q.pola(st.id_pola);
+      const spec = Q.spec(st.id_spesifikasi);
+      const qty = Number(st.jumlah_stok_pcs);
+      const isZero = qty <= 0;
+      const isLow = qty > 0 && qty <= minJadi;
+      return `
+        <tr class="${(isZero || isLow) ? 'bg-rose-50/70 hover:bg-rose-100/60' : 'hover:bg-slate-50'} transition-colors">
+          <td class="py-3 font-medium text-slate-800">${esc(pola?.nama_pola || '-')}</td>
+          <td class="py-3 font-mono font-semibold text-indigo-600">${esc(spec?.nama_ukuran || '-')}</td>
+          <td class="py-3">${esc(st.nama_warna)}</td>
+          <td class="py-3 font-mono font-bold ${(isZero || isLow) ? 'text-rose-600' : 'text-emerald-600'}">
+            ${fmtNum(qty)} pcs
+            ${isZero ? '<span class="ml-1 px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9px] font-sans uppercase">HABIS (0)</span>' : (isLow ? '<span class="ml-1 px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-300 text-[9px] font-sans uppercase">RENDAH</span>' : '')}
+          </td>
+          <td class="py-3 font-mono text-[10px] text-slate-400">${fmtDateTimeDmy(st.tgl_update_terakhir)}</td>
+          <td class="py-3 text-right">
+            <div class="inline-flex items-center justify-end gap-1">
+              <button type="button" data-action="edit-stok-jadi" data-id="${st.id_stok}" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-semibold text-[11px] inline-flex items-center gap-1"><i data-lucide="edit-3" class="w-3 h-3"></i> Edit</button>
+              <button type="button" data-action="outbound-stok-jadi" data-id="${st.id_stok}" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-md font-semibold text-[11px] inline-flex items-center gap-1"><i data-lucide="log-out" class="w-3 h-3"></i> Keluar</button>
+              <button type="button" data-action="delete-stok-jadi" data-id="${st.id_stok}" class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-md font-semibold text-[11px] inline-flex items-center gap-1"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('') : '<tr><td colspan="6" class="py-6 text-center text-slate-400">Belum ada stok barang jadi terdaftar.</td></tr>';
 
-      hostStok.innerHTML = `
-        <div class="grid grid-cols-2 gap-3">
-          ${stData.map((d) => `
-            <div class="p-3 rounded-lg border border-slate-200 bg-slate-50 flex flex-col justify-between">
-              <div class="flex items-center justify-between">
-                <span class="badge ${d.meta.badge} font-bold">• ${d.status}</span>
-                <span class="font-mono text-xs text-slate-500">${d.kg} kg</span>
-              </div>
-              <p class="mt-2 text-xl font-bold font-mono text-slate-900">${d.count} <span class="text-xs font-sans font-medium text-slate-400">Roll</span></p>
-            </div>`).join('')}
-        </div>
-        <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-          <span>Total Seluruh Roll: <b class="font-mono text-slate-800">${allRolls.length} Roll</b></span>
-          <span>Total Berat Gudang: <b class="font-mono text-slate-800">${round1(sum(allRolls, (r) => r.berat_kg))} kg</b></span>
+    const accBody = $('#gudang-aksesoris-tbody');
+    accBody.innerHTML = aksesoris.length ? aksesoris.map((acc) => {
+      const sup = Q.supplier(acc.id_supplier);
+      const qty = Number(acc.stok);
+      const accZero = qty <= 0;
+      const accLow = qty > 0 && qty < minAcc;
+      return `
+        <tr class="${(accZero || accLow) ? 'bg-rose-50/70 hover:bg-rose-100/60' : 'hover:bg-slate-50'} transition-colors">
+          <td class="py-3 font-medium text-slate-800">${esc(acc.nama_aksesoris)}</td>
+          <td class="py-3 font-mono text-slate-500">${esc(acc.ukuran || '-')}</td>
+          <td class="py-3 font-mono font-bold ${(accZero || accLow) ? 'text-rose-600' : 'text-slate-800'}">
+            ${fmtNum(qty)} <span class="text-[10px] text-slate-400 font-normal">${esc(acc.satuan)}</span>
+            ${accZero ? '<span class="block text-[9px] font-sans font-bold text-rose-600 uppercase">STOK HABIS (0)</span>' : (accLow ? `<span class="block text-[9px] font-sans font-bold text-rose-600 uppercase">STOK RENDAH (&lt;${fmtNum(minAcc)})</span>` : '')}
+          </td>
+          <td class="py-3 text-slate-500 text-[11px]">${esc(sup?.nama_supplier || '-')}</td>
+          <td class="py-3 text-center">
+            <div class="inline-flex items-center gap-1">
+              <button type="button" data-action="quick-acc" data-id="${acc.id_aksesoris}" data-delta="-500" class="px-1.5 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-mono font-semibold text-[10px] rounded border border-rose-200">-500</button>
+              <button type="button" data-action="quick-acc" data-id="${acc.id_aksesoris}" data-delta="-100" class="px-1.5 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-mono font-semibold text-[10px] rounded border border-rose-200">-100</button>
+              <button type="button" data-action="quick-acc" data-id="${acc.id_aksesoris}" data-delta="100" class="px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-mono font-semibold text-[10px] rounded border border-indigo-200">+100</button>
+              <button type="button" data-action="quick-acc" data-id="${acc.id_aksesoris}" data-delta="500" class="px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-mono font-semibold text-[10px] rounded border border-indigo-200">+500</button>
+            </div>
+          </td>
+          <td class="py-3 text-right">
+            <div class="inline-flex items-center gap-1">
+              <button type="button" data-action="edit-acc" data-id="${acc.id_aksesoris}" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-semibold">Edit</button>
+              <button type="button" data-action="delete-acc" data-id="${acc.id_aksesoris}" class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-semibold">Hapus</button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('') : '<tr><td colspan="6" class="py-6 text-center text-slate-400">Belum ada data aksesoris.</td></tr>';
+
+    $('#gudang-pola-acc-grid').innerHTML = polas.length ? polas.map((pl) => {
+      const maps = Q.aksesorisOfPola(pl.id_pola);
+      return `
+        <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-mono text-xs font-bold text-indigo-600">${esc(pl.kode_pola)}</span>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-600 font-semibold">${maps.length} Komponen</span>
+            </div>
+            <h4 class="font-bold text-xs text-slate-900 mb-3">${esc(pl.nama_pola)}</h4>
+            <div class="space-y-1.5">
+              ${maps.length ? maps.map((dap) => `
+                <div class="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs">
+                  <div>
+                    <span class="font-semibold text-slate-800">${esc(dap.aksesoris?.nama_aksesoris || `Aksesoris #${dap.id_aksesoris}`)}</span>
+                    <span class="block text-[10px] font-mono text-indigo-600 font-bold">Kebutuhan: ${dap.jumlah_digunakan} ${esc(dap.aksesoris?.satuan || 'Pcs')} / 1 Pakaian</span>
+                  </div>
+                  <div class="inline-flex items-center gap-1">
+                    <button type="button" data-action="edit-pola-map" data-pola="${pl.id_pola}" data-acc="${dap.id_aksesoris}" data-qty="${dap.jumlah_digunakan}" class="text-slate-400 hover:text-indigo-600 p-1"><i data-lucide="edit-3" class="w-3.5 h-3.5"></i></button>
+                    <button type="button" data-action="delete-pola-map" data-pola="${pl.id_pola}" data-acc="${dap.id_aksesoris}" class="text-slate-400 hover:text-rose-600 p-1"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                  </div>
+                </div>`).join('') : '<p class="text-[11px] text-slate-400 italic py-2">Belum ada aksesoris terhubung ke pola ini.</p>'}
+            </div>
+          </div>
         </div>`;
-    }
+    }).join('') : '<p class="col-span-full text-center text-xs text-slate-400 py-4">Belum ada Master Pola terdaftar.</p>';
 
-    refreshIcons();
+    const riwayat = [...DB.all('Riwayat_Stok_Barang_Jadi')].sort((a, b) => String(b.tgl_transaksi || '').localeCompare(String(a.tgl_transaksi || '')) || b.id_riwayat_stok - a.id_riwayat_stok);
+    $('#gudang-riwayat-badge').textContent = `${riwayat.length} Transaksi Tercatat`;
+    $('#gudang-riwayat-tbody').innerHTML = riwayat.length ? riwayat.map((rw) => {
+      const pola = Q.pola(rw.id_pola);
+      const spec = Q.spec(rw.id_spesifikasi);
+      const usr = Q.user(rw.id_user);
+      const isKeluar = rw.jenis_transaksi === 'KELUAR';
+      return `
+        <tr class="hover:bg-slate-50 transition-colors">
+          <td class="py-3 font-mono text-[11px] text-slate-500 whitespace-nowrap">${fmtDateTimeDmy(rw.tgl_transaksi)}</td>
+          <td class="py-3">
+            <span class="font-semibold text-slate-800 block">${esc(pola?.nama_pola || `Pola #${rw.id_pola}`)}</span>
+            <span class="text-[11px] text-slate-500">Ukuran <strong class="font-mono text-indigo-600">${esc(spec?.nama_ukuran || '-')}</strong> &bull; ${esc(rw.nama_warna)}</span>
+          </td>
+          <td class="py-3 whitespace-nowrap">
+            ${isKeluar
+              ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 font-mono">-${rw.jumlah_pcs} pcs (KELUAR)</span>`
+              : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono">+${rw.jumlah_pcs} pcs (MASUK)</span>`}
+          </td>
+          <td class="py-3 font-mono text-[11px] text-slate-600 whitespace-nowrap">${rw.stok_sebelum} &rarr; <strong class="text-slate-900">${rw.stok_sesudah} pcs</strong></td>
+          <td class="py-3 text-slate-700 font-medium">${esc(rw.kategori_alasan)}</td>
+          <td class="py-3">
+            ${rw.nama_mitra ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100 font-semibold text-[11px]"><i data-lucide="building-2" class="w-3 h-3"></i>${esc(rw.nama_mitra)}</span>` : '<span class="text-slate-400 italic text-[11px]">- Non-Mitra / Internal -</span>'}
+          </td>
+          <td class="py-3 text-[11px] text-slate-500">
+            ${rw.keterangan ? `<span class="block text-slate-700">${esc(rw.keterangan)}</span>` : ''}
+            <span class="text-[10px] text-slate-400">Oleh: ${esc(usr?.nama_user || 'Petugas Gudang')}</span>
+          </td>
+          <td class="py-3 text-right whitespace-nowrap">
+            <button type="button" data-action="delete-riwayat-stok" data-id="${rw.id_riwayat_stok}" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-md text-[11px] font-semibold inline-flex items-center gap-1">
+              <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Hapus &amp; Reverse
+            </button>
+          </td>
+        </tr>`;
+    }).join('') : '<tr><td colspan="8" class="py-6 text-center text-slate-400">Belum ada riwayat transaksi keluar/masuk stok barang jadi yang tercatat.</td></tr>';
+
+    const polaOpts = polas.map((pl) => `<option value="${pl.id_pola}">${esc(pl.kode_pola)} - ${esc(pl.nama_pola)}</option>`).join('');
+    syncSelectOptions($('#adj-id-pola'), polaOpts);
+    syncSelectOptions($('#edit-stok-pola'), polaOpts);
+    syncSelectOptions($('#map-id-pola'), polaOpts);
+    syncSelectOptions($('#map-id-aksesoris'), aksesoris.map((a) => `<option value="${a.id_aksesoris}">${esc(a.nama_aksesoris)} (Stok: ${fmtNum(a.stok)} ${esc(a.satuan)})</option>`).join(''));
+
+    const mitras = Array.from(new Set([
+      ...DB.all('Pesanan').map((p) => p.nama_mitra).filter(Boolean),
+      ...riwayat.map((r) => r.nama_mitra).filter(Boolean),
+    ]));
+    $('#mitra-datalist').innerHTML = mitras.map((m) => `<option value="${esc(m)}"></option>`).join('');
   }
 
-  function applyLaporanFilter() {
-    state.laporan.jenis = $('#sel-lap-jenis')?.value || 'ALL';
-    state.laporan.startDate = $('#inp-lap-start')?.value || addDays(APP_TODAY, -30);
-    state.laporan.endDate = $('#inp-lap-end')?.value || APP_TODAY;
-    state.laporan.sumber = $('#sel-lap-sumber')?.value || 'ALL';
-    state.laporan.status = $('#sel-lap-status')?.value || 'ALL';
+  /* --------------------------------------------------------------------------
+   * SCREEN 7: LAPORAN EKSEKUTIF (5 Report Types + Kop Surat + .doc + .csv + PDF)
+   * ------------------------------------------------------------------------ */
+  function renderLaporan() {
+    const canEditKop = Auth.getEffectiveRole() === 'Admin';
+    const btnKop = $('#btn-edit-kop-surat');
+    if (btnKop) btnKop.style.display = canEditKop ? '' : 'none';
 
-    renderLaporanScreen();
-    showToast(`Filter laporan diterapkan: ${state.laporan.startDate} s/d ${state.laporan.endDate}.`, { type: 'info', title: 'Laporan Diperbarui' });
-  }
+    const sumberOpts = '<option value="">-- Semua Sumber Inisiasi --</option>' +
+      DB.all('Sumber_Inisiasi').map((s) => `<option value="${s.id_sumber}">${esc(s.nama_sumber)}</option>`).join('');
+    syncSelectOptions($('#lap-filter-sumber'), sumberOpts);
 
-  function resetLaporanFilter() {
-    state.laporan = {
-      jenis: 'ALL',
-      startDate: addDays(APP_TODAY, -30),
-      endDate: APP_TODAY,
-      sumber: 'ALL',
-      status: 'ALL',
+    $('#lap-filter-jenis').value = state.laporanFilters.jenis_laporan;
+    $('#lap-filter-sumber').value = state.laporanFilters.id_sumber || '';
+    $('#lap-filter-start').value = state.laporanFilters.start_date || '';
+    $('#lap-filter-end').value = state.laporanFilters.end_date || '';
+
+    const rep = Svc.buildReportData(state.laporanFilters);
+    state.lastReportData = rep;
+
+    const jenis = rep.filters.jenis_laporan;
+    const company = rep.companyProfile;
+    const meta = rep.meta;
+    const summary = rep.summary;
+    const sumStokMin = rep.thresholds.min_stok_jadi;
+    const sumAccMin = rep.thresholds.min_stok_aksesoris;
+
+    const titles = {
+      KONSOLIDASI: 'Laporan Rekapitulasi & Konsolidasi Produksi CMT (End-to-End)',
+      STOK: 'Laporan Posisi Stok Gudang Barang Jadi, Aksesoris & Roll Kain',
+      BAHAN_MASUK: 'Laporan Penerimaan Bahan Baku & Registrasi Roll Supplier',
+      MUTASI_KELUAR: 'Laporan Pengeluaran Barang Jadi (Outbound Mitra) & Riwayat Mutasi',
+      QC: 'Laporan Rekapitulasi Inspeksi Quality Control (QC) & Kerusakan',
     };
-    renderLaporanScreen();
-    showToast('Filter laporan telah direset ke nilai default (30 hari terakhir).', { type: 'info' });
-  }
+    const activeReportTitle = titles[jenis] || titles.KONSOLIDASI;
+    rep.activeReportTitle = activeReportTitle;
 
-  function printReport() {
-    window.print();
-  }
+    const startLbl = rep.filters.start_date ? fmtDateShortId(rep.filters.start_date) : null;
+    const endLbl = rep.filters.end_date ? fmtDateShortId(rep.filters.end_date) : null;
+    let periodeText = '';
+    if (startLbl && endLbl) periodeText = `${startLbl} s/d ${endLbl}`;
+    else if (startLbl) periodeText = `Mulai ${startLbl} s/d ${meta.printed_date_short}`;
+    else if (endLbl) periodeText = `Hingga ${endLbl}`;
+    else periodeText = jenis === 'STOK' ? `Posisi Stok Per ${meta.printed_date_short}` : `Semua Periode Operasional (s/d ${meta.printed_date_short})`;
+    rep.periodeText = periodeText;
 
-  /* --------------------------------------------------------------------------
-   * 10. NOTIFICATIONS & GLOBAL SEARCH
-   * ------------------------------------------------------------------------ */
-  function buildNotifications() {
-    const D = BongDB.data;
-    const items = [];
-    D.Kerusakan.filter((k) => k.status === 'Need Rework').sort((a, b) => b.id_qc - a.id_qc).forEach((k) => {
-      items.push({ icon: 'shield-alert', cls: 'bg-rose-50 text-rose-600', title: `Rework diperlukan · Pesanan #${k.id_pesanan}`, text: `${k.jenis_cacat} (${k.jumlah_pcs} ${qcUnit(k)}) — ${k.catatan}`, time: fmtDate(k.tgl_temuan), action: 'open-order', id: k.id_pesanan });
-    });
-    D.Pesanan.filter((p) => ACTIVE_STATUSES.includes(p.status_pesanan))
-      .map((p) => {
-        const dl = p.deadline || addDays(p.tgl_order || APP_TODAY, 14);
-        return { p, dl, sisa: diffDays(APP_TODAY, dl) };
-      })
-      .filter((x) => x.sisa >= 0 && x.sisa <= 5)
-      .sort((a, b) => a.sisa - b.sisa)
-      .forEach(({ p, dl, sisa }) => {
-        items.push({ icon: 'alarm-clock', cls: 'bg-amber-50 text-amber-600', title: `Deadline ${sisa} hari lagi · #${p.id_pesanan}`, text: `${Q.pola(p.id_pola)?.nama_pola || ''}${p.nama_mitra ? ' · ' + p.nama_mitra : ''} — status ${p.status_pesanan}`, time: fmtDate(dl), action: 'open-order', id: p.id_pesanan });
-      });
-    D.Penerimaan_Bahan.filter((p) => p.tgl_nota === APP_TODAY).forEach((p) => {
-      const rolls = sum(D.Detail_Bahan_Warna.filter((w) => w.id_penerimaan === p.id_penerimaan), (w) => w.total_roll);
-      items.push({ icon: 'package-check', cls: 'bg-emerald-50 text-emerald-600', title: `Bahan diterima · Nota #${p.no_nota}`, text: `${p.nama_kain} — ${rolls} roll dari ${Q.supplier(p.id_supplier)?.nama_supplier || '-'}`, time: fmtDate(p.tgl_nota), action: 'goto', target: 'penerimaan' });
-    });
-    return items;
-  }
-  function renderNotifications() {
-    const items = buildNotifications();
-    $('#notif-dot').classList.toggle('hidden', items.length <= state.notifSeen);
-    $('#notif-menu').innerHTML = `
-      <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-        <p class="text-sm font-semibold text-slate-900">Notifikasi <span class="ml-1 font-mono text-xs text-slate-400">${items.length}</span></p>
-        <span class="text-[11px] text-slate-400">${APP_TODAY_LABEL}</span>
+    // 3 KPI Summary Cards
+    let kpiHtml = '';
+    if (jenis === 'KONSOLIDASI') {
+      kpiHtml = `
+        <div class="kpi-summary-grid grid grid-cols-1 md:grid-cols-3 print:grid-cols-3 gap-4 print-avoid-break">
+          <div class="border border-slate-300 rounded-xl p-4 bg-white">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">TOTAL PESANAN PRODUKSI</p>
+            <p class="text-xl font-extrabold text-slate-900 mt-1">${fmtNum(summary.total_pesanan)} Pesanan</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">${summary.pesanan_selesai} Selesai &bull; ${summary.pesanan_proses} Dalam Proses</p>
+          </div>
+          <div class="border border-slate-300 rounded-xl p-4 bg-white">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">TOTAL HASIL POTONG &amp; KAIN</p>
+            <p class="text-xl font-extrabold text-indigo-700 mt-1">${fmtNum(summary.total_lembar_potong)} Lembar</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">${summary.total_roll_dikonsumsi} Roll (${Number(summary.total_kain_terpakai).toFixed(2)} Kg/Yd/M)</p>
+          </div>
+          <div class="border border-slate-300 rounded-xl p-4 bg-white">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">KELOLOSAN QC &amp; STOK JADI</p>
+            <p class="text-xl font-extrabold text-emerald-700 mt-1">${summary.pass_rate_pct}% Lolos QC</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">Gudang Abadi: ${fmtNum(summary.total_stok_jadi)} Pcs</p>
+          </div>
+        </div>`;
+    } else if (jenis === 'STOK') {
+      const kritik = summary.low_stock_jadi_count + summary.low_stock_aksesoris_count;
+      kpiHtml = `
+        <div class="kpi-summary-grid grid grid-cols-1 md:grid-cols-3 print:grid-cols-3 gap-4 print-avoid-break">
+          <div class="border border-slate-300 rounded-xl p-4 bg-white">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">TOTAL VARIASI STOK JADI</p>
+            <p class="text-xl font-extrabold text-slate-900 mt-1">${fmtNum(summary.total_sku_stok_jadi)} Item (${fmtNum(summary.total_stok_jadi)} Pcs)</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">Batas min. global: &le; ${sumStokMin} Pcs</p>
+          </div>
+          <div class="border border-slate-300 rounded-xl p-4 bg-white">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">PERSEDIAAN AKSESORIS CMT</p>
+            <p class="text-xl font-extrabold text-indigo-700 mt-1">${fmtNum(summary.total_aksesoris_item)} Jenis (${fmtNum(summary.total_aksesoris_unit)} Unit)</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">Batas min. aksesoris: &lt; ${sumAccMin} Unit</p>
+          </div>
+          <div class="border border-slate-300 rounded-xl p-4 bg-white">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">ITEM STOK MINIMUM &amp; ROLL SISA</p>
+            <p class="text-xl font-extrabold ${kritik > 0 ? 'text-rose-700' : 'text-emerald-700'} mt-1">${kritik} Item Kritis</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">${summary.roll_tersedia_count + summary.roll_dipotong_count} Roll kain belum habis</p>
+          </div>
+        </div>`;
+    } else if (jenis === 'BAHAN_MASUK') {
+      const totalRollInPen = sum(rep.penerimaanList, (p) => sum(Q.warnaOfPenerimaan(p.id_penerimaan), (w) => w.total_roll));
+      const totalUkrInPen = sum(rep.penerimaanList, (p) => sum(Q.warnaOfPenerimaan(p.id_penerimaan), (w) => w.total_ukuran));
+      kpiHtml = `
+        <div class="kpi-summary-grid grid grid-cols-1 md:grid-cols-3 print:grid-cols-3 gap-4 print-avoid-break">
+          <div class="border border-slate-300 rounded-xl p-4 bg-white">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">TOTAL NOTA PENERIMAAN</p>
+            <p class="text-xl font-extrabold text-slate-900 mt-1">${fmtNum(summary.total_penerimaan_nota)} Nota</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">Surat jalan bahan baku supplier</p>
+          </div>
+          <div class="border border-slate-300 rounded-xl p-4 bg-white">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">TOTAL ROLL DITERIMA</p>
+            <p class="text-xl font-extrabold text-indigo-700 mt-1">${fmtNum(totalRollInPen)} Roll Fisik</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">Terdaftar pada kelompok warna</p>
+          </div>
+          <div class="border border-slate-300 rounded-xl p-4 bg-white">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">TOTAL KUANTITAS BAHAN MASUK</p>
+            <p class="text-xl font-extrabold text-emerald-700 mt-1">${Number(totalUkrInPen).toFixed(2)} Kg / Yd / M</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">Akumulasi bruto penerimaan kain</p>
+          </div>
+        </div>`;
+    } else if (jenis === 'MUTASI_KELUAR') {
+      const keluarCnt = rep.riwayatStokList.filter((r) => r.jenis_transaksi === 'KELUAR').length;
+      const masukCnt = rep.riwayatStokList.filter((r) => r.jenis_transaksi === 'MASUK').length;
+      kpiHtml = `
+        <div class="kpi-summary-grid grid grid-cols-1 md:grid-cols-3 print:grid-cols-3 gap-4 print-avoid-break">
+          <div class="border border-slate-300 rounded-xl p-4 bg-white">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">TOTAL LOG TRANSAKSI STOK</p>
+            <p class="text-xl font-extrabold text-slate-900 mt-1">${fmtNum(rep.riwayatStokList.length)} Transaksi</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">${keluarCnt} Keluar &bull; ${masukCnt} Masuk</p>
+          </div>
+          <div class="border border-slate-300 rounded-xl p-4 bg-white">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">TOTAL PENGELUARAN (OUTBOUND)</p>
+            <p class="text-xl font-extrabold text-rose-700 mt-1">-${fmtNum(summary.total_outbound_pcs)} Pcs</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">Diserahkan ke Mitra / Distribusi</p>
+          </div>
+          <div class="border border-slate-300 rounded-xl p-4 bg-white">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">TOTAL PEMASUKAN (INBOUND)</p>
+            <p class="text-xl font-extrabold text-emerald-700 mt-1">+${fmtNum(summary.total_inbound_pcs)} Pcs</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">Masuk dari QC Produk Abadi / Opname</p>
+          </div>
+        </div>`;
+    } else if (jenis === 'QC') {
+      kpiHtml = `
+        <div class="kpi-summary-grid grid grid-cols-1 md:grid-cols-3 print:grid-cols-3 gap-4 print-avoid-break">
+          <div class="border border-slate-300 rounded-xl p-4 bg-white">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">TOTAL SAMPEL DIPERIKSA</p>
+            <p class="text-xl font-extrabold text-slate-900 mt-1">${fmtNum(summary.total_sampel_diperiksa)} Pcs (${rep.qcList.length} Log)</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">Prototipe, Potong &amp; Jahit Akhir</p>
+          </div>
+          <div class="border border-slate-300 rounded-xl p-4 bg-white">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">TINGKAT KELOLOSAN (PASS RATE)</p>
+            <p class="text-xl font-extrabold text-emerald-700 mt-1">${summary.pass_rate_pct}% (${fmtNum(summary.total_lolos_qc)} Pcs)</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">Target standar mutu: &ge; 95.0%</p>
+          </div>
+          <div class="border border-slate-300 rounded-xl p-4 bg-white">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">CACAT MUTU &amp; ANTREAN REWORK</p>
+            <p class="text-xl font-extrabold text-rose-700 mt-1">${fmtNum(summary.total_cacat_qc)} Pcs (${summary.defect_rate_pct}%)</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">${summary.total_rework_pending} batch status Need Rework</p>
+          </div>
+        </div>`;
+    }
+
+    // Formal 2-Column Table for KONSOLIDASI + Specific Tables
+    let rekapanSheetHtml = '';
+    if (jenis === 'KONSOLIDASI') {
+      rekapanSheetHtml = `
+        <div class="rekapan-sheet-block print-page-break print-avoid-break pt-2">
+          <div class="text-center mb-3 font-serif">
+            <h3 class="text-sm font-bold uppercase tracking-wide text-slate-900">KONVEKSI ${esc(company.nama_perusahaan.toUpperCase())}</h3>
+            <p class="text-sm font-bold text-slate-900">Rekapitulasi Operasional Produksi &amp; Posisi Inventori CMT</p>
+            <p class="text-xs font-bold text-slate-800">Per ${esc(meta.printed_date_long)}</p>
+          </div>
+          <table class="doc-table w-full border-collapse border border-slate-900 text-xs font-serif">
+            <thead>
+              <tr class="bg-slate-100">
+                <th colspan="2" class="border border-slate-900 px-3 py-1.5 text-center font-bold uppercase tracking-wide text-slate-900 w-1/2">PRODUKSI &amp; BAHAN BAKU</th>
+                <th colspan="2" class="border border-slate-900 px-3 py-1.5 text-center font-bold uppercase tracking-wide text-slate-900 w-1/2">MUTU (QC) &amp; INVENTORI GUDANG</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="bg-slate-50">
+                <td colspan="2" class="border border-slate-900 px-3 py-1 text-center font-bold text-slate-900">Status Pesanan Produksi (EDF)</td>
+                <td colspan="2" class="border border-slate-900 px-3 py-1 text-center font-bold text-slate-900">Hasil Quality Control (3 Tahap)</td>
+              </tr>
+              <tr>
+                <td class="border border-slate-900 px-3 py-1 text-slate-800 w-[34%]">- Pesanan Selesai</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900 w-[16%]">${fmtNum(summary.pesanan_selesai)} Order</td>
+                <td class="border border-slate-900 px-3 py-1 text-slate-800 w-[34%]">- Total Sampel Diperiksa</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900 w-[16%]">${fmtNum(summary.total_sampel_diperiksa)} Pcs</td>
+              </tr>
+              <tr>
+                <td class="border border-slate-900 px-3 py-1 text-slate-800">- Pesanan Dalam Proses (Antrean/Potong/QC)</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900">${fmtNum(summary.pesanan_proses)} Order</td>
+                <td class="border border-slate-900 px-3 py-1 text-slate-800">- Unit Lolos QC (${summary.pass_rate_pct}%)</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900">${fmtNum(summary.total_lolos_qc)} Pcs</td>
+              </tr>
+              <tr>
+                <td class="border border-slate-900 px-3 py-1 text-slate-800">- Batch Pemotongan Seri Terealisasi</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900">${fmtNum(summary.total_batch_potong)} Batch</td>
+                <td class="border border-slate-900 px-3 py-1 text-slate-800">- Unit Cacat (${summary.defect_rate_pct}%)</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900">${fmtNum(summary.total_cacat_qc)} Pcs</td>
+              </tr>
+              <tr>
+                <td class="border border-slate-900 px-3 py-1 text-slate-800">- Akumulasi Lembar Hasil Potong</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900">${fmtNum(summary.total_lembar_potong)} Lembar</td>
+                <td class="border border-slate-900 px-3 py-1 text-slate-800">- Batch Antrean Perbaikan (Need Rework)</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900">${fmtNum(summary.total_rework_pending)} Batch</td>
+              </tr>
+              <tr class="bg-slate-50/70 font-bold">
+                <td class="border border-slate-900 px-3 py-1 text-slate-900">Total Pesanan Terdaftar</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900">${fmtNum(summary.total_pesanan)} Order</td>
+                <td class="border border-slate-900 px-3 py-1 text-slate-900">Total Inspeksi QC (Lolos + Cacat)</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900">${fmtNum(summary.total_lolos_qc + summary.total_cacat_qc)} Pcs</td>
+              </tr>
+              <tr class="bg-slate-50">
+                <td colspan="2" class="border border-slate-900 px-3 py-1 text-center font-bold text-slate-900">Penerimaan &amp; Konsumsi Roll Kain Fisik</td>
+                <td colspan="2" class="border border-slate-900 px-3 py-1 text-center font-bold text-slate-900">Inventori Barang Jadi &amp; Aksesoris CMT</td>
+              </tr>
+              <tr>
+                <td class="border border-slate-900 px-3 py-1 text-slate-800">- Nota Penerimaan Supplier</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900">${fmtNum(summary.total_penerimaan_nota)} Nota</td>
+                <td class="border border-slate-900 px-3 py-1 text-slate-800">- Stok Barang Jadi (Produk Abadi)</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900">${fmtNum(summary.total_stok_jadi)} Pcs</td>
+              </tr>
+              <tr>
+                <td class="border border-slate-900 px-3 py-1 text-slate-800">- Roll Utuh Tersedia (${summary.roll_tersedia_count} Roll)</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900">${Number(summary.roll_tersedia_qty).toFixed(2)}</td>
+                <td class="border border-slate-900 px-3 py-1 text-slate-800">- Variasi SKU Barang Jadi Aktif</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900">${fmtNum(summary.total_sku_stok_jadi)} SKU</td>
+              </tr>
+              <tr>
+                <td class="border border-slate-900 px-3 py-1 text-slate-800">- Roll Sedang Dipotong (${summary.roll_dipotong_count} Roll)</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900">${Number(summary.roll_dipotong_qty).toFixed(2)}</td>
+                <td class="border border-slate-900 px-3 py-1 text-slate-800">- Persediaan Aksesoris CMT (${summary.total_aksesoris_item} Jenis)</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900">${fmtNum(summary.total_aksesoris_unit)} Unit</td>
+              </tr>
+              <tr>
+                <td class="border border-slate-900 px-3 py-1 text-slate-800">- Roll Habis Terpakai</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900">${fmtNum(summary.roll_habis_count)} Roll</td>
+                <td class="border border-slate-900 px-3 py-1 text-slate-800">- Barang Jadi Keluar / Outbound Mitra</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900">${fmtNum(summary.total_outbound_pcs)} Pcs</td>
+              </tr>
+              <tr class="bg-slate-50/70 font-bold">
+                <td class="border border-slate-900 px-3 py-1 text-slate-900">Total Sisa Kain Roll di Rak</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900">${Number(summary.total_ukuran_sisa_roll).toFixed(2)}</td>
+                <td class="border border-slate-900 px-3 py-1 text-slate-900">Item Stok Rendah (&le;${sumStokMin} Pcs / &lt;${sumAccMin} Unit)</td>
+                <td class="border border-slate-900 px-3 py-1 text-right font-mono text-slate-900">${fmtNum(summary.low_stock_jadi_count + summary.low_stock_aksesoris_count)} Item</td>
+              </tr>
+              <tr class="bg-slate-100 font-bold text-slate-900">
+                <td class="border border-slate-900 px-3 py-1.5">Total Kain Terpakai Produksi (${summary.total_roll_dikonsumsi} Roll)</td>
+                <td class="border border-slate-900 px-3 py-1.5 text-right font-mono">${Number(summary.total_kain_terpakai).toFixed(2)}</td>
+                <td class="border border-slate-900 px-3 py-1.5">Total Stok Masuk Gudang (Inbound)</td>
+                <td class="border border-slate-900 px-3 py-1.5 text-right font-mono">${fmtNum(summary.total_inbound_pcs)} Pcs</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>`;
+    }
+
+    let detailTablesHtml = '';
+    if (jenis === 'KONSOLIDASI') {
+      const cOrders = rep.consolidatedOrders;
+      detailTablesHtml = `
+        <div class="border border-slate-300 rounded-xl overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-300 flex items-center justify-between">
+            <div>
+              <h3 class="font-bold text-slate-900 text-sm">Rincian Konsolidasi Operasional Pesanan (End-to-End)</h3>
+              <p class="text-[11px] text-slate-500">Pelacakan pesanan dari pola, pemakaian roll kain fisik, hasil potong, hingga kualitas QC akhir</p>
+            </div>
+            <span class="text-xs font-mono font-bold text-indigo-700">${cOrders.length} Baris</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="doc-table w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-300">
+                  <th class="py-2.5 px-3 border-r border-slate-200">NO. ORDER</th>
+                  <th class="py-2.5 px-3 border-r border-slate-200">TGL ORDER &amp; EDF</th>
+                  <th class="py-2.5 px-3 border-r border-slate-200">POLA &amp; MITRA / SUMBER</th>
+                  <th class="py-2.5 px-3 border-r border-slate-200">ROLL TERPAKAI</th>
+                  <th class="py-2.5 px-3 border-r border-slate-200 text-right">YIELD POTONG</th>
+                  <th class="py-2.5 px-3 border-r border-slate-200 text-right">HASIL QC</th>
+                  <th class="py-2.5 px-3 text-center">STATUS</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-200">
+                ${cOrders.length ? cOrders.map((r) => {
+                  const stCls = r.status_pesanan === 'Selesai' ? 'border-emerald-300 text-emerald-800 bg-emerald-50' : (r.status_pesanan === 'Dalam QC' ? 'border-amber-300 text-amber-800 bg-amber-50' : 'border-slate-300 text-slate-700 bg-slate-50');
+                  return `
+                    <tr>
+                      <td class="py-2.5 px-3 font-mono font-bold text-indigo-700 border-r border-slate-200">#ORD-${String(r.id_pesanan).padStart(4, '0')}</td>
+                      <td class="py-2.5 px-3 font-mono text-[11px] border-r border-slate-200">
+                        <div>${fmtDateShortId(r.tgl_order)}</div>
+                        <div class="text-amber-700 font-semibold">EDF: ${fmtDateShortId(r.deadline_terbaru)}</div>
+                      </td>
+                      <td class="py-2.5 px-3 border-r border-slate-200">
+                        <div class="font-bold text-slate-900">${esc(r.nama_pola)} <span class="font-mono text-[10px] text-slate-500">(${esc(r.kode_pola)})</span></div>
+                        <div class="text-[11px] text-slate-600">${esc(r.nama_sumber)} &bull; ${esc(r.nama_mitra)}</div>
+                      </td>
+                      <td class="py-2.5 px-3 font-mono text-[11px] border-r border-slate-200">
+                        <div class="font-semibold text-slate-800">${esc(r.rolls_used)}</div>
+                        ${r.kain_terpakai > 0 ? `<div class="text-[10px] text-slate-500">${Number(r.kain_terpakai).toFixed(2)} Kg/Yd/M (${r.rolls_count} roll)</div>` : ''}
+                      </td>
+                      <td class="py-2.5 px-3 font-mono font-bold text-slate-900 text-right border-r border-slate-200">${fmtNum(r.actual_yield)} lbr</td>
+                      <td class="py-2.5 px-3 font-mono text-right border-r border-slate-200"><span class="text-emerald-700 font-bold">${r.qc_lolos}</span> / <span class="text-rose-700 font-bold">${r.qc_cacat}</span></td>
+                      <td class="py-2.5 px-3 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${stCls}">${esc(r.status_pesanan)}</span></td>
+                    </tr>`;
+                }).join('') : '<tr><td colspan="7" class="py-6 text-center text-slate-400">Tidak ada data pesanan yang sesuai filter.</td></tr>'}
+              </tbody>
+              <tfoot>
+                <tr class="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-400">
+                  <td colspan="3" class="py-2.5 px-3 border-r border-slate-200 uppercase">TOTAL KONSOLIDASI (${cOrders.length} PESANAN)</td>
+                  <td class="py-2.5 px-3 font-mono border-r border-slate-200">${Number(sum(cOrders, (r) => r.kain_terpakai)).toFixed(2)} Kg/Yd/M</td>
+                  <td class="py-2.5 px-3 font-mono text-right border-r border-slate-200">${fmtNum(sum(cOrders, (r) => r.actual_yield))} lbr</td>
+                  <td class="py-2.5 px-3 font-mono text-right border-r border-slate-200">${sum(cOrders, (r) => r.qc_lolos)} / ${sum(cOrders, (r) => r.qc_cacat)}</td>
+                  <td class="py-2.5 px-3 text-center">${summary.pesanan_selesai} Selesai</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>`;
+    } else if (jenis === 'STOK') {
+      const sList = rep.stokBarangJadiList;
+      const aList = rep.aksesorisList;
+      const rList = rep.rollList;
+      detailTablesHtml = `
+        <div class="border border-slate-300 rounded-xl overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-300"><h3 class="font-bold text-slate-900 text-sm">A. Laporan Posisi Stok Gudang Barang Jadi (Produk Abadi)</h3></div>
+          <div class="overflow-x-auto">
+            <table class="doc-table w-full text-left text-xs border-collapse">
+              <thead><tr class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-300"><th class="py-2.5 px-3 border-r border-slate-200">KODE</th><th class="py-2.5 px-3 border-r border-slate-200">NAMA PRODUK / POLA</th><th class="py-2.5 px-3 border-r border-slate-200">KATEGORI</th><th class="py-2.5 px-3 border-r border-slate-200">UKURAN &amp; WARNA</th><th class="py-2.5 px-3 border-r border-slate-200 text-right">STOK AKTUAL</th><th class="py-2.5 px-3 border-r border-slate-200 text-right">BATAS MIN.</th><th class="py-2.5 px-3 text-center">STATUS</th></tr></thead>
+              <tbody class="divide-y divide-slate-200">
+                ${sList.length ? sList.map((st) => {
+                  const pl = Q.pola(st.id_pola);
+                  const kat = pl ? Q.kategori(pl.id_kategori) : null;
+                  const sp = Q.spec(st.id_spesifikasi);
+                  const qty = Number(st.jumlah_stok_pcs);
+                  const habis = qty <= 0;
+                  const min = !habis && qty <= sumStokMin;
+                  const stCls = habis ? 'border-rose-400 bg-rose-50 text-rose-800' : (min ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-emerald-300 bg-emerald-50 text-emerald-700');
+                  return `<tr><td class="py-2.5 px-3 font-mono font-bold text-slate-700 border-r border-slate-200">${esc(pl?.kode_pola || `SKU-${st.id_stok}`)}</td><td class="py-2.5 px-3 font-bold text-slate-900 border-r border-slate-200">${esc(pl?.nama_pola || '-')}</td><td class="py-2.5 px-3 border-r border-slate-200"><span class="px-2 py-0.5 rounded-full text-[10px] font-semibold border border-indigo-200 bg-indigo-50 text-indigo-800">${esc(kat?.nama_kategori || 'Umum')}</span></td><td class="py-2.5 px-3 border-r border-slate-200">${esc(sp?.nama_ukuran || '-')} &bull; ${esc(st.nama_warna)}</td><td class="py-2.5 px-3 font-mono font-bold text-right border-r border-slate-200 ${habis || min ? 'text-rose-700' : 'text-slate-900'}">${fmtNum(qty)} pcs</td><td class="py-2.5 px-3 font-mono text-right text-slate-600 border-r border-slate-200">${fmtNum(sumStokMin)} pcs</td><td class="py-2.5 px-3 text-center"><span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${stCls}">${habis ? 'Habis' : (min ? 'Stok Minimum' : 'Normal')}</span></td></tr>`;
+                }).join('') : '<tr><td colspan="7" class="py-6 text-center text-slate-400">Belum ada stok barang jadi di gudang.</td></tr>'}
+              </tbody>
+              <tfoot><tr class="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-400"><td colspan="4" class="py-2.5 px-3 border-r border-slate-200 uppercase">TOTAL STOK BARANG JADI (${sList.length} SKU)</td><td class="py-2.5 px-3 font-mono text-right border-r border-slate-200">${fmtNum(sum(sList, (s) => s.jumlah_stok_pcs))} pcs</td><td colspan="2" class="py-2.5 px-3 text-center text-rose-700">${summary.low_stock_jadi_count} SKU Minimum/Habis</td></tr></tfoot>
+            </table>
+          </div>
+        </div>
+        <div class="border border-slate-300 rounded-xl overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-300"><h3 class="font-bold text-slate-900 text-sm">B. Laporan Posisi Inventori Aksesoris CMT</h3></div>
+          <div class="overflow-x-auto">
+            <table class="doc-table w-full text-left text-xs border-collapse">
+              <thead><tr class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-300"><th class="py-2.5 px-3 border-r border-slate-200">KODE</th><th class="py-2.5 px-3 border-r border-slate-200">NAMA AKSESORIS &amp; UKURAN</th><th class="py-2.5 px-3 border-r border-slate-200">SUPPLIER REKANAN</th><th class="py-2.5 px-3 border-r border-slate-200 text-right">STOK AKTUAL</th><th class="py-2.5 px-3 border-r border-slate-200 text-right">BATAS MIN.</th><th class="py-2.5 px-3 text-center">STATUS</th></tr></thead>
+              <tbody class="divide-y divide-slate-200">
+                ${aList.length ? aList.map((acc) => {
+                  const qty = Number(acc.stok);
+                  const low = qty < sumAccMin;
+                  return `<tr><td class="py-2.5 px-3 font-mono font-bold text-slate-700 border-r border-slate-200">ACC-${String(acc.id_aksesoris).padStart(3, '0')}</td><td class="py-2.5 px-3 border-r border-slate-200"><span class="font-bold text-slate-900">${esc(acc.nama_aksesoris)}</span>${acc.ukuran ? ` <span class="text-slate-500">(${esc(acc.ukuran)})</span>` : ''}</td><td class="py-2.5 px-3 border-r border-slate-200 text-slate-700">${esc(Q.supplier(acc.id_supplier)?.nama_supplier || '-')}</td><td class="py-2.5 px-3 font-mono font-bold text-right border-r border-slate-200 ${low ? 'text-rose-700' : 'text-slate-900'}">${fmtNum(qty)} ${esc(acc.satuan)}</td><td class="py-2.5 px-3 font-mono text-right text-slate-600 border-r border-slate-200">${fmtNum(sumAccMin)} ${esc(acc.satuan)}</td><td class="py-2.5 px-3 text-center"><span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${low ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-emerald-300 bg-emerald-50 text-emerald-700'}">${low ? 'Stok Minimum' : 'Normal'}</span></td></tr>`;
+                }).join('') : '<tr><td colspan="6" class="py-6 text-center text-slate-400">Belum ada data aksesoris CMT.</td></tr>'}
+              </tbody>
+              <tfoot><tr class="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-400"><td colspan="3" class="py-2.5 px-3 border-r border-slate-200 uppercase">TOTAL PERSEDIAAN AKSESORIS (${aList.length} ITEM)</td><td class="py-2.5 px-3 font-mono text-right border-r border-slate-200">${fmtNum(sum(aList, (a) => a.stok))} Unit</td><td colspan="2" class="py-2.5 px-3 text-center text-rose-700">${summary.low_stock_aksesoris_count} Item Minimum</td></tr></tfoot>
+            </table>
+          </div>
+        </div>
+        <div class="border border-slate-300 rounded-xl overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-300"><h3 class="font-bold text-slate-900 text-sm">C. Laporan Posisi Sisa Roll Bahan Baku Kain (${rList.length} Roll)</h3></div>
+          <div class="overflow-x-auto">
+            <table class="doc-table w-full text-left text-xs border-collapse">
+              <thead><tr class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-300"><th class="py-2.5 px-3 border-r border-slate-200">ID ROLL</th><th class="py-2.5 px-3 border-r border-slate-200">NOTA &amp; SUPPLIER</th><th class="py-2.5 px-3 border-r border-slate-200">KAIN &amp; WARNA</th><th class="py-2.5 px-3 border-r border-slate-200 text-right">UKURAN AWAL</th><th class="py-2.5 px-3 border-r border-slate-200 text-right">SISA AKTUAL</th><th class="py-2.5 px-3 text-center">STATUS ROLL</th></tr></thead>
+              <tbody class="divide-y divide-slate-200">
+                ${rList.length ? rList.map((rl) => {
+                  const w = Q.warna(rl.id_detail_warna);
+                  const p = w ? Q.penerimaan(w.id_penerimaan) : null;
+                  const s = p ? Q.supplier(p.id_supplier) : null;
+                  const rlCls = rl.status_roll === 'Tersedia' ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : (rl.status_roll === 'Dipotong' ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-slate-300 bg-slate-100 text-slate-600');
+                  return `<tr><td class="py-2 px-3 font-mono font-bold text-indigo-700 border-r border-slate-200">#${rl.id_roll} (Roll ${rl.no_roll_ke})</td><td class="py-2 px-3 border-r border-slate-200"><span class="font-mono font-semibold">${esc(p?.no_nota || '-')}</span><span class="text-slate-500"> &bull; ${esc(s?.nama_supplier || '-')}</span></td><td class="py-2 px-3 border-r border-slate-200">${esc(p?.nama_kain || '-')} (${esc(w?.nama_warna || '-')})</td><td class="py-2 px-3 font-mono text-right border-r border-slate-200">${Number(rl.ukuran_awal).toFixed(2)} ${esc(rl.satuan)}</td><td class="py-2 px-3 font-mono font-bold text-right border-r border-slate-200">${Number(rl.ukuran_sisa).toFixed(2)} ${esc(rl.satuan)}</td><td class="py-2 px-3 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${rlCls}">${esc(rl.status_roll)}</span></td></tr>`;
+                }).join('') : '<tr><td colspan="6" class="py-6 text-center text-slate-400">Belum ada gulungan roll kain terdaftar.</td></tr>'}
+              </tbody>
+              <tfoot><tr class="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-400"><td colspan="3" class="py-2.5 px-3 border-r border-slate-200 uppercase">TOTAL GULUNGAN KAIN (${rList.length} ROLL)</td><td class="py-2.5 px-3 font-mono text-right border-r border-slate-200">${Number(sum(rList, (r) => r.ukuran_awal)).toFixed(2)}</td><td class="py-2.5 px-3 font-mono text-right border-r border-slate-200">${Number(sum(rList, (r) => r.ukuran_sisa)).toFixed(2)}</td><td class="py-2.5 px-3 text-center">${summary.roll_tersedia_count} Tersedia</td></tr></tfoot>
+            </table>
+          </div>
+        </div>`;
+    } else if (jenis === 'BAHAN_MASUK') {
+      const pList = rep.penerimaanList;
+      const totRoll = sum(pList, (pn) => sum(Q.warnaOfPenerimaan(pn.id_penerimaan), (w) => w.total_roll));
+      const totUkr = sum(pList, (pn) => sum(Q.warnaOfPenerimaan(pn.id_penerimaan), (w) => w.total_ukuran));
+      detailTablesHtml = `
+        <div class="border border-slate-300 rounded-xl overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-300"><h3 class="font-bold text-slate-900 text-sm">Laporan Penerimaan Bahan Baku &amp; Registrasi Roll Supplier</h3></div>
+          <div class="overflow-x-auto">
+            <table class="doc-table w-full text-left text-xs border-collapse">
+              <thead><tr class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-300"><th class="py-2.5 px-3 border-r border-slate-200">NO. DOKUMEN / NOTA</th><th class="py-2.5 px-3 border-r border-slate-200">TANGGAL</th><th class="py-2.5 px-3 border-r border-slate-200">SUPPLIER / PEMASOK &amp; KAIN</th><th class="py-2.5 px-3 border-r border-slate-200">PENERIMA / KENDARAAN</th><th class="py-2.5 px-3 border-r border-slate-200 text-right">JML ROLL</th><th class="py-2.5 px-3 text-right">TOTAL KUANTITAS</th></tr></thead>
+              <tbody class="divide-y divide-slate-200">
+                ${pList.length ? pList.map((pn) => {
+                  const warnas = Q.warnaOfPenerimaan(pn.id_penerimaan);
+                  const wSum = warnas.map((w) => `${w.nama_warna} (${w.total_roll} roll, ${Number(w.total_ukuran).toFixed(2)} ${w.satuan_ukur})`).join(', ');
+                  const nRolls = sum(warnas, (w) => w.total_roll);
+                  const nUkr = sum(warnas, (w) => w.total_ukuran);
+                  const nSat = warnas[0]?.satuan_ukur || 'Kg';
+                  return `<tr><td class="py-2.5 px-3 font-mono font-bold text-indigo-700 border-r border-slate-200">${esc(pn.no_nota)}</td><td class="py-2.5 px-3 font-mono border-r border-slate-200">${fmtDateShortId(pn.tgl_nota)}</td><td class="py-2.5 px-3 border-r border-slate-200"><div class="font-bold text-slate-900">${esc(Q.supplier(pn.id_supplier)?.nama_supplier || '-')}</div><div class="text-[11px] text-slate-700 font-medium">${esc(pn.nama_kain)}${pn.lebar_gramasi ? ` (${esc(pn.lebar_gramasi)})` : ''}</div>${wSum ? `<div class="text-[10px] text-slate-500 mt-0.5">${esc(wSum)}</div>` : ''}</td><td class="py-2.5 px-3 border-r border-slate-200 text-slate-600"><div>${esc(pn.penerima || '-')}</div>${pn.no_kendaraan ? `<div class="font-mono text-[10px]">${esc(pn.no_kendaraan)}</div>` : ''}</td><td class="py-2.5 px-3 font-mono text-right border-r border-slate-200">${fmtNum(nRolls)} roll</td><td class="py-2.5 px-3 font-mono font-bold text-right text-slate-900">${Number(nUkr).toFixed(2)} ${esc(nSat)}</td></tr>`;
+                }).join('') : '<tr><td colspan="6" class="py-6 text-center text-slate-400">Tidak ada nota penerimaan bahan baku pada periode ini.</td></tr>'}
+              </tbody>
+              <tfoot><tr class="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-400"><td colspan="4" class="py-2.5 px-3 border-r border-slate-200 uppercase">TOTAL PENERIMAAN BAHAN BAKU (${pList.length} NOTA)</td><td class="py-2.5 px-3 font-mono text-right border-r border-slate-200">${fmtNum(totRoll)} roll</td><td class="py-2.5 px-3 font-mono text-right">${Number(totUkr).toFixed(2)} Kg/Yd/M</td></tr></tfoot>
+            </table>
+          </div>
+        </div>`;
+    } else if (jenis === 'MUTASI_KELUAR') {
+      const mList = rep.riwayatStokList;
+      detailTablesHtml = `
+        <div class="border border-slate-300 rounded-xl overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-300"><h3 class="font-bold text-slate-900 text-sm">Laporan Pengeluaran Barang Jadi (Outbound Mitra) &amp; Riwayat Mutasi Stok</h3></div>
+          <div class="overflow-x-auto">
+            <table class="doc-table w-full text-left text-xs border-collapse">
+              <thead><tr class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-300"><th class="py-2.5 px-3 border-r border-slate-200">NO. DOKUMEN</th><th class="py-2.5 px-3 border-r border-slate-200">TANGGAL</th><th class="py-2.5 px-3 border-r border-slate-200">MITRA / ALASAN &amp; PRODUK</th><th class="py-2.5 px-3 border-r border-slate-200">PETUGAS</th><th class="py-2.5 px-3 border-r border-slate-200 text-center">SALDO</th><th class="py-2.5 px-3 text-right">QTY MUTASI</th></tr></thead>
+              <tbody class="divide-y divide-slate-200">
+                ${mList.length ? mList.map((rw) => {
+                  const isKeluar = rw.jenis_transaksi === 'KELUAR';
+                  const pl = Q.pola(rw.id_pola);
+                  const sp = Q.spec(rw.id_spesifikasi);
+                  const usr = Q.user(rw.id_user);
+                  return `<tr><td class="py-2.5 px-3 font-mono font-bold text-indigo-700 border-r border-slate-200">${isKeluar ? 'OUT' : 'INB'}-${String(rw.id_riwayat_stok).padStart(4, '0')}</td><td class="py-2.5 px-3 font-mono border-r border-slate-200">${fmtDateShortId(rw.tgl_transaksi)}</td><td class="py-2.5 px-3 border-r border-slate-200"><div class="font-bold text-slate-900">[${esc(rw.jenis_transaksi)}] ${rw.nama_mitra ? `${esc(rw.nama_mitra)} — ` : ''}${esc(rw.kategori_alasan)}</div><div class="text-[11px] text-slate-600">${esc(pl?.nama_pola || '-')} (${esc(sp?.nama_ukuran || '-')} / ${esc(rw.nama_warna)})${rw.keterangan ? ` &bull; ${esc(rw.keterangan)}` : ''}</div></td><td class="py-2.5 px-3 text-slate-600 border-r border-slate-200">${esc(usr?.username || '-')}</td><td class="py-2.5 px-3 font-mono text-center text-slate-600 border-r border-slate-200">${rw.stok_sebelum} &rarr; ${rw.stok_sesudah}</td><td class="py-2.5 px-3 font-mono font-bold text-right ${isKeluar ? 'text-rose-700' : 'text-emerald-700'}">${isKeluar ? '-' : '+'}${fmtNum(rw.jumlah_pcs)} pcs</td></tr>`;
+                }).join('') : '<tr><td colspan="6" class="py-6 text-center text-slate-400">Belum ada catatan mutasi stok barang jadi pada periode ini.</td></tr>'}
+              </tbody>
+              <tfoot><tr class="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-400"><td colspan="4" class="py-2.5 px-3 border-r border-slate-200 uppercase">TOTAL MUTASI STOK (${mList.length} TRANSAKSI)</td><td class="py-2.5 px-3 font-mono text-center border-r border-slate-200 text-emerald-700">+${fmtNum(summary.total_inbound_pcs)} In</td><td class="py-2.5 px-3 font-mono text-right text-rose-700">-${fmtNum(summary.total_outbound_pcs)} Out</td></tr></tfoot>
+            </table>
+          </div>
+        </div>`;
+    } else if (jenis === 'QC') {
+      const df = rep.defectBreakdown;
+      const stg = rep.stageBreakdown;
+      const qList = rep.qcList;
+      detailTablesHtml = `
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div class="border border-slate-300 rounded-xl overflow-hidden">
+            <div class="px-4 py-2.5 bg-slate-50 border-b border-slate-300"><h3 class="font-bold text-slate-900 text-xs uppercase">A1. Sebaran Kategori Kerusakan</h3></div>
+            <table class="doc-table w-full text-left text-xs border-collapse">
+              <thead><tr class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-300"><th class="py-2 px-3 border-r border-slate-200">KATEGORI KERUSAKAN</th><th class="py-2 px-3 text-right">TOTAL CACAT</th></tr></thead>
+              <tbody class="divide-y divide-slate-200">${df.map((d) => `<tr><td class="py-2 px-3 border-r border-slate-200 text-slate-800 font-medium">${esc(d.label_lengkap)}</td><td class="py-2 px-3 font-mono font-bold text-right text-rose-700">${fmtNum(d.total_cacat)} pcs</td></tr>`).join('')}</tbody>
+              <tfoot><tr class="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-400"><td class="py-2 px-3 border-r border-slate-200">TOTAL CACAT TERCATAT</td><td class="py-2 px-3 font-mono text-right text-rose-700">${fmtNum(sum(df, (x) => x.total_cacat))} pcs</td></tr></tfoot>
+            </table>
+          </div>
+          <div class="border border-slate-300 rounded-xl overflow-hidden">
+            <div class="px-4 py-2.5 bg-slate-50 border-b border-slate-300"><h3 class="font-bold text-slate-900 text-xs uppercase">A2. Rekapitulasi per Tahapan QC</h3></div>
+            <table class="doc-table w-full text-left text-xs border-collapse">
+              <thead><tr class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-300"><th class="py-2 px-3 border-r border-slate-200">TAHAP QC</th><th class="py-2 px-3 border-r border-slate-200 text-right">DIPERIKSA</th><th class="py-2 px-3 border-r border-slate-200 text-right">LOLOS</th><th class="py-2 px-3 text-right">CACAT</th></tr></thead>
+              <tbody class="divide-y divide-slate-200">${stg.length ? stg.map((s) => `<tr><td class="py-2 px-3 border-r border-slate-200 font-bold text-slate-800">${esc(s.tahap_qc)}</td><td class="py-2 px-3 font-mono text-right border-r border-slate-200">${fmtNum(s.total_diperiksa)} pcs</td><td class="py-2 px-3 font-mono font-bold text-right text-emerald-700 border-r border-slate-200">${fmtNum(s.total_lolos)} pcs</td><td class="py-2 px-3 font-mono font-bold text-right text-rose-700">${fmtNum(s.total_cacat)} pcs</td></tr>`).join('') : '<tr><td colspan="4" class="py-4 text-center text-slate-400">Belum ada data tahapan QC.</td></tr>'}</tbody>
+              <tfoot><tr class="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-400"><td class="py-2 px-3 border-r border-slate-200">TOTAL</td><td class="py-2 px-3 font-mono text-right border-r border-slate-200">${fmtNum(sum(stg, (x) => x.total_diperiksa))} pcs</td><td class="py-2 px-3 font-mono text-right text-emerald-700 border-r border-slate-200">${fmtNum(sum(stg, (x) => x.total_lolos))} pcs</td><td class="py-2 px-3 font-mono text-right text-rose-700">${fmtNum(sum(stg, (x) => x.total_cacat))} pcs</td></tr></tfoot>
+            </table>
+          </div>
+        </div>
+        <div class="border border-slate-300 rounded-xl overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-300"><h3 class="font-bold text-slate-900 text-sm">B. Catatan Detail Log Inspeksi Quality Control &amp; Rework</h3></div>
+          <div class="overflow-x-auto">
+            <table class="doc-table w-full text-left text-xs border-collapse">
+              <thead><tr class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-300"><th class="py-2.5 px-3 border-r border-slate-200">NO. QC</th><th class="py-2.5 px-3 border-r border-slate-200">TANGGAL</th><th class="py-2.5 px-3 border-r border-slate-200">PESANAN, TAHAP &amp; CACAT</th><th class="py-2.5 px-3 border-r border-slate-200">PETUGAS</th><th class="py-2.5 px-3 border-r border-slate-200 text-right">DIPERIKSA / LOLOS / CACAT</th><th class="py-2.5 px-3 text-center">STATUS</th></tr></thead>
+              <tbody class="divide-y divide-slate-200">
+                ${qList.length ? qList.map((q) => {
+                  const ord = Q.pesanan(q.id_pesanan);
+                  const pl = ord ? Q.pola(ord.id_pola) : null;
+                  const usr = Q.user(q.id_user_qc);
+                  const passCls = (q.status_qc === 'Lolos QC' || q.status_qc === 'Rework Selesai') ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-rose-300 bg-rose-50 text-rose-700';
+                  return `<tr><td class="py-2.5 px-3 font-mono font-bold text-indigo-700 border-r border-slate-200">QC-${String(q.id_qc).padStart(4, '0')}</td><td class="py-2.5 px-3 font-mono border-r border-slate-200">${fmtDateShortId(q.tgl_pemeriksaan)}</td><td class="py-2.5 px-3 border-r border-slate-200"><div class="font-bold text-slate-900">[${esc(q.tahap_qc)}] ${esc(pl?.nama_pola || ord?.jenis_pesanan || '-')}</div><div class="text-[11px] text-slate-600">Cacat: ${esc(q.jenis_cacat)}${q.catatan_qc ? ` &bull; ${esc(q.catatan_qc)}` : ''}</div></td><td class="py-2.5 px-3 border-r border-slate-200 text-slate-600">${esc(usr?.username || '-')}</td><td class="py-2.5 px-3 font-mono text-right border-r border-slate-200">${q.jumlah_diperiksa} / <span class="text-emerald-700 font-bold">${q.jumlah_lolos}</span> / <span class="text-rose-700 font-bold">${q.jumlah_cacat}</span></td><td class="py-2.5 px-3 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${passCls}">${esc(q.status_qc)}</span></td></tr>`;
+                }).join('') : '<tr><td colspan="6" class="py-6 text-center text-slate-400">Belum ada log inspeksi QC pada periode ini.</td></tr>'}
+              </tbody>
+              <tfoot><tr class="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-400"><td colspan="4" class="py-2.5 px-3 border-r border-slate-200 uppercase">TOTAL INSPEKSI (${qList.length} LOG)</td><td class="py-2.5 px-3 font-mono text-right border-r border-slate-200">${sum(qList, (q) => q.jumlah_diperiksa)} / ${sum(qList, (q) => q.jumlah_lolos)} / ${sum(qList, (q) => q.jumlah_cacat)}</td><td class="py-2.5 px-3 text-center">${summary.pass_rate_pct}% Lolos</td></tr></tfoot>
+            </table>
+          </div>
+        </div>`;
+    }
+
+    $('#laporan-dokumen-resmi').innerHTML = `
+      <!-- KOP SURAT RESMI PERUSAHAAN -->
+      <div class="border border-slate-300 rounded-xl p-5 bg-white print-avoid-break">
+        <div class="flex items-start gap-4">
+          <div class="w-14 h-14 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-100 shrink-0" style="background-color:#4f46e5; color:#ffffff;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/>
+            </svg>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-baseline gap-x-2.5">
+              <h1 class="font-serif text-xl md:text-2xl font-extrabold text-indigo-950 tracking-wide uppercase">${esc(company.nama_perusahaan)}</h1>
+              <span class="text-[11px] font-bold text-rose-700 uppercase tracking-widest">${esc(company.tagline)}</span>
+            </div>
+            <p class="text-xs text-slate-600 mt-0.5">${esc(company.alamat)} | Telp: ${esc(company.telepon)}</p>
+            <p class="text-[11px] text-slate-500">${esc(company.deskripsi_sistem)}</p>
+          </div>
+        </div>
+        <div class="mt-4 bg-slate-50/70 border border-slate-200 rounded-lg px-4 py-3 text-xs space-y-1">
+          <div><span class="font-semibold text-slate-700">Judul Laporan:</span> <strong class="text-slate-900">${esc(activeReportTitle)}</strong></div>
+          <div><span class="font-semibold text-slate-700">Periode:</span> <span class="font-semibold text-indigo-700">${esc(periodeText)}</span></div>
+          <div><span class="font-semibold text-slate-700">Diotorisasi / Dicetak Oleh:</span> <strong class="text-slate-900">${esc(meta.printer_username)} (${esc(meta.printer_name)} / ${esc(meta.printer_role)})</strong></div>
+          <div><span class="font-semibold text-slate-700">Waktu Cetak:</span> <span class="font-mono text-slate-800">${esc(meta.printed_at_formatted)}</span></div>
+        </div>
+        <div class="border-t-2 border-slate-900 mt-4"></div>
       </div>
-      <div class="max-h-96 overflow-y-auto thin-scroll divide-y divide-slate-100">
-        ${items.map((n) => `
-          <button type="button" class="w-full flex gap-3 px-4 py-3 text-left hover:bg-slate-50" data-action="${n.action}" ${n.id ? `data-id="${n.id}"` : ''} ${n.target ? `data-target="${n.target}"` : ''}>
-            <span class="w-8 h-8 shrink-0 rounded-lg grid place-items-center ${n.cls}"><i data-lucide="${n.icon}" class="w-4 h-4"></i></span>
-            <span class="min-w-0">
-              <span class="block text-[13px] font-medium text-slate-900">${esc(n.title)}</span>
-              <span class="block text-xs text-slate-500 truncate">${esc(n.text)}</span>
-              <span class="block text-[10.5px] text-slate-400 mt-0.5">${n.time}</span>
-            </span>
-          </button>`).join('') || '<p class="px-4 py-8 text-center text-sm text-slate-400">Tidak ada notifikasi.</p>'}
+
+      ${kpiHtml}
+      ${rekapanSheetHtml}
+
+      <div class="print-page-break space-y-6">
+        ${detailTablesHtml}
+        <div class="signature-block pt-4 flex justify-end">
+          <div class="w-72 text-center text-xs space-y-1">
+            <p class="text-slate-700">${esc(company.kota_pengesahan || 'Jakarta')}, ${esc(meta.printed_date_short)}</p>
+            <p class="font-bold text-slate-900">Diotorisasi Oleh &mdash; ${esc(meta.printer_role_label)}</p>
+            <div class="h-14"></div>
+            <p class="font-bold text-slate-900 uppercase underline underline-offset-4 tracking-wide">${esc(meta.printer_username)}</p>
+            <p class="text-[11px] text-slate-500">${esc(meta.printer_name)} &bull; ${esc(meta.printer_role_label)}</p>
+          </div>
+        </div>
       </div>`;
   }
 
-  function runSearch(raw) {
-    const box = $('#search-results');
-    const q = String(raw || '').trim().toLowerCase().replace(/^#/, '');
-    if (!q) { box.classList.add('hidden'); box.innerHTML = ''; return; }
-    const D = BongDB.data;
-    const orders = D.Pesanan.filter((p) => String(p.id_pesanan).includes(q) || (Q.pola(p.id_pola)?.nama_pola || '').toLowerCase().includes(q) || (p.nama_mitra || '').toLowerCase().includes(q)).slice(0, 5);
-    const rolls = D.Detail_Roll_Bahan.filter((r) => String(r.id_roll).includes(q) || Q.rollInfo(r).label.toLowerCase().includes(q)).slice(0, 5);
-    const polas = D.Pola.filter((p) => p.nama_pola.toLowerCase().includes(q) || p.kode_pola.toLowerCase().includes(q)).slice(0, 4);
-
-    const group = (title, list) => (list.length ? `<p class="px-4 pt-3 pb-1 text-[10.5px] font-semibold tracking-wider uppercase text-slate-400">${title}</p>${list.join('')}` : '');
-    const item = (action, id, icon, main, sub, badge = '') => `
-      <button type="button" class="search-item w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-indigo-50/60" data-action="${action}" data-id="${id}">
-        <span class="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 grid place-items-center shrink-0"><i data-lucide="${icon}" class="w-4 h-4"></i></span>
-        <span class="flex-1 min-w-0"><span class="block text-[13px] font-medium text-slate-900 truncate">${main}</span><span class="block text-[11px] text-slate-500 truncate">${sub}</span></span>${badge}
-      </button>`;
-
-    const html = [
-      group('Pesanan', orders.map((p) => item('open-order', p.id_pesanan, 'clipboard-list', `<span class="font-mono text-indigo-600">#${p.id_pesanan}</span> · ${esc(Q.pola(p.id_pola)?.nama_pola || '')}`, `${esc(Q.sumber(p.id_sumber)?.nama_sumber || '')}${p.nama_mitra ? ' · ' + esc(p.nama_mitra) : ''}`, `<span class="badge ${(STATUS_META[p.status_pesanan] || STATUS_META.ANTREAN).badge}">${p.status_pesanan}</span>`))),
-      group('Roll Kain', rolls.map((r) => item('open-roll', r.id_roll, 'cylinder', `<span class="font-mono">id_roll: ${r.id_roll}</span> · ${esc(Q.rollInfo(r).label)}`, `${fmtNum(r.berat_kg, 1)} kg · Rak ${esc(r.rak_alokasi)}`, `<span class="badge ${(ROLL_META[r.status_roll] || ROLL_META.Habis).badge}">${r.status_roll}</span>`))),
-      group('Pola', polas.map((p) => item('open-pola', p.id_pola, 'shirt', esc(p.nama_pola), `<span class="font-mono">${esc(p.kode_pola)}</span> · ${esc(Q.kategori(p.id_kategori)?.nama_kategori || '')}`))),
-    ].join('');
-
-    box.innerHTML = html
-      ? `${html}<div class="px-4 py-2 mt-1 border-t border-slate-100 text-[10.5px] text-slate-400">Enter untuk membuka hasil pertama · Esc untuk menutup</div>`
-      : `<div class="px-4 py-8 text-center"><p class="text-sm text-slate-500">Tidak ditemukan hasil untuk "<b>${esc(raw)}</b>"</p><p class="text-[11px] text-slate-400 mt-1">Coba 101, 4503, atau "flanel"</p></div>`;
-    box.classList.remove('hidden');
-    refreshIcons();
-  }
-
-  /* --------------------------------------------------------------------------
-   * 11. DETAIL MODALS (relational joins)
-   * ------------------------------------------------------------------------ */
-  const kv = (label, value) => `<div><p class="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">${label}</p><p class="text-sm text-slate-800 mt-0.5">${value}</p></div>`;
-
-  function showPesananDetail(id) {
-    const p = Q.pesanan(id);
-    if (!p) return showToast(`Pesanan #${id} tidak ditemukan.`, { type: 'error' });
-    const pola = Q.pola(p.id_pola);
-    const pen = Q.penerimaan(p.id_penerimaan);
-    const st = STATUS_META[p.status_pesanan] || STATUS_META.ANTREAN;
-    const dl = p.deadline || addDays(p.tgl_order || APP_TODAY, 14);
-    const sisa = diffDays(APP_TODAY, dl);
-    const seri = BongDB.where('Pemotongan_Seri', (s) => s.id_pesanan === p.id_pesanan).sort((a, b) => String(a.tgl_potong || '').localeCompare(String(b.tgl_potong || '')));
-    const qc = BongDB.where('Kerusakan', (k) => k.id_pesanan === p.id_pesanan);
-    const totalCut = sum(seri, (s) => s.total_lembar_hasil);
-
-    openModal({
-      title: `Pesanan #${p.id_pesanan} · ${esc(pola?.nama_pola || '-')}`,
-      subtitle: `${esc(pola?.kode_pola || '')} · ${esc(p.jenis_pesanan)}`,
-      icon: 'clipboard-list', size: 'max-w-3xl',
-      body: `
-        <div class="flex flex-wrap items-center gap-2 mb-5">
-          <span class="badge ${st.badge}">${p.status_pesanan}</span>
-          <span class="badge bg-slate-100 text-slate-600 ring-slate-200">${progressLabel(p)} · ${p.progress_pct}%</span>
-          ${p.status_pesanan !== 'SELESAI' ? `<span class="badge ${sisa <= 7 ? 'bg-rose-50 text-rose-700 ring-rose-200' : 'bg-slate-100 text-slate-600 ring-slate-200'}">Sisa ${sisa} hari</span>` : ''}
-        </div>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
-          ${kv('Sumber Inisiasi', esc(Q.sumber(p.id_sumber)?.nama_sumber || '-'))}
-          ${kv('Mitra / Klien', esc(p.nama_mitra || '-'))}
-          ${kv('Tanggal Order', fmtDate(p.tgl_order))}
-          ${kv('Deadline', fmtDate(dl))}
-          ${kv('Penerimaan Bahan', pen ? `<span class="font-mono">Nota #${esc(pen.no_nota)}</span> · ${esc(pen.nama_kain)}` : '<span class="text-slate-400">Menunggu bahan</span>')}
-          ${kv('Supplier', esc(pen ? Q.supplier(pen.id_supplier)?.nama_supplier : '-'))}
-          ${kv('Admin', esc(Q.user(p.id_user_admin)?.nama_user || '-'))}
-          ${kv('Total Lembar Dipotong', `<span class="font-mono font-semibold">${fmtNum(totalCut)}</span> pcs`)}
-        </div>
-        <h4 class="mt-6 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Riwayat Pemotongan Seri <span class="font-mono text-slate-400">(${seri.length})</span></h4>
-        ${seri.length ? `<div class="rounded-lg border border-slate-200 overflow-hidden"><table class="w-full text-xs">
-          <thead class="bg-slate-50"><tr><th class="th">id_potong</th><th class="th">Kode Seri</th><th class="th">Tanggal</th><th class="th">Pemotong</th><th class="th text-right">Gelaran</th><th class="th text-right pr-4">Lembar</th></tr></thead>
-          <tbody class="divide-y divide-slate-100">${seri.map((s) => `<tr>
-            <td class="px-3 py-2 font-mono text-indigo-600">#${s.id_potong}</td><td class="px-3 py-2 font-mono">${esc(s.kode_seri)}</td>
-            <td class="px-3 py-2">${fmtDate(s.tgl_potong)}</td><td class="px-3 py-2">${esc(Q.user(s.id_user_pemotong)?.nama_user || '-')}</td>
-            <td class="px-3 py-2 text-right font-mono">${Q.gelaranOfPotong([s]).length}</td><td class="px-3 py-2 pr-4 text-right font-mono font-semibold">${fmtNum(s.total_lembar_hasil)}</td></tr>`).join('')}</tbody></table></div>`
-          : '<p class="text-xs text-slate-400">Belum ada pemotongan seri.</p>'}
-        <h4 class="mt-6 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Temuan QC <span class="font-mono text-slate-400">(${qc.length})</span></h4>
-        ${qc.length ? qc.map((k) => `<div class="flex items-start justify-between gap-3 p-3 rounded-lg border border-slate-200 mb-2">
-            <div><p class="text-xs"><span class="font-mono text-slate-400">id_qc: ${k.id_qc}</span> · <b>${esc(k.jenis_cacat)} (${k.jumlah_pcs} ${qcUnit(k)})</b></p><p class="text-xs text-slate-600 mt-0.5">${esc(k.catatan)}</p></div>
-            <span class="badge ${(QC_META[k.status] || QC_META['Need Rework']).badge}">${esc(k.status.toUpperCase())}</span></div>`).join('')
-          : '<p class="text-xs text-slate-400">Tidak ada temuan cacat.</p>'}`,
-      footer: `<button type="button" class="btn btn-outline" data-action="close-modal">Tutup</button>`,
-    });
-  }
-
-  function showRollDetail(id) {
-    const r = Q.roll(id);
-    if (!r) return showToast(`id_roll ${id} tidak ditemukan.`, { type: 'error' });
-    const info = Q.rollInfo(r);
-    const meta = ROLL_META[r.status_roll] || ROLL_META.Habis;
-    const gel = Q.rollGelaran(r.id_roll).sort((a, b) => a.id_gelar - b.id_gelar);
-    const sup = info.penerimaan ? Q.supplier(info.penerimaan.id_supplier) : null;
-    openModal({
-      title: `id_roll: ${r.id_roll} · ${esc(info.label)}`,
-      subtitle: `Detail_Roll_Bahan → Detail_Bahan_Warna #${r.id_detail_warna} → Penerimaan_Bahan #${info.penerimaan?.id_penerimaan ?? '-'}`,
-      icon: 'cylinder', iconCls: meta.icon,
-      body: `
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
-          ${kv('Status', `<span class="badge ${meta.badge}">${r.status_roll}</span>`)}
-          ${kv('Berat', `<span class="font-mono font-semibold">${fmtNum(r.berat_kg, 1)}</span> kg`)}
-          ${kv('Roll Ke', `<span class="font-mono">${r.no_roll_ke} / ${r.total_roll}</span>`)}
-          ${kv('Rak Alokasi', `<span class="font-mono">${esc(r.rak_alokasi)}</span>`)}
-          ${kv('Warna', `${esc(info.warna?.nama_warna || '-')} <span class="font-mono text-xs text-slate-400">${esc(info.warna?.kode_warna || '')}</span>`)}
-          ${kv('Nota', `<span class="font-mono">#${esc(info.penerimaan?.no_nota || '-')}</span> · ${fmtDate(info.penerimaan?.tgl_nota)}`)}
-          ${kv('Lebar / Gramasi', esc(info.penerimaan?.lebar_gramasi || '-'))}
-          ${kv('Supplier', esc(sup?.nama_supplier || '-'))}
-        </div>
-        <h4 class="mt-6 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Riwayat Gelaran <span class="font-mono text-slate-400">(${gel.length})</span></h4>
-        ${gel.length ? `<div class="rounded-lg border border-slate-200 overflow-hidden"><table class="w-full text-xs">
-          <thead class="bg-slate-50"><tr><th class="th">id_gelar</th><th class="th">Potong PK</th><th class="th">Pesanan</th><th class="th text-right">Panjang (m)</th><th class="th text-right">Tumpuk</th><th class="th text-right pr-4">Lembar</th></tr></thead>
-          <tbody class="divide-y divide-slate-100">${gel.map((g) => `<tr>
-            <td class="px-3 py-2 font-mono">${g.id_gelar}</td><td class="px-3 py-2 font-mono text-indigo-600">#${g.id_potong ?? '-'}</td>
-            <td class="px-3 py-2 font-mono">#${g.potong?.id_pesanan ?? '-'}</td><td class="px-3 py-2 text-right font-mono">${fmtNum(g.panjang_gelar, 1)}</td>
-            <td class="px-3 py-2 text-right font-mono">${g.jumlah_tumpuk}</td><td class="px-3 py-2 pr-4 text-right font-mono font-semibold">${g.total_lembar_gelar}</td></tr>`).join('')}
-          <tr class="bg-slate-50"><td colspan="5" class="px-3 py-2 text-right font-semibold">Total Yield</td><td class="px-3 py-2 pr-4 text-right font-mono font-bold text-indigo-700">${fmtNum(sum(gel, (g) => g.total_lembar_gelar))} pcs</td></tr>
-          </tbody></table></div>` : '<p class="text-xs text-slate-400">Roll belum pernah digelar.</p>'}`,
-      footer: `<button type="button" class="btn btn-outline" data-action="close-modal">Tutup</button>
-        ${r.status_roll === 'Tersedia' ? `<button type="button" class="btn btn-primary" data-action="siap-gelar" data-id="${r.id_roll}"><i data-lucide="scissors" class="w-4 h-4"></i>Siap Gelar di Meja Potong</button>` : ''}`,
-    });
-  }
-
-  function showPolaDetail(id) {
-    const p = Q.pola(id);
-    if (!p) return;
-    const specs = BongDB.where('Spesifikasi_Ukuran', (s) => s.id_pola === p.id_pola);
-    const isCelana = specs.some((s) => s.lingkar_pinggang !== null);
-    const orders = BongDB.where('Pesanan', (o) => o.id_pola === p.id_pola);
-    openModal({
-      title: esc(p.nama_pola), subtitle: `${esc(p.kode_pola)} · Kategori ${esc(Q.kategori(p.id_kategori)?.nama_kategori || '-')} · ${orders.length} pesanan`,
-      icon: 'shirt',
-      body: `
-        <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Spesifikasi Ukuran (cm)</h4>
-        <div class="rounded-lg border border-slate-200 overflow-hidden"><table class="w-full text-xs">
-          <thead class="bg-slate-50"><tr><th class="th">Ukuran</th>${isCelana ? '<th class="th text-right">Lingkar Pinggang</th><th class="th text-right pr-4">Panjang</th>' : '<th class="th text-right">Lingkar Dada</th><th class="th text-right">Panjang</th><th class="th text-right">Lebar Bahu</th><th class="th text-right pr-4">Panjang Lengan</th>'}</tr></thead>
-          <tbody class="divide-y divide-slate-100">${specs.map((s) => `<tr><td class="px-3 py-2 font-semibold">${s.nama_ukuran}</td>${isCelana
-            ? `<td class="px-3 py-2 text-right font-mono">${s.lingkar_pinggang ?? '-'}</td><td class="px-3 py-2 pr-4 text-right font-mono">${s.panjang ?? '-'}</td>`
-            : `<td class="px-3 py-2 text-right font-mono">${s.lingkar_dada ?? '-'}</td><td class="px-3 py-2 text-right font-mono">${s.panjang ?? '-'}</td><td class="px-3 py-2 text-right font-mono">${s.lebar_bahu ?? s.panjang_pundak ?? '-'}</td><td class="px-3 py-2 pr-4 text-right font-mono">${s.panjang_lengan ?? s.panjang_tangan ?? '-'}</td>`}</tr>`).join('')}</tbody>
-        </table></div>`,
-      footer: `<button type="button" class="btn btn-outline" data-action="close-modal">Tutup</button>`,
-    });
-  }
-
-  function openSettingsModal() {
-    const stats = BongDB.stats();
-    const meta = BongDB.data._meta;
-    openModal({
-      title: 'Pengaturan Sistem · BongDB',
-      subtitle: `localStorage key <code class="font-mono">${DB_KEY}</code> · ${fmtNum(BongDB.totalRecords())} record di 14 tabel`,
-      icon: 'database', size: 'max-w-3xl',
-      body: `
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          ${stats.map((s) => `
-            <div class="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2.5 hover:border-indigo-200 transition">
-              <div class="min-w-0">
-                <p class="text-[10px] font-mono text-slate-400">${String(s.no).padStart(2, '0')} · PK ${s.pk}</p>
-                <p class="text-[13px] font-medium font-mono text-slate-800 truncate">${s.table}</p>
-              </div>
-              <span class="font-mono text-sm font-bold text-indigo-600">${fmtNum(s.count)}</span>
-            </div>`).join('')}
-        </div>
-        <div class="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-          <div class="rounded-lg bg-slate-50 border border-slate-100 p-3">${kv('Tanggal Demo', APP_TODAY_LABEL)}</div>
-          <div class="rounded-lg bg-slate-50 border border-slate-100 p-3">${kv('Seed Dibuat', new Date(meta.seeded_at).toLocaleString('id-ID'))}</div>
-          <div class="rounded-lg bg-slate-50 border border-slate-100 p-3">${kv('Terakhir Diperbarui', new Date(meta.updated_at).toLocaleString('id-ID'))}</div>
-        </div>
-        <div class="mt-5 flex items-start gap-3 p-4 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
-          <i data-lucide="triangle-alert" class="w-4 h-4 shrink-0 mt-0.5"></i>
-          <p><b>Reset &amp; Seed Ulang</b> akan menghapus seluruh perubahan pada 14 tabel dan memulihkan data demo awal (18 pesanan aktif, 142 roll tersedia, 1,250 pcs hasil potong hari ini).</p>
-        </div>`,
-      footer: `
-        <button type="button" class="btn btn-outline mr-auto" data-action="export-json"><i data-lucide="file-json" class="w-4 h-4"></i>Ekspor Backup JSON</button>
-        <button type="button" class="btn btn-outline" data-action="close-modal">Tutup</button>
-        <button type="button" class="btn btn-danger" data-action="reset-db"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Reset &amp; Seed Ulang Data Demo</button>`,
-    });
-  }
-
-  /* --------------------------------------------------------------------------
-   * 12. EXPORTS
-   * ------------------------------------------------------------------------ */
-  function exportShiftLog() {
-    const todayPotong = BongDB.where('Pemotongan_Seri', (p) => String(p.tgl_potong).slice(0, 10) === APP_TODAY);
-    const rows = Q.gelaranOfPotong(todayPotong).map((g) => {
-      const pw = BongDB.find('Detail_Pemotongan_Warna', g.id_potong_warna);
-      const ps = pw ? BongDB.find('Pemotongan_Seri', pw.id_potong) : null;
-      const roll = Q.roll(g.id_roll);
-      return {
-        tgl_potong: ps?.tgl_potong || '', id_potong: ps?.id_potong || '', kode_seri: ps?.kode_seri || '', id_pesanan: ps?.id_pesanan || '',
-        pemotong: Q.user(ps?.id_user_pemotong)?.nama_user || '', id_gelar: g.id_gelar, id_roll: g.id_roll,
-        kain: roll ? Q.rollInfo(roll).label : '', panjang_gelar_m: g.panjang_gelar, jumlah_tumpuk: g.jumlah_tumpuk, total_lembar_gelar: g.total_lembar_gelar,
-      };
-    });
-    if (!rows.length) return showToast('Belum ada gelaran pada shift hari ini.', { type: 'warning' });
-    downloadFile(`shift_log_${APP_TODAY}.csv`, '\uFEFF' + toCsv(rows), 'text/csv;charset=utf-8');
-    showToast(`${rows.length} baris gelaran · ${fmtNum(sum(rows, (r) => r.total_lembar_gelar))} pcs diekspor ke <b>shift_log_${APP_TODAY}.csv</b>`, { title: 'Shift log diekspor' });
-  }
-
-  function exportExcel() {
-    let dataset = BongDB.data.Pesanan;
-    if (state.tab === 'laporan') {
-      const start = state.laporan.startDate;
-      const end = state.laporan.endDate;
-      const sumberFilter = state.laporan.sumber;
-      const statusFilter = state.laporan.status;
-      dataset = dataset.filter((p) => {
-        const tgl = p.tgl_order || APP_TODAY;
-        if (tgl < start || tgl > end) return false;
-        if (sumberFilter !== 'ALL' && String(p.id_sumber) !== String(sumberFilter)) return false;
-        if (statusFilter !== 'ALL' && p.status_pesanan !== statusFilter) return false;
-        return true;
+  function buildExportCsvRows(rep) {
+    const jenis = rep.filters.jenis_laporan;
+    const sumStokMin = rep.thresholds.min_stok_jadi;
+    const sumAccMin = rep.thresholds.min_stok_aksesoris;
+    if (jenis === 'KONSOLIDASI') {
+      return rep.consolidatedOrders.map((r) => ({
+        'No Order': `#ORD-${String(r.id_pesanan).padStart(4, '0')}`,
+        'Kode Pola': r.kode_pola,
+        'Nama Pola': r.nama_pola,
+        'Sumber Inisiasi': r.nama_sumber,
+        Mitra: r.nama_mitra,
+        'Tgl Order': fmtDateDmy(r.tgl_order),
+        'Deadline EDF': fmtDateDmy(r.deadline_terbaru),
+        'Roll Terpakai': r.rolls_used,
+        'Kain Terpakai': Number(r.kain_terpakai).toFixed(2),
+        'Actual Yield (Lembar)': r.actual_yield,
+        'QC Lolos (Pcs)': r.qc_lolos,
+        'QC Cacat (Pcs)': r.qc_cacat,
+        'Status Pesanan': r.status_pesanan,
+      }));
+    }
+    if (jenis === 'STOK') {
+      const rows = [];
+      rep.stokBarangJadiList.forEach((st) => {
+        const pl = Q.pola(st.id_pola);
+        const kat = pl ? Q.kategori(pl.id_kategori) : null;
+        const sp = Q.spec(st.id_spesifikasi);
+        const qty = Number(st.jumlah_stok_pcs);
+        rows.push({
+          Tipe: 'Barang Jadi',
+          Kode: pl?.kode_pola || `SKU-${st.id_stok}`,
+          'Nama Item': `${pl?.nama_pola || '-'} (${sp?.nama_ukuran || '-'} / ${st.nama_warna})`,
+          'Kategori / Supplier': kat?.nama_kategori || 'Umum',
+          'Stok Aktual': `${qty} Pcs`,
+          'Batas Min.': `${sumStokMin} Pcs`,
+          Status: qty <= 0 ? 'Habis' : (qty <= sumStokMin ? 'Stok Minimum' : 'Normal'),
+        });
+      });
+      rep.aksesorisList.forEach((acc) => {
+        const qty = Number(acc.stok);
+        rows.push({
+          Tipe: 'Aksesoris CMT',
+          Kode: `ACC-${String(acc.id_aksesoris).padStart(3, '0')}`,
+          'Nama Item': acc.nama_aksesoris + (acc.ukuran ? ` (${acc.ukuran})` : ''),
+          'Kategori / Supplier': Q.supplier(acc.id_supplier)?.nama_supplier || '-',
+          'Stok Aktual': `${qty} ${acc.satuan}`,
+          'Batas Min.': `${sumAccMin} ${acc.satuan}`,
+          Status: qty < sumAccMin ? 'Stok Minimum' : 'Normal',
+        });
+      });
+      return rows;
+    }
+    if (jenis === 'BAHAN_MASUK') {
+      return rep.penerimaanList.map((pn) => {
+        const warnas = Q.warnaOfPenerimaan(pn.id_penerimaan);
+        return {
+          'No Nota': pn.no_nota,
+          Tanggal: fmtDateDmy(pn.tgl_nota),
+          Supplier: Q.supplier(pn.id_supplier)?.nama_supplier || '-',
+          'Nama Kain': pn.nama_kain,
+          Penerima: pn.penerima || '-',
+          'Jml Roll': sum(warnas, (w) => w.total_roll),
+          'Total Ukuran': Number(sum(warnas, (w) => w.total_ukuran)).toFixed(2),
+        };
       });
     }
-
-    const rows = dataset.map((p) => {
-      const seri = BongDB.where('Pemotongan_Seri', (s) => s.id_pesanan === p.id_pesanan);
-      const gel = Q.gelaranOfPotong(seri);
-      const rollsUsed = [...new Set(gel.map((g) => g.id_roll))].join('; ');
+    if (jenis === 'MUTASI_KELUAR') {
+      return rep.riwayatStokList.map((rw) => ({
+        'No Dokumen': (rw.jenis_transaksi === 'KELUAR' ? 'OUT-' : 'INB-') + String(rw.id_riwayat_stok).padStart(4, '0'),
+        Tanggal: fmtDateTimeDmy(rw.tgl_transaksi),
+        Jenis: rw.jenis_transaksi,
+        'Pola & Ukuran & Warna': `${Q.pola(rw.id_pola)?.nama_pola || '-'} (${Q.spec(rw.id_spesifikasi)?.nama_ukuran || '-'} / ${rw.nama_warna})`,
+        'Mitra / Alasan': (rw.nama_mitra ? `${rw.nama_mitra} - ` : '') + rw.kategori_alasan,
+        Petugas: Q.user(rw.id_user)?.username || '-',
+        'Saldo Sebelum': rw.stok_sebelum,
+        'Saldo Sesudah': rw.stok_sesudah,
+        'Qty (Pcs)': (rw.jenis_transaksi === 'KELUAR' ? '-' : '+') + rw.jumlah_pcs,
+      }));
+    }
+    return rep.qcList.map((q) => {
+      const ord = Q.pesanan(q.id_pesanan);
+      const pl = ord ? Q.pola(ord.id_pola) : null;
       return {
-        id_pesanan: p.id_pesanan, kode_pola: Q.pola(p.id_pola)?.kode_pola || '', nama_pola: Q.pola(p.id_pola)?.nama_pola || '',
-        sumber_inisiasi: Q.sumber(p.id_sumber)?.nama_sumber || '', nama_mitra: p.nama_mitra || '-', tgl_order: p.tgl_order,
-        deadline: p.deadline || addDays(p.tgl_order || APP_TODAY, 14),
-        status_pesanan: p.status_pesanan, progress_pct: p.progress_pct, lembar_dipotong: sum(seri, (s) => s.total_lembar_hasil),
-        roll_terpakai: rollsUsed || '-', temuan_cacat: BongDB.where('Kerusakan', (k) => k.id_pesanan === p.id_pesanan).length,
+        'No QC': `QC-${String(q.id_qc).padStart(4, '0')}`,
+        Tanggal: fmtDateTimeDmy(q.tgl_pemeriksaan),
+        'Pola / Pesanan': pl?.nama_pola || ord?.jenis_pesanan || '-',
+        'Tahap QC': q.tahap_qc,
+        'Petugas QC': Q.user(q.id_user_qc)?.username || '-',
+        Diperiksa: q.jumlah_diperiksa,
+        Lolos: q.jumlah_lolos,
+        Cacat: q.jumlah_cacat,
+        'Jenis Cacat': q.jenis_cacat,
+        'Status QC': q.status_qc,
       };
     });
-    downloadFile(`laporan_konsolidasi_${APP_TODAY}.csv`, '\uFEFF' + toCsv(rows), 'text/csv;charset=utf-8');
-    showToast(`${rows.length} baris pesanan dikonsolidasi diekspor ke <b>laporan_konsolidasi_${APP_TODAY}.csv</b> (UTF-8 BOM, kompatibel Excel).`, { title: 'Laporan Konsolidasi Diekspor' });
+  }
+
+  function exportLaporanExcel() {
+    const rep = state.lastReportData || Svc.buildReportData(state.laporanFilters);
+    const rows = buildExportCsvRows(rep);
+    if (!rows || rows.length === 0) {
+      showToast('Tidak ada data pada jenis laporan ini untuk diekspor ke CSV.', 'warning');
+      return;
+    }
+    const headers = Object.keys(rows[0]);
+    const csvLines = [
+      headers.join(','),
+      ...rows.map((row) => headers.map((h) => `"${String(row[h] ?? '').replace(/"/g, '""')}"`).join(',')),
+    ];
+    const blob = new Blob(['\uFEFF' + csvLines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Rekapan_Bong_Garment_${rep.filters.jenis_laporan}_${todayIso()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    showToast('File CSV berhasil diunduh.', 'success');
+  }
+
+  function exportLaporanWord() {
+    const docRoot = $('#laporan-dokumen-resmi');
+    const rep = state.lastReportData;
+    if (!docRoot || !rep) return;
+
+    const company = rep.companyProfile;
+    const meta = rep.meta;
+    let kpiTableHtml = '';
+    const kpiGrid = docRoot.querySelector('.kpi-summary-grid');
+    if (kpiGrid) {
+      const kpiCells = Array.from(kpiGrid.children).map((card) => {
+        const ps = Array.from(card.querySelectorAll('p')).map((p) => p.textContent.trim());
+        return `<td style="width:33.33%; border:1px solid #cbd5e1; padding:7pt 9pt; vertical-align:top;">
+          <div style="font-size:8pt; font-weight:bold; text-transform:uppercase; color:#475569;">${esc(ps[0] || '')}</div>
+          <div style="font-size:13pt; font-weight:bold; color:#0f172a; margin:3pt 0;">${esc(ps[1] || '')}</div>
+          <div style="font-size:8.5pt; color:#475569;">${esc(ps[2] || '')}</div>
+        </td>`;
+      }).join('');
+      kpiTableHtml = `<table style="width:100%; border-collapse:separate; border-spacing:6pt 0; margin-bottom:12pt;"><tr>${kpiCells}</tr></table>`;
+    }
+
+    const tablesHtml = Array.from(docRoot.querySelectorAll('table.doc-table')).map((tbl) => {
+      let headingHtml = '';
+      const centerWrap = tbl.closest('.rekapan-sheet-block');
+      const cardWrap = tbl.closest('.border.border-slate-300');
+      if (centerWrap) {
+        const lines = Array.from(centerWrap.querySelectorAll('h3, p')).map((el) => esc(el.textContent.trim()));
+        headingHtml = `<div style="text-align:center; font-weight:bold; font-size:10.5pt; margin:10pt 0 6pt 0;">${lines.join('<br/>')}</div>`;
+      } else if (cardWrap) {
+        const h3 = cardWrap.querySelector('h3');
+        if (h3) headingHtml = `<div style="font-weight:bold; font-size:10.5pt; color:#0f172a; margin:12pt 0 5pt 0;">${esc(h3.textContent.trim())}</div>`;
+      }
+      const clone = tbl.cloneNode(true);
+      clone.removeAttribute('class');
+      clone.setAttribute('style', 'width:100%; border-collapse:collapse; margin-bottom:10pt; font-family:"Times New Roman", serif; font-size:9pt;');
+      clone.querySelectorAll('th, td').forEach((cell) => {
+        const align = cell.classList.contains('text-right') ? 'text-align:right;' : (cell.classList.contains('text-center') ? 'text-align:center;' : 'text-align:left;');
+        const isBold = cell.tagName === 'TH' || cell.classList.contains('font-bold') || cell.closest('tr')?.classList.contains('font-bold');
+        const bg = cell.tagName === 'TH' || cell.closest('tr')?.classList.contains('bg-slate-100') ? 'background-color:#f1f5f9;' : '';
+        cell.removeAttribute('class');
+        cell.setAttribute('style', `border:1px solid #0f172a; padding:4pt 6pt; vertical-align:top; ${align} ${isBold ? 'font-weight:bold;' : ''} ${bg}`);
+      });
+      return headingHtml + clone.outerHTML;
+    }).join('\n');
+
+    const htmlDoc = `
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="utf-8" />
+  <title>${esc(rep.activeReportTitle)}</title>
+  <style>
+    @page { size: A4 landscape; margin: 1.2cm; }
+    body { font-family: "Times New Roman", Times, serif; color: #0f172a; font-size: 10pt; }
+    .kop-title { font-size: 15pt; font-weight: bold; color: #1e1b4b; margin: 0; }
+    .kop-sub { font-size: 9.5pt; color: #475569; margin: 2pt 0 0 0; }
+    .meta-box { border: 1px solid #cbd5e1; background: #f8fafc; padding: 8pt 10pt; margin: 10pt 0; font-size: 9.5pt; }
+    .divider { border-top: 2px solid #0f172a; margin: 8pt 0 12pt 0; }
+    .sig-wrap { width: 100%; border-collapse: collapse; margin-top: 18pt; }
+    .sig-wrap td { border: none; vertical-align: top; }
+  </style>
+</head>
+<body>
+  <table style="width:100%; border-collapse:collapse;">
+    <tr>
+      <td style="width:48pt; height:48pt; vertical-align:middle; text-align:center; background:#4f46e5; color:#ffffff; padding:6pt;"><div style="font-size:20pt; line-height:1; color:#ffffff;">&#9986;</div></td>
+      <td style="padding-left:10pt; vertical-align:middle;">
+        <p class="kop-title">${esc(company.nama_perusahaan)} <span style="font-size:9pt; color:#be123c;">${esc(company.tagline)}</span></p>
+        <p class="kop-sub">${esc(company.alamat)} | Telp: ${esc(company.telepon)}</p>
+        <p class="kop-sub">${esc(company.deskripsi_sistem)}</p>
+      </td>
+    </tr>
+  </table>
+  <div class="meta-box">
+    <div><b>Judul Laporan:</b> ${esc(rep.activeReportTitle)}</div>
+    <div><b>Periode:</b> ${esc(rep.periodeText)}</div>
+    <div><b>Diotorisasi / Dicetak Oleh:</b> ${esc(meta.printer_username)} (${esc(meta.printer_name)} / ${esc(meta.printer_role)})</div>
+    <div><b>Waktu Cetak:</b> ${esc(meta.printed_at_formatted)}</div>
+  </div>
+  <div class="divider"></div>
+  ${kpiTableHtml}
+  ${tablesHtml}
+  <table class="sig-wrap">
+    <tr>
+      <td style="width:58%;"></td>
+      <td style="width:42%; text-align:center; font-size:9.5pt;">
+        <div>${esc(company.kota_pengesahan || 'Jakarta')}, ${esc(meta.printed_date_short)}</div>
+        <div><b>Diotorisasi Oleh &mdash; ${esc(meta.printer_role_label)}</b></div>
+        <br/><br/><br/>
+        <div><b><u>${esc(meta.printer_username.toUpperCase())}</u></b></div>
+        <div style="font-size:8.5pt; color:#475569;">${esc(meta.printer_name)} &bull; ${esc(meta.printer_role_label)}</div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+    const blob = new Blob(['\ufeff', htmlDoc], { type: 'application/msword;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Rekapan_Bong_Garment_${rep.filters.jenis_laporan}_${todayIso()}.doc`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    showToast('Dokumen Word (.doc) berhasil diunduh.', 'success');
   }
 
   /* --------------------------------------------------------------------------
-   * 13. EVENT HANDLING
+   * SCREEN 8: PENGATURAN & MANAJEMEN PENGGUNA
    * ------------------------------------------------------------------------ */
-  function toggleDropdown(id, force) {
-    const el = $(id);
-    const open = force !== undefined ? force : el.classList.contains('hidden');
-    el.classList.toggle('hidden', !open);
-    if (open) el.classList.add('pop-in');
-    return open;
+  function renderPengaturan() {
+    const users = DB.all('User');
+    const activeUserId = Auth.getUser()?.id_user;
+    $('#pengaturan-user-count').textContent = `${users.length} Akun Terdaftar`;
+
+    const roleAccessMap = {
+      Admin: 'Akses Penuh Seluruh Modul & Pengaturan',
+      Pemilik: 'Mode Audit (Read-Only): Dashboard, Gudang & Laporan Eksekutif',
+      Pemotong: 'Dashboard, Antrean EDF & Pemotongan Seri',
+      QC: 'Dashboard & Quality Control (Prototipe, Potong, Jahit Akhir)',
+      Gudang: 'Dashboard, Penerimaan Bahan, Stok Barang Jadi & Aksesoris',
+    };
+
+    $('#pengaturan-users-tbody').innerHTML = users.map((u) => {
+      const isMe = Number(u.id_user) === Number(activeUserId);
+      const roleCls = u.role === 'Admin' ? 'bg-indigo-100 text-indigo-800' : (u.role === 'Pemilik' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700');
+      return `
+        <tr class="hover:bg-slate-50">
+          <td class="py-3 font-mono font-semibold text-indigo-600">#${u.id_user}</td>
+          <td class="py-3 font-semibold text-slate-800">${esc(u.nama_user)}${isMe ? '<span class="ml-1.5 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">Sesi Anda</span>' : ''}</td>
+          <td class="py-3 font-mono text-indigo-700 font-semibold">@ ${esc(u.username)}</td>
+          <td class="py-3"><span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${roleCls}">${esc(u.role)}</span></td>
+          <td class="py-3 text-[11px] text-slate-500">${esc(roleAccessMap[u.role] || '-')}</td>
+          <td class="py-3 text-right">
+            <div class="inline-flex items-center justify-end gap-1.5">
+              <button type="button" data-action="edit-user" data-id="${u.id_user}" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-md font-semibold text-[11px] inline-flex items-center gap-1"><i data-lucide="key-round" class="w-3 h-3"></i> Edit / Password</button>
+              ${!isMe ? `<button type="button" data-action="delete-user" data-id="${u.id_user}" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-md font-semibold text-[11px] inline-flex items-center gap-1"><i data-lucide="trash-2" class="w-3 h-3"></i> Hapus</button>` : ''}
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+
+    const counters = [
+      { label: 'Pesanan', val: DB.all('Pesanan').length, cls: 'text-slate-800' },
+      { label: 'Nota Kain', val: DB.all('Penerimaan_Bahan').length, cls: 'text-slate-800' },
+      { label: 'Roll Fisik', val: DB.all('Detail_Roll_Bahan').length, cls: 'text-slate-800' },
+      { label: 'Seri Potong', val: DB.all('Pemotongan_Seri').length, cls: 'text-slate-800' },
+      { label: 'Log QC', val: DB.all('QC').length, cls: 'text-slate-800' },
+      { label: 'Stok Jadi', val: DB.all('Stok_Barang_Jadi').length, cls: 'text-slate-800' },
+      { label: 'Riwayat Stok', val: DB.all('Riwayat_Stok_Barang_Jadi').length, cls: 'text-indigo-600' },
+      { label: 'Master Pola', val: DB.all('Pola').length, cls: 'text-slate-800' },
+      { label: 'Aksesoris', val: DB.all('Aksesoris').length, cls: 'text-slate-800' },
+    ];
+    $('#pengaturan-db-counts').innerHTML = counters.map((c) => `
+      <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-center">
+        <div class="text-base font-bold font-mono ${c.cls}">${c.val}</div>
+        <div class="text-[9px] text-slate-500 font-semibold uppercase">${c.label}</div>
+      </div>`).join('');
+
+    $('#pengaturan-kategori-list').innerHTML = DB.all('Kategori_Pola').map((k) => `
+      <div class="py-2 flex items-center justify-between gap-2">
+        <span class="font-medium text-slate-800"><span class="font-mono text-slate-400 mr-1">#${k.id_kategori}</span> ${esc(k.nama_kategori)}</span>
+        <div class="inline-flex items-center gap-1">
+          <button type="button" data-action="edit-kat-inline" data-id="${k.id_kategori}" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-semibold">Edit</button>
+          <button type="button" data-action="del-kat-inline" data-id="${k.id_kategori}" class="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-semibold">Hapus</button>
+        </div>
+      </div>`).join('');
+
+    $('#pengaturan-sumber-list').innerHTML = DB.all('Sumber_Inisiasi').map((s) => `
+      <div class="py-2 flex items-center justify-between gap-2">
+        <span class="font-medium text-slate-800"><span class="font-mono text-slate-400 mr-1">#${s.id_sumber}</span> ${esc(s.nama_sumber)}</span>
+        <div class="inline-flex items-center gap-1">
+          <button type="button" data-action="edit-sum-inline" data-id="${s.id_sumber}" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-semibold">Edit</button>
+          <button type="button" data-action="del-sum-inline" data-id="${s.id_sumber}" class="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-semibold">Hapus</button>
+        </div>
+      </div>`).join('');
+
+    const suppliers = DB.all('Supplier');
+    $('#pengaturan-supplier-list').innerHTML = suppliers.length ? suppliers.map((sp) => `
+      <div class="py-2 flex items-center justify-between gap-2">
+        <div>
+          <span class="font-semibold text-slate-800 block">${esc(sp.nama_supplier)}</span>
+          <span class="text-[10px] text-slate-400">${esc(sp.kontak || '-')}</span>
+        </div>
+        <div class="inline-flex items-center gap-1 shrink-0">
+          <button type="button" data-action="edit-sup-inline" data-id="${sp.id_supplier}" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-semibold">Edit</button>
+          <button type="button" data-action="del-sup-inline" data-id="${sp.id_supplier}" class="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[10px] font-semibold">Hapus</button>
+        </div>
+      </div>`).join('') : '<p class="text-[11px] text-slate-400 italic py-3">Belum ada supplier terdaftar.</p>';
   }
-  function closeDropdowns(except) {
-    ['#role-menu', '#notif-menu', '#search-results'].forEach((id) => { if (id !== except) $(id).classList.add('hidden'); });
-    $('#btn-role-menu').setAttribute('aria-expanded', 'false');
-  }
 
-  const ACTIONS = {
-    'goto': (el) => { closeModal(); closeDropdowns(); switchTab(el.dataset.target); },
-    'open-settings': () => { closeDropdowns(); openSettingsModal(); },
-    'close-modal': () => closeModal(),
-    'confirm-yes': () => { const fn = state.confirmFn; closeModal(); if (fn) fn(); },
-    'reset-db': () => confirmDialog({
-      title: 'Reset & seed ulang database?', danger: true, icon: 'rotate-ccw', confirmText: 'Ya, Reset Data',
-      message: `Seluruh data pada 14 tabel di <code class="font-mono">${DB_KEY}</code> akan dikembalikan ke kondisi demo awal. Tindakan ini tidak dapat dibatalkan.`,
-      onConfirm: () => {
-        state.selectedEdf = null; state.notifSeen = 0;
-        state.pesanan.flashOrderId = null;
-        state.penerimaan.flashRollId = null;
-        BongDB.reset();
-        showToast(`Database dipulihkan · ${fmtNum(BongDB.totalRecords())} record di 14 tabel.`, { title: 'Reset berhasil' });
-      },
-    }),
-    'export-json': () => {
-      downloadFile(`bong_garment_db_backup_${APP_TODAY}.json`, BongDB.exportJSON(), 'application/json');
-      showToast('Backup seluruh 14 tabel berhasil diunduh.', { title: 'Backup JSON' });
-    },
-    'export-shift-log': () => exportShiftLog(),
-    'export-excel': () => exportExcel(),
-    'step-pending': (el) => {
-      const step = el.dataset.step;
-      showToast(`Aksi <b>${esc(el.dataset.label || 'Simpan')}</b> akan aktif pada <b>Step ${esc(step)}</b>. Skema tabel terkait sudah tersedia di <code class="font-mono">BongDB</code>.`, { type: 'info', title: `Modul Step ${step}` });
-    },
-    'logout': () => confirmDialog({
-      title: 'Keluar dari sistem?', icon: 'log-out', danger: true, confirmText: 'Keluar',
-      message: 'Sesi <b>Luis Febry</b> akan diakhiri. Pada prototipe ini data tetap tersimpan di localStorage browser.',
-      onConfirm: () => {
-        applyRole('Admin');
-        switchTab('dashboard');
-        showToast('Sesi demo diakhiri. Anda masuk kembali sebagai Admin.', { type: 'info', title: 'Keluar sistem' });
-      },
-    }),
-    'toggle-role-menu': (el) => {
-      closeDropdowns('#role-menu');
-      const open = toggleDropdown('#role-menu');
-      el.setAttribute('aria-expanded', String(open));
-    },
-    'set-role': (el) => {
-      closeDropdowns();
-      if (el.dataset.role === state.role) return;
-      applyRole(el.dataset.role, { announce: true });
-    },
-    'toggle-notif': () => {
-      closeDropdowns('#notif-menu');
-      const open = toggleDropdown('#notif-menu');
-      if (open) { state.notifSeen = buildNotifications().length; $('#notif-dot').classList.add('hidden'); refreshIcons(); }
-    },
-    'filter-orders': (el) => { state.orderFilter = el.dataset.filter; state.showAllOrders = false; renderOrdersTable(); refreshIcons(); },
-    'toggle-orders': () => { state.showAllOrders = !state.showAllOrders; renderOrdersTable(); refreshIcons(); },
-    'open-order': (el) => { closeDropdowns(); showPesananDetail(el.dataset.id); },
-    'open-roll': (el) => { closeDropdowns(); showRollDetail(el.dataset.id); },
-    'open-pola': (el) => { closeDropdowns(); showPolaDetail(el.dataset.id); },
-    'siap-gelar': (el) => {
-      closeModal();
-      const idRoll = Number(el.dataset.id);
-      const r = Q.roll(idRoll);
-      if (r) {
-        state.pemotongan.draftGelarRows = [
-          {
-            id_roll: idRoll,
-            panjang_gelar: 2.2,
-            jumlah_tumpuk: 50,
-            total_lembar_gelar: 60,
-            status_akhir: 'Dipotong',
-          },
-        ];
-        state.pemotongan.rollStatusMap[idRoll] = 'Dipotong';
-      }
-      switchTab('pemotongan');
-      renderDraftGelarTable();
-      updateCuttingYieldSummary();
-      showToast(`<span class="font-mono">id_roll: ${idRoll}</span> (${esc(r ? Q.rollInfo(r).label : '')}) ditambahkan ke draft gelaran di Meja Potong. Pilih pesanan target dari Cutter Queue EDF.`, { type: 'info', title: 'Roll siap digelar' });
-    },
-    'select-sumber': (el) => {
-      state.selectedSumber = Number(el.dataset.id);
-      renderSumberTiles();
-      renderPesananScreen();
-      refreshIcons();
-    },
-    'select-edf': (el) => {
-      state.selectedEdf = Number(el.dataset.id);
-      renderEdfQueue();
-      renderPemotonganScreen({ selectedOrderId: state.selectedEdf });
-      refreshIcons();
-    },
-
-    // Screen 2 Actions
-    'submit-pesanan': () => submitPesanan(),
-    'reset-pesanan-form': () => {
-      resetPesananForm();
-      showToast('Form pesanan telah direset ke nilai awal.', { type: 'info' });
-    },
-    'toggle-pola-mode': (el) => {
-      state.pesanan.polaMode = el.dataset.mode;
-      renderPesananScreen();
-      refreshIcons();
-    },
-    'view-selected-pola': () => {
-      const selId = Number($('#sel-pola-existing')?.value || state.pesanan.selectedPolaId || BongDB.data.Pola[0]?.id_pola);
-      showPolaDetail(selId);
-    },
-    'select-mitra-chip': (el) => {
-      const m = el.dataset.mitra;
-      const inp = $('#inp-nama-mitra');
-      if (inp) {
-        inp.value = m;
-        inp.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    },
-
-    // Screen 3 Actions
-    'submit-penerimaan': () => submitPenerimaan(),
-    'reset-penerimaan-form': () => {
-      resetPenerimaanForm();
-      showToast('Form penerimaan bahan telah direset ke nilai awal.', { type: 'info' });
-    },
-    'modal-add-supplier': () => modalAddSupplier(),
-    'save-new-supplier': () => {
-      const nama = $('#inp-new-sup-nama')?.value.trim();
-      const kontak = $('#inp-new-sup-kontak')?.value.trim();
-      const alamat = $('#inp-new-sup-alamat')?.value.trim();
-      if (!nama) { showToast('Nama Supplier wajib diisi.', { type: 'error' }); $('#inp-new-sup-nama')?.focus(); return; }
-      if (!kontak) { showToast('Kontak Supplier wajib diisi.', { type: 'error' }); $('#inp-new-sup-kontak')?.focus(); return; }
-      if (!alamat) { showToast('Alamat Supplier wajib diisi.', { type: 'error' }); $('#inp-new-sup-alamat')?.focus(); return; }
-
-      const newSup = BongDB.insert('Supplier', { nama_supplier: nama, kontak, alamat });
-      closeModal();
-      showToast(`Supplier <b>${esc(nama)}</b> (ID: #${newSup.id_supplier}) berhasil ditambahkan ke database.`, { title: 'Supplier Terdaftar' });
-      renderPenerimaanScreen({ selectedSupplierId: newSup.id_supplier });
-    },
-    'add-color-group': () => {
-      const nextId = ++state.penerimaan.nextColorGroupId;
-      const palette = [
-        { name: 'Navy', code: 'NVY-02', hex: '#1E3A8A', rack: 'A-05' },
-        { name: 'Khaki', code: 'KHK-03', hex: '#D97706', rack: 'B-04' },
-        { name: 'Olive Green', code: 'OLV-04', hex: '#166534', rack: 'C-02' },
-        { name: 'Maroon', code: 'MRN-05', hex: '#991B1B', rack: 'D-01' },
-        { name: 'White Bright', code: 'WHT-06', hex: '#F8FAFC', rack: 'A-03' },
-      ];
-      const pick = palette[(nextId - 1) % palette.length];
-      state.penerimaan.colorGroups.push({
-        id: nextId,
-        namaWarna: pick.name,
-        kodeWarna: pick.code,
-        rakDefault: pick.rack,
-        hexColor: pick.hex,
-      });
-      renderColorGroups();
-      renderDraftRollsTable();
-    },
-    'remove-color-group': (el) => {
-      if (state.penerimaan.colorGroups.length <= 1) return;
-      const cgId = Number(el.dataset.id);
-      state.penerimaan.colorGroups = state.penerimaan.colorGroups.filter((g) => g.id !== cgId);
-      const fallbackId = state.penerimaan.colorGroups[0].id;
-      state.penerimaan.draftRolls.forEach((r) => {
-        if (r.colorGroupId === cgId) r.colorGroupId = fallbackId;
-      });
-      renderColorGroups();
-      renderDraftRollsTable();
-    },
-    'add-roll-row': () => {
-      const defaultGroup = state.penerimaan.colorGroups[0] || { id: 1, rakDefault: 'B-04' };
-      state.penerimaan.draftRolls.push({
-        colorGroupId: defaultGroup.id,
-        beratKg: 25.0,
-        rakAlokasi: defaultGroup.rakDefault || 'B-04',
-      });
-      renderDraftRollsTable();
-      renderColorGroups();
-    },
-    'add-5-rolls': () => {
-      const defaultGroup = state.penerimaan.colorGroups[0] || { id: 1, rakDefault: 'B-04' };
-      for (let i = 0; i < 5; i++) {
-        state.penerimaan.draftRolls.push({
-          colorGroupId: defaultGroup.id,
-          beratKg: 25.0,
-          rakAlokasi: defaultGroup.rakDefault || 'B-04',
-        });
-      }
-      renderDraftRollsTable();
-      renderColorGroups();
-      showToast('5 baris roll kain baru ditambahkan ke draft.', { type: 'info' });
-    },
-    'remove-roll-row': (el) => {
-      if (state.penerimaan.draftRolls.length <= 1) {
-        showToast('Minimal harus ada 1 roll fisik dalam penerimaan bahan.', { type: 'warning' });
-        return;
-      }
-      const idx = Number(el.dataset.index);
-      state.penerimaan.draftRolls.splice(idx, 1);
-      renderDraftRollsTable();
-      renderColorGroups();
-    },
-    'filter-rolls': (el) => {
-      state.penerimaan.rollFilter = el.dataset.filter;
-      renderInventoryRollsTable();
-      refreshIcons();
-    },
-    'select-kain-chip': (el) => {
-      const k = el.dataset.kain;
-      const inp = $('#inp-nama-kain');
-      if (inp) {
-        inp.value = k;
-        inp.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    },
-
-    // Screen 4 Actions (Pemotongan)
-    'submit-pemotongan': () => submitPemotongan(),
-    'reset-pemotongan-form': () => {
-      resetPemotonganForm();
-      showToast('Form pemotongan seri telah direset ke nilai awal.', { type: 'info' });
-    },
-    'add-gelar-row': () => {
-      const selectedWarnaId = Number($('#sel-potong-warna')?.value || 1);
-      const availRolls = getAvailableRollOptions(selectedWarnaId);
-      const usedRollIds = new Set((state.pemotongan.draftGelarRows || []).map((r) => r.id_roll));
-      const nextRoll = availRolls.find((r) => !usedRollIds.has(r.id_roll)) || availRolls[0];
-      const pcsPerPly = Number($('#inp-pcs-per-ply')?.value) || 2;
-      state.pemotongan.draftGelarRows.push({
-        id_roll: nextRoll ? nextRoll.id_roll : 4503,
-        panjang_gelar: 2.2,
-        jumlah_tumpuk: 50,
-        total_lembar_gelar: 50 * pcsPerPly,
-        status_akhir: 'Dipotong',
-      });
-      renderDraftGelarTable();
-      updateCuttingYieldSummary();
-    },
-    'remove-gelar-row': (el) => {
-      if (state.pemotongan.draftGelarRows.length <= 1) {
-        showToast('Minimal harus ada 1 baris gelaran roll.', { type: 'warning' });
-        return;
-      }
-      const idx = Number(el.dataset.index);
-      state.pemotongan.draftGelarRows.splice(idx, 1);
-      renderDraftGelarTable();
-      updateCuttingYieldSummary();
-    },
-    'set-roll-post-status': (el) => {
-      const idRoll = Number(el.dataset.rollId);
-      const status = el.dataset.status;
-      state.pemotongan.rollStatusMap[idRoll] = status;
-      state.pemotongan.draftGelarRows.forEach((r) => {
-        if (r.id_roll === idRoll) r.status_akhir = status;
-      });
-      renderDraftGelarTable();
-      updateCuttingYieldSummary();
-    },
-
-    // Screen 5 Actions (Quality Control)
-    'submit-qc': () => submitQc(),
-    'reset-qc-form': () => {
-      resetQcForm();
-      showToast('Form inspeksi QC telah direset ke nilai awal.', { type: 'info' });
-    },
-    'approve-qc-pass': () => approveQcPass(),
-    'resolve-qc': (el) => resolveQc(el.dataset.id),
-    'pick-defect-cat': (el) => {
-      state.qc.selectedDefectCat = el.dataset.cat;
-      renderQcScreen();
-    },
-    'pick-qc-decision': (el) => {
-      state.qc.selectedDecision = el.dataset.decision;
-      renderQcScreen();
-    },
-    'fill-qc-template': (el) => {
-      const cat = el.dataset.cat;
-      const textarea = $('#inp-catatan-qc');
-      if (!textarea) return;
-      if (cat === 'potong') {
-        state.qc.selectedDefectCat = 'Cacat Potong';
-        textarea.value = 'Terjadi pergeseran pola kain pada gelaran layer 4 saat mesin potong berjalan. Membutuhkan pemotongan ulang lembar kain komponen lengan.';
-      } else if (cat === 'jahit') {
-        state.qc.selectedDefectCat = 'Cacat Jahit';
-        textarea.value = 'Kerutan berlebih dan jahitan loncat pada bagian kerah kemeja. Perlu dibongkar dan dijahit ulang oleh penjahit CMT.';
-      } else if (cat === 'bahan') {
-        state.qc.selectedDefectCat = 'Cacat Bahan';
-        state.qc.selectedDecision = 'Retur Supplier';
-        textarea.value = 'Ditemukan perbedaan saturasi warna (shading belang) antar gulungan kain pada lot yang sama. Roll kain ditandai klaim retur supplier.';
-      }
-      renderQcScreen();
-    },
-    'filter-qc-table': (el) => {
-      state.qc.tableFilter = el.dataset.filter;
-      renderQcTable();
-    },
-
-    // Screen 6 Actions (Laporan)
-    'print-report': () => printReport(),
-    'apply-laporan-filter': () => applyLaporanFilter(),
-    'reset-laporan-filter': () => resetLaporanFilter(),
-  };
-
+  /* --------------------------------------------------------------------------
+   * Event Binding & Delegated Controllers
+   * ------------------------------------------------------------------------ */
   function bindEvents() {
+    // Modal close buttons + backdrop + Escape
     document.addEventListener('click', (e) => {
-      const target = e.target;
-      if (!target.closest('#role-switcher')) $('#role-menu').classList.add('hidden');
-      if (!target.closest('#notif-wrap')) $('#notif-menu').classList.add('hidden');
-      if (!target.closest('#search-wrap')) $('#search-results').classList.add('hidden');
-
-      const tabEl = target.closest('[data-tab]');
-      if (tabEl) { e.preventDefault(); switchTab(tabEl.dataset.tab); return; }
-
-      const el = target.closest('[data-action]');
-      if (!el) return;
-      const fn = ACTIONS[el.dataset.action];
-      if (fn) { e.preventDefault(); fn(el, e); }
+      const closeTarget = e.target.closest('[data-close-modal]');
+      if (closeTarget) {
+        closeModalById(closeTarget.dataset.closeModal);
+        return;
+      }
+      if (e.target.id && e.target.id.startsWith('modal-') && e.target.classList.contains('fixed')) {
+        closeModalById(e.target.id);
+      }
     });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeAllModals();
+    });
+
+    // Login overlay
+    $('#btn-toggle-pw')?.addEventListener('click', () => {
+      const inp = $('#inp-login-password');
+      if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
+    });
+    $$('.btn-demo-login').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        $('#inp-login-username').value = btn.dataset.demoUser;
+        $('#inp-login-password').value = btn.dataset.demoPass;
+        $('#form-login').requestSubmit();
+      });
+    });
+    $('#form-login')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      try {
+        const res = Auth.login($('#inp-login-username').value, $('#inp-login-password').value);
+        $('#login-error-box').classList.add('hidden');
+        syncAuthVisibility();
+        switchTab(res.redirectTab);
+        showToast(`Selamat datang, ${res.user.nama_user}!`, 'success');
+      } catch (err) {
+        $('#login-error-text').textContent = err.message;
+        $('#login-error-box').classList.remove('hidden');
+        $('#login-error-box').classList.add('flex');
+      }
+    });
+
+    // Logout buttons
+    document.addEventListener('click', (e) => {
+      const logoutBtn = e.target.closest('[data-action="logout"]');
+      if (logoutBtn) {
+        Auth.logout();
+        syncAuthVisibility();
+        refreshIcons();
+      }
+    });
+
+    // Sidebar navigation
+    $$('.nav-item[data-tab]').forEach((a) => {
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        switchTab(a.dataset.tab);
+      });
+    });
+
+    // Admin Role View Simulator
+    $('#role-select')?.addEventListener('change', function () {
+      const newRole = this.value;
+      Auth.setSimulatedRole(newRole);
+      if (!Auth.canAccessTab(state.tab)) {
+        showToast(`Mode tampilan diubah menjadi '${newRole}'. Dialihkan ke Dashboard karena peran ini tidak memiliki akses ke halaman sebelumnya.`, 'info');
+        switchTab('dashboard');
+      } else {
+        renderActiveScreen();
+        showToast(`Mode tampilan disimulasikan sebagai '${newRole}'.`, 'info');
+      }
+    });
+
+    /* --- Screen 2: Pesanan & Pola Listeners --- */
+    $('#pesanan-sumber')?.addEventListener('change', syncCreateMitraField);
+    $('#edit-id-sumber')?.addEventListener('change', syncEditMitraField);
+    $('#btn-mode-existing')?.addEventListener('click', () => setPolaMode('existing'));
+    $('#btn-mode-new')?.addEventListener('click', () => setPolaMode('new'));
+    $('#btn-switch-new-pola')?.addEventListener('click', () => setPolaMode('new'));
+    $('#btn-add-pola-size-row')?.addEventListener('click', () => {
+      state.newPolaSpecs.push({ nama_ukuran: '', lingkar_dada: '', panjang_baju_celana: '', lebar_baju: '', panjang_pundak: '', panjang_tangan: '', lingkar_lengan: '', diameter_leher: '', lingkar_pinggang: '', lingkar_selangkang: '', lingkar_paha: '', lebar_kaki: '' });
+      renderNewPolaSpecs();
+    });
+    $('#btn-add-pola-acc-row')?.addEventListener('click', () => {
+      const accs = DB.all('Aksesoris');
+      if (!accs.length) { showToast('Belum ada data aksesoris terdaftar di Gudang & Aksesoris.', 'warning'); return; }
+      state.newPolaAccs.push({ id_aksesoris: accs[0].id_aksesoris, jumlah_digunakan: 1 });
+      renderNewPolaAccs();
+    });
+
+    $('#tbody-new-pola-specs')?.addEventListener('input', (e) => {
+      if (!e.target.classList.contains('inp-spec-metric')) return;
+      const idx = Number(e.target.dataset.idx);
+      const f = e.target.dataset.field;
+      if (state.newPolaSpecs[idx]) {
+        state.newPolaSpecs[idx][f] = f === 'nama_ukuran' ? e.target.value : (e.target.value !== '' ? parseFloat(e.target.value) : null);
+      }
+    });
+    $('#container-new-pola-acc')?.addEventListener('change', (e) => {
+      if (e.target.classList.contains('sel-new-acc')) {
+        const idx = Number(e.target.dataset.idx);
+        if (state.newPolaAccs[idx]) state.newPolaAccs[idx].id_aksesoris = Number(e.target.value);
+      }
+    });
+    $('#container-new-pola-acc')?.addEventListener('input', (e) => {
+      if (e.target.classList.contains('inp-new-acc-qty')) {
+        const idx = Number(e.target.dataset.idx);
+        if (state.newPolaAccs[idx]) state.newPolaAccs[idx].jumlah_digunakan = parseInt(e.target.value, 10) || 1;
+      }
+    });
+
+    $('#btn-save-pola-standalone')?.addEventListener('click', () => {
+      const pola = runAction(() => Svc.createPola({
+        id_kategori: $('#new-pola-kategori').value,
+        kode_pola: $('#new-pola-kode').value,
+        nama_pola: $('#new-pola-nama').value,
+        spesifikasi: state.newPolaSpecs,
+        aksesoris: state.newPolaAccs,
+      }));
+      if (pola) {
+        showToast(`Master Pola ${pola.kode_pola} berhasil didaftarkan!`, 'success');
+        $('#new-pola-kode').value = '';
+        $('#new-pola-nama').value = '';
+        state.newPolaSpecs = [{ nama_ukuran: 'All', lingkar_dada: '', panjang_baju_celana: '', lebar_baju: '', panjang_pundak: '', panjang_tangan: '', lingkar_lengan: '', diameter_leher: '', lingkar_pinggang: '', lingkar_selangkang: '', lingkar_paha: '', lebar_kaki: '' }];
+        state.newPolaAccs = [];
+        setPolaMode('existing');
+        renderPesanan();
+        $('#sel-pola-existing').value = pola.id_pola;
+      }
+    });
+
+    $('#form-pesanan')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const order = runAction(() => Svc.createPesanan({
+        pola_mode: state.polaMode,
+        id_sumber: $('#pesanan-sumber').value,
+        nama_mitra: $('#input-nama-mitra').value,
+        id_pola: $('#sel-pola-existing').value,
+        jenis_pesanan: $('#inp-jenis-pesanan').value,
+        id_penerimaan: $('#sel-pesanan-penerimaan').value || null,
+        tgl_order: $('#inp-tgl-order').value,
+        deadline_awal: $('#inp-deadline-awal').value,
+        new_pola: state.polaMode === 'new' ? {
+          id_kategori: $('#new-pola-kategori').value,
+          kode_pola: $('#new-pola-kode').value,
+          nama_pola: $('#new-pola-nama').value,
+          spesifikasi: state.newPolaSpecs,
+          aksesoris: state.newPolaAccs,
+        } : null,
+      }));
+      if (order) {
+        showToast(`Pesanan #${order.id_pesanan} berhasil diinisiasi.`, 'success');
+        $('#inp-jenis-pesanan').value = '';
+        $('#input-nama-mitra').value = '';
+        $('#new-pola-kode').value = '';
+        $('#new-pola-nama').value = '';
+        setPolaMode('existing');
+        renderPesanan();
+      }
+    });
+
+    $('#form-edit-pesanan')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = $('#edit-id-pesanan').value;
+      const res = runAction(() => Svc.updatePesanan(id, {
+        id_sumber: $('#edit-id-sumber').value,
+        nama_mitra: $('#edit-nama-mitra').value,
+        id_pola: $('#edit-id-pola').value,
+        jenis_pesanan: $('#edit-jenis-pesanan').value,
+        id_penerimaan: $('#edit-id-penerimaan').value || null,
+        tgl_order: $('#edit-tgl-order').value,
+        deadline_awal: $('#edit-deadline-awal').value,
+        deadline_terbaru: $('#edit-deadline-terbaru').value,
+        status_pesanan: $('#edit-status-pesanan').value,
+        alasan_perubahan_deadline: $('#edit-alasan-perubahan').value,
+      }), `Pesanan #${id} berhasil diperbarui!`);
+      if (res) {
+        closeModalById('modal-edit-pesanan');
+        renderPesanan();
+      }
+    });
+
+    $('#btn-delete-pesanan-modal')?.addEventListener('click', () => {
+      const id = $('#edit-id-pesanan').value;
+      if (!id || !confirm(`Hapus Pesanan #${id}? Tindakan ini hanya berhasil jika pesanan belum memiliki catatan Pemotongan Seri atau QC.`)) return;
+      const ok = runAction(() => { Svc.deletePesanan(id); return true; }, `Pesanan #${id} berhasil dihapus.`);
+      if (ok) {
+        closeModalById('modal-edit-pesanan');
+        renderPesanan();
+      }
+    });
+
+    $('#form-edit-pola')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = $('#edit-pola-id').value;
+      const res = runAction(() => Svc.updatePola(id, {
+        id_kategori: $('#edit-pola-kategori').value,
+        kode_pola: $('#edit-pola-kode').value,
+        nama_pola: $('#edit-pola-nama').value,
+        nama_ukuran: $('#edit-pola-ukuran').value,
+        lingkar_dada: $('#edit-pola-dada').value,
+        panjang_baju_celana: $('#edit-pola-panjang').value,
+        panjang_pundak: $('#edit-pola-pundak').value,
+      }), 'Master Pola berhasil diperbarui.');
+      if (res) {
+        closeModalById('modal-edit-pola');
+        renderPesanan();
+      }
+    });
+
+    $('#btn-delete-pola-modal')?.addEventListener('click', () => {
+      const id = $('#edit-pola-id').value;
+      const kode = $('#edit-pola-kode').value;
+      const nama = $('#edit-pola-nama').value;
+      if (!id || !confirm(`Hapus Master Pola "${kode} - ${nama}"? Hanya berhasil jika belum digunakan oleh Pesanan atau Stok Barang Jadi.`)) return;
+      const ok = runAction(() => { Svc.deletePola(id); return true; }, 'Master Pola berhasil dihapus.');
+      if (ok) {
+        closeModalById('modal-edit-pola');
+        renderPesanan();
+      }
+    });
+
+    // Kategori & Sumber modals
+    const openKatModal = () => {
+      $('#kat-edit-id').value = '';
+      $('#kat-nama-input').value = '';
+      $('#kat-form-label').innerHTML = 'Nama Kategori Pola Baru <span class="text-rose-500">*</span>';
+      $('#kat-submit-btn').textContent = '+ Tambah';
+      $('#kat-cancel-edit-btn').classList.add('hidden');
+      renderKategoriModalList();
+      openModalById('modal-kelola-kategori');
+    };
+    const openSumModal = () => {
+      $('#sum-edit-id').value = '';
+      $('#sum-nama-input').value = '';
+      $('#sum-form-label').innerHTML = 'Nama Sumber Inisiasi Baru <span class="text-rose-500">*</span>';
+      $('#sum-submit-btn').textContent = '+ Tambah';
+      $('#sum-cancel-edit-btn').classList.add('hidden');
+      renderSumberModalList();
+      openModalById('modal-kelola-sumber');
+    };
+    $('#btn-open-modal-kategori')?.addEventListener('click', openKatModal);
+    $('#btn-edit-pola-kategori')?.addEventListener('click', openKatModal);
+    $('#btn-open-modal-sumber')?.addEventListener('click', openSumModal);
+    $('#btn-edit-pesanan-sumber')?.addEventListener('click', openSumModal);
+    $('#kat-cancel-edit-btn')?.addEventListener('click', openKatModal);
+    $('#sum-cancel-edit-btn')?.addEventListener('click', openSumModal);
+
+    $('#form-manage-kategori')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const editId = $('#kat-edit-id').value;
+      const nama = $('#kat-nama-input').value;
+      const res = runAction(() => editId ? Svc.updateKategori(editId, nama) : Svc.createKategori(nama), editId ? 'Kategori diperbarui.' : 'Kategori ditambahkan.');
+      if (res) {
+        refreshPesananDropdowns();
+        if (!editId && $('#new-pola-kategori')) $('#new-pola-kategori').value = res.id_kategori;
+        openKatModal();
+      }
+    });
+
+    $('#form-manage-sumber')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const editId = $('#sum-edit-id').value;
+      const nama = $('#sum-nama-input').value;
+      const res = runAction(() => editId ? Svc.updateSumber(editId, nama) : Svc.createSumber(nama), editId ? 'Sumber inisiasi diperbarui.' : 'Sumber inisiasi ditambahkan.');
+      if (res) {
+        refreshPesananDropdowns();
+        if (!editId && $('#pesanan-sumber')) $('#pesanan-sumber').value = res.id_sumber;
+        openSumModal();
+      }
+    });
+
+    /* --- Screen 3: Penerimaan & Supplier Listeners --- */
+    $('#btn-add-color-group')?.addEventListener('click', () => {
+      state.colorGroups.push({ id: state.nextColorGroupId++, namaWarna: '', kodeWarna: '', satuanUkur: 'Kg' });
+      renderColorGroups();
+      renderDraftRollsTable();
+    });
+    const addDraftRoll = (berat = 25.00) => {
+      state.draftRolls.push({ colorGroupId: state.colorGroups[0]?.id || 1, berat });
+      renderDraftRollsTable();
+      renderColorGroups();
+    };
+    $('#btn-add-roll-row')?.addEventListener('click', () => addDraftRoll(25.00));
+    $('#btn-add-roll-row-bottom')?.addEventListener('click', () => addDraftRoll(25.00));
+    $('#btn-add-5-rolls')?.addEventListener('click', () => {
+      const defId = state.colorGroups[0]?.id || 1;
+      for (let i = 0; i < 5; i++) state.draftRolls.push({ colorGroupId: defId, berat: 25.00 });
+      renderDraftRollsTable();
+      renderColorGroups();
+    });
+    $('#btn-reset-penerimaan')?.addEventListener('click', () => {
+      state.colorGroups = [{ id: 1, namaWarna: '', kodeWarna: '', satuanUkur: 'Kg' }];
+      state.nextColorGroupId = 2;
+      state.draftRolls = [{ colorGroupId: 1, berat: 25.00 }, { colorGroupId: 1, berat: 25.00 }, { colorGroupId: 1, berat: 25.00 }];
+      $('#form-penerimaan').reset();
+      $('#inp-tgl-nota').value = todayIso();
+      renderColorGroups();
+      renderDraftRollsTable();
+    });
+
+    $('#color-groups-container')?.addEventListener('input', (e) => {
+      const id = Number(e.target.dataset.cgId);
+      const cg = state.colorGroups.find((c) => c.id === id);
+      if (!cg) return;
+      if (e.target.classList.contains('inp-cg-nama')) { cg.namaWarna = e.target.value; renderDraftRollsTable(); }
+      if (e.target.classList.contains('inp-cg-kode')) { cg.kodeWarna = e.target.value; renderDraftRollsTable(); }
+    });
+    $('#color-groups-container')?.addEventListener('change', (e) => {
+      if (e.target.classList.contains('sel-cg-satuan')) {
+        const cg = state.colorGroups.find((c) => c.id === Number(e.target.dataset.cgId));
+        if (cg) { cg.satuanUkur = e.target.value; renderColorGroups(); renderDraftRollsTable(); }
+      }
+    });
+    $('#tbl-draft-rolls-body')?.addEventListener('change', (e) => {
+      if (e.target.classList.contains('sel-roll-color')) {
+        const idx = Number(e.target.dataset.rollIdx);
+        if (state.draftRolls[idx]) {
+          state.draftRolls[idx].colorGroupId = Number(e.target.value);
+          renderColorGroups();
+          renderDraftRollsTable();
+        }
+      }
+    });
+    $('#tbl-draft-rolls-body')?.addEventListener('input', (e) => {
+      if (e.target.classList.contains('inp-roll-weight')) {
+        const idx = Number(e.target.dataset.rollIdx);
+        if (state.draftRolls[idx]) {
+          state.draftRolls[idx].berat = parseFloat(String(e.target.value).replace(',', '.')) || 0;
+          updateDraftRollsSummary();
+        }
+      }
+    });
+
+    $('#form-penerimaan')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      for (let i = 0; i < state.colorGroups.length; i++) {
+        if (!state.colorGroups[i].namaWarna.trim()) {
+          showToast(`Nama warna kain pada kelompok warna ke-${i + 1} wajib diisi.`, 'error');
+          return;
+        }
+      }
+      for (let i = 0; i < state.draftRolls.length; i++) {
+        const w = parseFloat(state.draftRolls[i].berat);
+        if (isNaN(w) || w <= 0) {
+          showToast(`Ukuran roll pada baris Roll #${i + 1} tidak valid (harus > 0).`, 'error');
+          return;
+        }
+      }
+      const warnaPayload = state.colorGroups.map((cg) => ({
+        nama_warna: cg.namaWarna.trim(),
+        kode_warna: cg.kodeWarna ? cg.kodeWarna.trim() : null,
+        satuan_ukur: cg.satuanUkur || 'Kg',
+        rolls: state.draftRolls.filter((r) => Number(r.colorGroupId) === Number(cg.id)).map((r) => ({ ukuran_awal: parseFloat(r.berat) })),
+      })).filter((w) => w.rolls.length > 0);
+      if (!warnaPayload.length) {
+        showToast('Tidak ada roll kain yang terdaftar pada kelompok warna.', 'error');
+        return;
+      }
+
+      const res = runAction(() => Svc.createPenerimaan({
+        id_supplier: $('#sel-supplier').value,
+        no_nota: $('#inp-no-nota').value,
+        tgl_nota: $('#inp-tgl-nota').value,
+        nama_kain: $('#inp-nama-kain').value,
+        lebar_gramasi: $('#inp-lebar-gramasi').value,
+        no_kendaraan: $('#inp-no-kendaraan').value,
+        penerima: $('#inp-penerima').value,
+        warna: warnaPayload,
+      }));
+      if (res) {
+        showToast(`Penerimaan nota ${res.no_nota} berhasil disimpan beserta roll bahan.`, 'success');
+        $('#btn-reset-penerimaan').click();
+        renderPenerimaan();
+      }
+    });
+
+    $('#form-edit-nota')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = $('#edit-nota-id').value;
+      const res = runAction(() => Svc.updatePenerimaan(id, {
+        id_supplier: $('#edit-nota-supplier').value,
+        no_nota: $('#edit-nota-no').value,
+        tgl_nota: $('#edit-nota-tgl').value,
+        nama_kain: $('#edit-nota-kain').value,
+        lebar_gramasi: $('#edit-nota-gramasi').value,
+        no_kendaraan: $('#edit-nota-kendaraan').value,
+        penerima: $('#edit-nota-penerima').value,
+      }), 'Nota penerimaan berhasil diperbarui.');
+      if (res) { closeModalById('modal-edit-nota'); renderPenerimaan(); }
+    });
+
+    $('#form-edit-warna')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = $('#edit-warna-id').value;
+      const res = runAction(() => {
+        Svc.updateWarna(id, {
+          nama_warna: $('#edit-warna-nama').value,
+          kode_warna: $('#edit-warna-kode').value,
+          satuan_ukur: $('#edit-warna-satuan').value,
+        });
+        return true;
+      }, 'Kelompok warna berhasil diperbarui.');
+      if (res) { closeModalById('modal-edit-warna'); renderPenerimaan(); }
+    });
+
+    $('#form-edit-roll')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = $('#edit-roll-id').value;
+      const res = runAction(() => {
+        Svc.updateRoll(id, {
+          no_roll_ke: $('#edit-roll-no').value,
+          satuan: $('#edit-roll-satuan').value,
+          ukuran_awal: $('#edit-roll-awal').value,
+          ukuran_sisa: $('#edit-roll-sisa').value,
+          status_roll: $('#edit-roll-status').value,
+        });
+        return true;
+      }, 'Data roll berhasil diperbarui.');
+      if (res) { closeModalById('modal-edit-roll'); renderPenerimaan(); }
+    });
+
+    $('#form-add-roll-existing')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const wid = $('#add-roll-warna-id').value;
+      const res = runAction(() => Svc.addRollToWarna(wid, $('#add-roll-ukuran-awal').value));
+      if (res) {
+        showToast(`Roll baru (#id_roll: ${res.id_roll}) berhasil ditambahkan.`, 'success');
+        closeModalById('modal-add-roll-existing');
+        renderPenerimaan();
+      }
+    });
+
+    // Supplier Modal
+    const resetSupForm = () => {
+      $('#sup-edit-id').value = '';
+      $('#sup-nama').value = '';
+      $('#sup-kontak').value = '';
+      $('#sup-alamat').value = '';
+      $('#sup-modal-title').textContent = 'Tambah & Kelola Supplier';
+      $('#sup-nama-label').innerHTML = 'Nama Supplier <span class="text-rose-500">*</span>';
+      $('#sup-submit-btn').textContent = '+ Simpan Supplier Baru';
+      $('#sup-cancel-edit-btn').classList.add('hidden');
+    };
+    const openSupModal = () => {
+      resetSupForm();
+      renderSupplierModalList();
+      openModalById('modal-add-supplier');
+    };
+    $('#btn-open-supplier-modal')?.addEventListener('click', openSupModal);
+    $('#btn-supplier-new-inline')?.addEventListener('click', openSupModal);
+    $('#btn-gudang-supplier-modal')?.addEventListener('click', openSupModal);
+    $('#btn-acc-add-supplier')?.addEventListener('click', openSupModal);
+    $('#sup-cancel-edit-btn')?.addEventListener('click', resetSupForm);
+    $('#btn-supplier-edit-inline')?.addEventListener('click', () => {
+      const id = $('#sel-supplier')?.value;
+      const sp = id ? Q.supplier(id) : null;
+      if (!sp) { openSupModal(); return; }
+      renderSupplierModalList();
+      $('#sup-edit-id').value = sp.id_supplier;
+      $('#sup-nama').value = sp.nama_supplier;
+      $('#sup-kontak').value = sp.kontak || '';
+      $('#sup-alamat').value = sp.alamat || '';
+      $('#sup-modal-title').textContent = `Edit Data Supplier #${sp.id_supplier}`;
+      $('#sup-nama-label').innerHTML = `Edit Nama Supplier <span class="font-mono text-indigo-600">#${sp.id_supplier}</span> <span class="text-rose-500">*</span>`;
+      $('#sup-submit-btn').textContent = 'Simpan Perubahan Supplier';
+      $('#sup-cancel-edit-btn').classList.remove('hidden');
+      openModalById('modal-add-supplier');
+    });
+
+    $('#form-add-supplier')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const editId = $('#sup-edit-id').value;
+      const payload = { nama_supplier: $('#sup-nama').value, kontak: $('#sup-kontak').value, alamat: $('#sup-alamat').value };
+      const sp = runAction(() => editId ? Svc.updateSupplier(editId, payload) : Svc.createSupplier(payload), editId ? 'Data supplier berhasil diperbarui!' : 'Supplier baru berhasil ditambahkan!');
+      if (sp) {
+        refreshSupplierSelects();
+        if (!editId) {
+          if ($('#sel-supplier')) $('#sel-supplier').value = sp.id_supplier;
+          if ($('#add-acc-supplier')) $('#add-acc-supplier').value = sp.id_supplier;
+        }
+        resetSupForm();
+        renderSupplierModalList();
+        if (state.tab === 'pengaturan') renderPengaturan();
+      }
+    });
+
+    /* --- Screen 4: Pemotongan Listeners --- */
+    $('#btn-add-gelaran-row')?.addEventListener('click', () => {
+      const firstActive = DB.where('Detail_Roll_Bahan', (r) => r.status_roll !== 'Habis')[0];
+      state.gelaranRows.push({ id_roll: firstActive?.id_roll || '', panjang_gelar: 2.50, jumlah_tumpuk: 50, total_lembar_gelar: 300, status_roll_baru: 'Dipotong' });
+      renderGelaranRows();
+    });
+
+    $('#sel-pm-pesanan')?.addEventListener('change', function () {
+      const defWarna = this.options[this.selectedIndex]?.getAttribute('data-default-warna');
+      if (defWarna && $('#sel-warna-bahan')) {
+        $('#sel-warna-bahan').value = defWarna;
+        updateUnitBadgeFromWarna();
+        const matchRoll = DB.where('Detail_Roll_Bahan', (r) => r.status_roll !== 'Habis' && Number(r.id_detail_warna) === Number(defWarna))[0];
+        if (matchRoll && state.gelaranRows.length > 0) state.gelaranRows[0].id_roll = matchRoll.id_roll;
+      }
+      renderGelaranRows();
+    });
+
+    $('#sel-warna-bahan')?.addEventListener('change', function () {
+      updateUnitBadgeFromWarna();
+      const matchRoll = DB.where('Detail_Roll_Bahan', (r) => r.status_roll !== 'Habis' && Number(r.id_detail_warna) === Number(this.value))[0];
+      if (matchRoll && state.gelaranRows.length > 0) state.gelaranRows[0].id_roll = matchRoll.id_roll;
+      renderGelaranRows();
+    });
+
+    $('#gelaran-rows-body')?.addEventListener('change', (e) => {
+      const idx = Number(e.target.dataset.idx);
+      if (!state.gelaranRows[idx]) return;
+      if (e.target.classList.contains('sel-gelar-roll')) state.gelaranRows[idx].id_roll = Number(e.target.value);
+      if (e.target.classList.contains('sel-status-roll')) state.gelaranRows[idx].status_roll_baru = e.target.value;
+    });
+    $('#gelaran-rows-body')?.addEventListener('input', (e) => {
+      const idx = Number(e.target.dataset.idx);
+      const r = state.gelaranRows[idx];
+      if (!r) return;
+      if (e.target.classList.contains('inp-panjang-gelar')) {
+        r.panjang_gelar = parseFloat(e.target.value) || 0;
+        r.total_lembar_gelar = Math.max(1, Math.round(r.panjang_gelar * r.jumlah_tumpuk * 2.4));
+        const lembarInp = $(`.inp-lembar-gelar[data-idx="${idx}"]`);
+        if (lembarInp) lembarInp.value = r.total_lembar_gelar;
+        syncTotalHasil();
+      } else if (e.target.classList.contains('inp-jumlah-tumpuk')) {
+        r.jumlah_tumpuk = parseInt(e.target.value, 10) || 1;
+        r.total_lembar_gelar = Math.max(1, Math.round(r.panjang_gelar * r.jumlah_tumpuk * 2.4));
+        const lembarInp = $(`.inp-lembar-gelar[data-idx="${idx}"]`);
+        if (lembarInp) lembarInp.value = r.total_lembar_gelar;
+        syncTotalHasil();
+      } else if (e.target.classList.contains('inp-lembar-gelar')) {
+        r.total_lembar_gelar = parseInt(e.target.value, 10) || 1;
+        syncTotalHasil();
+      }
+    });
+
+    $('#form-pemotongan')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const res = runAction(() => Svc.createPemotongan({
+        id_pesanan: $('#sel-pm-pesanan').value,
+        id_user_pemotong: $('#sel-pm-cutter').value,
+        kode_seri: $('#inp-kode-seri').value,
+        jenis_variasi: $('#inp-jenis-variasi').value,
+        tgl_potong: $('#inp-tgl-potong').value,
+        total_lembar_hasil: $('#inp-total-hasil').value,
+        potong_warna: [{
+          id_detail_warna: $('#sel-warna-bahan').value,
+          total_lembar_direncanakan: $('#inp-target-lembar').value,
+          kain_terpakai: $('#inp-kain-terpakai').value,
+          gelaran: state.gelaranRows.map((r) => ({ ...r })),
+        }],
+      }));
+      if (res) {
+        showToast(`Pemotongan seri ${res.kode_seri} berhasil diproses. Stok & status roll bahan telah diperbarui.`, 'success');
+        $('#inp-kode-seri').value = '';
+        $('#inp-jenis-variasi').value = '';
+        renderPemotongan();
+      }
+    });
+
+    $('#form-edit-pemotongan')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = $('#edit-pm-id').value;
+      const ok = runAction(() => {
+        Svc.updatePemotongan(id, {
+          id_pesanan: $('#edit-pm-pesanan').value,
+          id_user_pemotong: $('#edit-pm-cutter').value,
+          kode_seri: $('#edit-pm-kode').value,
+          jenis_variasi: $('#edit-pm-variasi').value,
+          tgl_potong: $('#edit-pm-tgl').value,
+          id_detail_warna: $('#edit-pm-warna').value,
+          total_lembar_direncanakan: $('#edit-pm-rencana').value,
+          total_lembar_hasil: $('#edit-pm-hasil').value,
+          kain_terpakai: $('#edit-pm-kain').value,
+          id_roll: $('#edit-pm-roll').value,
+          panjang_gelar: $('#edit-pm-panjang').value,
+          jumlah_tumpuk: $('#edit-pm-tumpuk').value,
+          total_lembar_gelar: $('#edit-pm-hasil').value,
+          status_roll_baru: $('#edit-pm-status-roll').value,
+        });
+        return true;
+      }, 'Data pemotongan seri berhasil diperbarui.');
+      if (ok) { closeModalById('modal-edit-pemotongan'); renderPemotongan(); }
+    });
+
+    $('#form-delete-pemotongan')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = $('#del-pm-id').value;
+      const choice = $('input[name="reverse_roll_choice"]:checked')?.value === '1';
+      const ok = runAction(() => { Svc.deletePemotongan(id, choice); return true; }, choice ? 'Pemotongan dihapus & stok roll dipulihkan.' : 'Catatan pemotongan dihapus.');
+      if (ok) { closeModalById('modal-delete-pemotongan'); renderPemotongan(); }
+    });
+
+    /* --- Screen 5: QC Listeners --- */
+    const autoCalcQc = () => {
+      const d = parseInt($('#inp-qc-diperiksa').value, 10) || 0;
+      const c = parseInt($('#inp-qc-cacat').value, 10) || 0;
+      if (d >= c) $('#inp-qc-lolos').value = d - c;
+      const stSel = $('#sel-status-qc');
+      if (c > 0 && stSel.value === 'Lolos QC') stSel.value = 'Need Rework';
+      else if (c === 0 && stSel.value === 'Need Rework') stSel.value = 'Lolos QC';
+      updateQcStokIndicator();
+    };
+    $('#inp-qc-diperiksa')?.addEventListener('input', autoCalcQc);
+    $('#inp-qc-cacat')?.addEventListener('input', autoCalcQc);
+    $('#inp-qc-lolos')?.addEventListener('input', updateQcStokIndicator);
+    $('#sel-tahap-qc')?.addEventListener('change', updateQcStokIndicator);
+    $('#inp-qc-warna')?.addEventListener('input', updateQcStokIndicator);
+    $('#sel-qc-spesifikasi')?.addEventListener('change', updateQcStokIndicator);
+    $('#sel-qc-pesanan')?.addEventListener('change', syncQcOrderInfo);
+
+    $('#sel-jenis-cacat')?.addEventListener('change', function () {
+      const pic = $('#sel-pic-rework');
+      if (this.value === 'Cacat Potong') pic.value = 'Tim Pemotong (Stasiun Cutting)';
+      else if (this.value === 'Cacat Jahit') pic.value = 'Mitra Penjahit CMT';
+      else if (this.value === 'Cacat Bahan') pic.value = 'Gudang Bahan (Klaim Retur Supplier)';
+      else pic.value = '';
+    });
+
+    ['edit-qc-diperiksa', 'edit-qc-cacat'].forEach((id) => {
+      $(`#${id}`)?.addEventListener('input', () => {
+        const d = parseInt($('#edit-qc-diperiksa').value, 10) || 0;
+        const c = parseInt($('#edit-qc-cacat').value, 10) || 0;
+        if (d >= c) $('#edit-qc-lolos').value = d - c;
+      });
+    });
+
+    $('#form-qc')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const idPesanan = $('#sel-qc-pesanan').value;
+      const ord = idPesanan ? Q.pesanan(idPesanan) : null;
+      const isAbadi = Q.isProdukAbadi(ord);
+      const res = runAction(() => Svc.createQc({
+        id_pesanan: idPesanan,
+        id_user_qc: $('#sel-user-qc').value,
+        tahap_qc: $('#sel-tahap-qc').value,
+        tgl_pemeriksaan: $('#inp-tgl-pemeriksaan').value,
+        jumlah_diperiksa: $('#inp-qc-diperiksa').value,
+        jumlah_lolos: $('#inp-qc-lolos').value,
+        jumlah_cacat: $('#inp-qc-cacat').value,
+        jenis_cacat: $('#sel-jenis-cacat').value,
+        status_qc: $('#sel-status-qc').value,
+        pic_rework: $('#sel-pic-rework').value,
+        tgl_target_perbaikan: $('#inp-target-perbaikan').value,
+        catatan_qc: $('#inp-catatan-qc').value,
+        id_spesifikasi: isAbadi ? $('#sel-qc-spesifikasi').value : null,
+        nama_warna: isAbadi ? $('#inp-qc-warna').value : null,
+      }));
+      if (res) {
+        $('#inp-catatan-qc').value = '';
+        $('#inp-qc-cacat').value = 0;
+        autoCalcQc();
+        renderQc();
+      }
+    });
+
+    $('#form-edit-qc')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = $('#edit-qc-id').value;
+      const ok = runAction(() => {
+        Svc.updateQc(id, {
+          id_pesanan: $('#edit-qc-pesanan').value,
+          id_user_qc: $('#edit-qc-user').value,
+          tahap_qc: $('#edit-qc-tahap').value,
+          tgl_pemeriksaan: $('#edit-qc-tgl').value,
+          jumlah_diperiksa: $('#edit-qc-diperiksa').value,
+          jumlah_lolos: $('#edit-qc-lolos').value,
+          jumlah_cacat: $('#edit-qc-cacat').value,
+          jenis_cacat: $('#edit-qc-jenis').value,
+          status_qc: $('#edit-qc-status').value,
+          tgl_target_perbaikan: $('#edit-qc-target').value,
+          tgl_selesai_perbaikan: $('#edit-qc-selesai').value,
+          catatan_qc: $('#edit-qc-catatan').value,
+        });
+        return true;
+      }, `Catatan QC #${id} berhasil diperbarui.`);
+      if (ok) { closeModalById('modal-edit-qc'); renderQc(); }
+    });
+
+    $('#form-complete-rework')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = $('#rework-qc-id').value;
+      const ok = runAction(() => Svc.completeRework(id, $('#rework-tgl-selesai').value), `Rework untuk QC #${id} telah diselesaikan.`);
+      if (ok) { closeModalById('modal-complete-rework'); renderQc(); }
+    });
+
+    /* --- Screen 6: Gudang & Aksesoris Listeners --- */
+    $('#form-stock-thresholds')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const t = runAction(() => Svc.updateThresholds($('#inp-threshold-jadi').value, $('#inp-threshold-aksesoris').value));
+      if (t) {
+        showToast(`Batas stok rendah global disimpan: Barang Jadi <= ${t.min_stok_jadi} Pcs, Aksesoris < ${t.min_stok_aksesoris} Unit.`, 'success');
+        renderGudang();
+      }
+    });
+
+    $('#btn-open-adjust-stok')?.addEventListener('click', () => {
+      const polaSel = $('#adj-id-pola');
+      if (polaSel && polaSel.value) populateModalSpecsForPola($('#adj-id-spesifikasi'), polaSel.value);
+      toggleMitraFieldRequirement();
+      openModalById('modal-adjust-stok');
+    });
+    $('#adj-id-pola')?.addEventListener('change', function () {
+      populateModalSpecsForPola($('#adj-id-spesifikasi'), this.value);
+    });
+    $('#adj-alasan')?.addEventListener('change', toggleMitraFieldRequirement);
+    $('#edit-stok-pola')?.addEventListener('change', function () {
+      populateModalSpecsForPola($('#edit-stok-spesifikasi'), this.value);
+    });
+    $('#btn-open-add-aksesoris')?.addEventListener('click', () => {
+      refreshSupplierSelects();
+      openModalById('modal-add-aksesoris');
+    });
+    $('#btn-open-map-acc-pola')?.addEventListener('click', () => openModalById('modal-map-aksesoris-pola'));
+
+    $('#form-adjust-stok')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const qty = Math.abs(parseInt($('#adj-jumlah-pcs').value, 10) || 0);
+      const jenis = $('#adj-jenis').value;
+      const delta = jenis === 'KURANG' ? -qty : qty;
+      const res = runAction(() => Svc.adjustStokJadi({
+        id_pola: $('#adj-id-pola').value,
+        id_spesifikasi: $('#adj-id-spesifikasi').value,
+        nama_warna: $('#adj-nama-warna').value,
+        delta_pcs: delta,
+        alasan_penyesuaian: $('#adj-alasan').value,
+        nama_mitra: $('#adj-nama-mitra').value,
+        keterangan: $('#adj-keterangan').value,
+      }));
+      if (res) {
+        showToast(`Transaksi stok berhasil disimpan. Sisa stok: ${res.jumlah_stok_pcs} pcs.`, 'success');
+        closeModalById('modal-adjust-stok');
+        renderGudang();
+      }
+    });
+
+    $('#form-edit-stok-jadi')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = $('#edit-stok-id').value;
+      const ok = runAction(() => {
+        Svc.updateStokJadi(id, {
+          id_pola: $('#edit-stok-pola').value,
+          id_spesifikasi: $('#edit-stok-spesifikasi').value,
+          nama_warna: $('#edit-stok-warna').value,
+          jumlah_stok_pcs: $('#edit-stok-pcs').value,
+        });
+        return true;
+      }, 'Data stok barang jadi berhasil diperbarui.');
+      if (ok) { closeModalById('modal-edit-stok-jadi'); renderGudang(); }
+    });
+
+    $('#form-add-aksesoris')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const res = runAction(() => Svc.createAksesoris({
+        nama_aksesoris: $('#add-acc-nama').value,
+        ukuran: $('#add-acc-ukuran').value,
+        satuan: $('#add-acc-satuan').value,
+        stok: $('#add-acc-stok').value,
+        id_supplier: $('#add-acc-supplier').value,
+      }));
+      if (res) {
+        showToast(`Aksesoris '${res.nama_aksesoris}' berhasil didaftarkan.`, 'success');
+        $('#form-add-aksesoris').reset();
+        closeModalById('modal-add-aksesoris');
+        renderGudang();
+      }
+    });
+
+    $('#form-edit-aksesoris')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = $('#edit-acc-id').value;
+      const res = runAction(() => Svc.updateAksesoris(id, {
+        nama_aksesoris: $('#edit-acc-nama').value,
+        ukuran: $('#edit-acc-ukuran').value,
+        satuan: $('#edit-acc-satuan').value,
+        stok: $('#edit-acc-stok').value,
+        id_supplier: $('#edit-acc-supplier').value,
+      }), 'Data aksesoris berhasil diperbarui.');
+      if (res) { closeModalById('modal-edit-aksesoris'); renderGudang(); }
+    });
+
+    $('#form-map-aksesoris-pola')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const ok = runAction(() => {
+        Svc.savePolaAksesorisMapping($('#map-id-pola').value, $('#map-id-aksesoris').value, $('#map-jumlah-digunakan').value);
+        return true;
+      }, 'Kebutuhan aksesoris per pola berhasil disimpan.');
+      if (ok) { closeModalById('modal-map-aksesoris-pola'); renderGudang(); }
+    });
+
+    /* --- Screen 7: Laporan Eksekutif Listeners --- */
+    $('#form-laporan-filter')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      state.laporanFilters = {
+        jenis_laporan: $('#lap-filter-jenis').value,
+        id_sumber: $('#lap-filter-sumber').value,
+        start_date: $('#lap-filter-start').value,
+        end_date: $('#lap-filter-end').value,
+      };
+      renderLaporan();
+    });
+    $('#btn-reset-laporan-filter')?.addEventListener('click', () => {
+      state.laporanFilters = { jenis_laporan: 'KONSOLIDASI', id_sumber: '', start_date: '', end_date: '' };
+      renderLaporan();
+    });
+    $('#btn-export-word')?.addEventListener('click', exportLaporanWord);
+    $('#btn-export-csv')?.addEventListener('click', exportLaporanExcel);
+    $('#btn-print-laporan')?.addEventListener('click', () => window.print());
+    $('#btn-edit-kop-surat')?.addEventListener('click', () => {
+      const cp = DB.config().companyProfile;
+      $('#prof-nama').value = cp.nama_perusahaan || '';
+      $('#prof-tagline').value = cp.tagline || '';
+      $('#prof-alamat').value = cp.alamat || '';
+      $('#prof-telepon').value = cp.telepon || '';
+      $('#prof-kota').value = cp.kota_pengesahan || '';
+      $('#prof-deskripsi').value = cp.deskripsi_sistem || '';
+      openModalById('modal-company-profile');
+    });
+    $('#form-company-profile')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const res = runAction(() => Svc.updateCompanyProfile({
+        nama_perusahaan: $('#prof-nama').value,
+        tagline: $('#prof-tagline').value,
+        alamat: $('#prof-alamat').value,
+        telepon: $('#prof-telepon').value,
+        kota_pengesahan: $('#prof-kota').value,
+        deskripsi_sistem: $('#prof-deskripsi').value,
+      }), 'Profil & Kop Surat perusahaan berhasil diperbarui.');
+      if (res) { closeModalById('modal-company-profile'); renderLaporan(); }
+    });
+
+    /* --- Screen 8: Pengaturan Listeners --- */
+    $('#btn-open-add-user')?.addEventListener('click', () => {
+      $('#form-add-user').reset();
+      openModalById('modal-add-user');
+    });
+    $('#form-add-user')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const u = runAction(() => Svc.createUser({
+        nama_user: $('#add-user-nama').value,
+        username: $('#add-user-username').value,
+        password: $('#add-user-password').value,
+        role: $('#add-user-role').value,
+      }));
+      if (u) {
+        showToast(`Akun pengguna ${u.nama_user} (@${u.username}) berhasil ditambahkan.`, 'success');
+        closeModalById('modal-add-user');
+        renderPengaturan();
+      }
+    });
+    $('#form-edit-user')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = $('#edit-user-id').value;
+      const u = runAction(() => Svc.updateUser(id, {
+        nama_user: $('#edit-user-nama').value,
+        username: $('#edit-user-username').value,
+        password: $('#edit-user-password').value,
+        role: $('#edit-user-role').value,
+      }), 'Akun pengguna berhasil diperbarui.');
+      if (u) {
+        closeModalById('modal-edit-user');
+        syncChrome();
+        renderPengaturan();
+      }
+    });
+    $('#btn-reset-operational')?.addEventListener('click', () => {
+      const inc = $('#chk-reset-include-master')?.checked || false;
+      const msg = inc
+        ? 'PERINGATAN: Anda akan mengosongkan SELURUH data transaksi operasional DAN katalog master (Pola, Aksesoris, Supplier). Akun pengguna tetap disimpan. Lanjutkan?'
+        : 'Konfirmasi: Kosongkan seluruh data transaksi operasional (Pesanan, Nota & Roll Bahan, Pemotongan, QC, Stok Barang Jadi) untuk memulai produksi bersih?';
+      if (!confirm(msg)) return;
+      const res = runAction(() => Svc.resetOperationalData(inc));
+      if (res) { showToast(res, 'info'); renderPengaturan(); }
+    });
+    $('#btn-seed-sample')?.addEventListener('click', () => {
+      if (!confirm('Muat ulang data contoh produksi CMT ke dalam basis data? (Akun pengguna Anda tidak akan diubah)')) return;
+      const res = runAction(() => Svc.seedSampleData());
+      if (res) { showToast(res, 'success'); renderPengaturan(); }
+    });
+    $('#form-add-kategori')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const res = runAction(() => Svc.createKategori($('#inp-new-kategori').value), 'Kategori pola ditambahkan.');
+      if (res) { $('#inp-new-kategori').value = ''; renderPengaturan(); }
+    });
+    $('#form-add-sumber')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const res = runAction(() => Svc.createSumber($('#inp-new-sumber').value), 'Sumber inisiasi ditambahkan.');
+      if (res) { $('#inp-new-sumber').value = ''; renderPengaturan(); }
+    });
+
+    /* --- Delegated Table & Card Actions --- */
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const act = btn.dataset.action;
+      const id = btn.dataset.id;
+
+      // Pesanan actions
+      if (act === 'remove-pola-spec') {
+        const idx = Number(btn.dataset.idx);
+        if (state.newPolaSpecs.length > 1) { state.newPolaSpecs.splice(idx, 1); renderNewPolaSpecs(); }
+      } else if (act === 'remove-pola-acc') {
+        state.newPolaAccs.splice(Number(btn.dataset.idx), 1);
+        renderNewPolaAccs();
+      } else if (act === 'edit-pesanan') {
+        const ord = Q.pesanan(id);
+        if (!ord) return;
+        refreshPesananDropdowns();
+        $('#modal-edit-title').textContent = `Edit Pesanan #${ord.id_pesanan}`;
+        $('#edit-id-pesanan').value = ord.id_pesanan;
+        $('#edit-id-sumber').value = ord.id_sumber;
+        $('#edit-nama-mitra').value = ord.nama_mitra || '';
+        $('#edit-id-pola').value = ord.id_pola;
+        $('#edit-jenis-pesanan').value = ord.jenis_pesanan || '';
+        $('#edit-id-penerimaan').value = ord.id_penerimaan || '';
+        $('#edit-tgl-order').value = datePart(ord.tgl_order) || todayIso();
+        $('#edit-deadline-awal').value = datePart(ord.deadline_awal);
+        $('#edit-deadline-terbaru').value = datePart(ord.deadline_terbaru || ord.deadline_awal);
+        $('#edit-status-pesanan').value = ord.status_pesanan || 'Antrean';
+        $('#edit-alasan-perubahan').value = ord.alasan_perubahan_deadline || '';
+        syncEditMitraField();
+        openModalById('modal-edit-pesanan');
+      } else if (act === 'revise-deadline') {
+        const ord = Q.pesanan(id);
+        if (!ord) return;
+        const currDisp = fmtDateDmy(ord.deadline_terbaru || ord.deadline_awal);
+        const inp = prompt('Masukkan Deadline Terbaru (dd/mm/yyyy):', currDisp);
+        if (!inp) return;
+        const iso = displayToIsoDate(inp, false);
+        if (!iso) { showToast('Format tanggal tidak valid. Gunakan dd/mm/yyyy (contoh: 15/11/2026).', 'error'); return; }
+        const reason = prompt('Alasan Revisi Deadline:', 'Penyesuaian Antrean Pemotongan');
+        if (!reason) return;
+        if (runAction(() => Svc.reviseDeadline(id, iso, reason), `Deadline pesanan #${id} direvisi.`)) renderPesanan();
+      } else if (act === 'delete-pesanan') {
+        if (!confirm(`Hapus Pesanan #${id}? Tindakan ini hanya berhasil jika pesanan belum memiliki catatan Pemotongan Seri atau QC.`)) return;
+        if (runAction(() => { Svc.deletePesanan(id); return true; }, `Pesanan #${id} berhasil dihapus.`)) renderPesanan();
+      } else if (act === 'edit-pola') {
+        const p = Q.pola(id);
+        if (!p) return;
+        const firstSpec = Q.specsOfPola(p.id_pola)[0];
+        refreshPesananDropdowns();
+        $('#edit-pola-id').value = p.id_pola;
+        $('#edit-pola-kategori').value = p.id_kategori;
+        $('#edit-pola-kode').value = p.kode_pola;
+        $('#edit-pola-nama').value = p.nama_pola;
+        $('#edit-pola-ukuran').value = firstSpec?.nama_ukuran || 'All';
+        $('#edit-pola-dada').value = firstSpec?.lingkar_dada ?? '';
+        $('#edit-pola-panjang').value = firstSpec?.panjang_baju_celana ?? '';
+        $('#edit-pola-pundak').value = firstSpec?.panjang_pundak ?? '';
+        openModalById('modal-edit-pola');
+      } else if (act === 'delete-pola') {
+        const p = Q.pola(id);
+        if (!p || !confirm(`Hapus Master Pola "${p.kode_pola} - ${p.nama_pola}"?`)) return;
+        if (runAction(() => { Svc.deletePola(id); return true; }, 'Master Pola berhasil dihapus.')) renderPesanan();
+      } else if (act === 'edit-kategori-modal') {
+        const k = Q.kategori(id);
+        if (!k) return;
+        $('#kat-edit-id').value = k.id_kategori;
+        $('#kat-nama-input').value = k.nama_kategori;
+        $('#kat-form-label').innerHTML = `Edit Kategori Pola <span class="font-mono text-indigo-600">#${k.id_kategori}</span>`;
+        $('#kat-submit-btn').textContent = 'Simpan Perubahan';
+        $('#kat-cancel-edit-btn').classList.remove('hidden');
+      } else if (act === 'delete-kategori-modal') {
+        if (!confirm('Hapus kategori pola ini?')) return;
+        if (runAction(() => { Svc.deleteKategori(id); return true; }, 'Kategori dihapus.')) {
+          refreshPesananDropdowns();
+          renderKategoriModalList();
+        }
+      } else if (act === 'edit-sumber-modal') {
+        const s = Q.sumber(id);
+        if (!s) return;
+        $('#sum-edit-id').value = s.id_sumber;
+        $('#sum-nama-input').value = s.nama_sumber;
+        $('#sum-form-label').innerHTML = `Edit Sumber Inisiasi <span class="font-mono text-indigo-600">#${s.id_sumber}</span>`;
+        $('#sum-submit-btn').textContent = 'Simpan Perubahan';
+        $('#sum-cancel-edit-btn').classList.remove('hidden');
+      } else if (act === 'delete-sumber-modal') {
+        if (!confirm('Hapus sumber inisiasi ini?')) return;
+        if (runAction(() => { Svc.deleteSumber(id); return true; }, 'Sumber inisiasi dihapus.')) {
+          refreshPesananDropdowns();
+          renderSumberModalList();
+        }
+      }
+
+      // Penerimaan actions
+      else if (act === 'remove-color-group') {
+        const cid = Number(btn.dataset.cgId);
+        if (state.colorGroups.length <= 1) return;
+        state.colorGroups = state.colorGroups.filter((c) => c.id !== cid);
+        const fb = state.colorGroups[0].id;
+        state.draftRolls.forEach((r) => { if (Number(r.colorGroupId) === cid) r.colorGroupId = fb; });
+        renderColorGroups();
+        renderDraftRollsTable();
+      } else if (act === 'remove-draft-roll') {
+        const idx = Number(btn.dataset.rollIdx);
+        if (state.draftRolls.length <= 1) return;
+        state.draftRolls.splice(idx, 1);
+        renderDraftRollsTable();
+        renderColorGroups();
+      } else if (act === 'edit-nota') {
+        const pn = Q.penerimaan(id);
+        if (!pn) return;
+        refreshSupplierSelects();
+        $('#edit-nota-id').value = pn.id_penerimaan;
+        $('#edit-nota-supplier').value = pn.id_supplier;
+        $('#edit-nota-no').value = pn.no_nota;
+        $('#edit-nota-tgl').value = datePart(pn.tgl_nota);
+        $('#edit-nota-kain').value = pn.nama_kain;
+        $('#edit-nota-gramasi').value = pn.lebar_gramasi || '';
+        $('#edit-nota-kendaraan').value = pn.no_kendaraan || '';
+        $('#edit-nota-penerima').value = pn.penerima || '';
+        openModalById('modal-edit-nota');
+      } else if (act === 'delete-nota') {
+        const pn = Q.penerimaan(id);
+        if (!pn || !confirm(`Hapus nota penerimaan #${pn.id_penerimaan} (${pn.no_nota}) beserta seluruh kelompok warna dan roll kain di dalamnya?`)) return;
+        if (runAction(() => { Svc.deletePenerimaan(id); return true; }, 'Nota penerimaan berhasil dihapus.')) renderPenerimaan();
+      } else if (act === 'edit-warna') {
+        const w = Q.warna(id);
+        if (!w) return;
+        $('#edit-warna-id').value = w.id_detail_warna;
+        $('#edit-warna-nama').value = w.nama_warna;
+        $('#edit-warna-kode').value = w.kode_warna || '';
+        $('#edit-warna-satuan').value = w.satuan_ukur || 'Kg';
+        openModalById('modal-edit-warna');
+      } else if (act === 'add-roll-existing') {
+        const w = Q.warna(id);
+        if (!w) return;
+        $('#add-roll-warna-id').value = w.id_detail_warna;
+        $('#add-roll-existing-subtitle').textContent = `Warna: ${w.nama_warna} (${w.satuan_ukur})`;
+        openModalById('modal-add-roll-existing');
+      } else if (act === 'delete-warna') {
+        const w = Q.warna(id);
+        if (!w || !confirm(`Hapus kelompok warna "${w.nama_warna}" beserta seluruh roll kain di dalamnya?`)) return;
+        if (runAction(() => { Svc.deleteWarna(id); return true; }, 'Kelompok warna dihapus.')) renderPenerimaan();
+      } else if (act === 'edit-roll') {
+        const r = Q.roll(id);
+        if (!r) return;
+        $('#edit-roll-id').value = r.id_roll;
+        $('#edit-roll-no').value = r.no_roll_ke;
+        $('#edit-roll-satuan').value = r.satuan;
+        $('#edit-roll-awal').value = Number(r.ukuran_awal).toFixed(2);
+        $('#edit-roll-sisa').value = Number(r.ukuran_sisa).toFixed(2);
+        $('#edit-roll-status').value = r.status_roll;
+        openModalById('modal-edit-roll');
+      } else if (act === 'delete-roll') {
+        const r = Q.roll(id);
+        if (!r || !confirm(`Hapus Roll #${r.no_roll_ke} (#${r.id_roll})?`)) return;
+        if (runAction(() => { Svc.deleteRoll(id); return true; }, 'Roll dihapus.')) renderPenerimaan();
+      } else if (act === 'edit-supplier-modal') {
+        const sp = Q.supplier(id);
+        if (!sp) return;
+        $('#sup-edit-id').value = sp.id_supplier;
+        $('#sup-nama').value = sp.nama_supplier;
+        $('#sup-kontak').value = sp.kontak || '';
+        $('#sup-alamat').value = sp.alamat || '';
+        $('#sup-modal-title').textContent = `Edit Data Supplier #${sp.id_supplier}`;
+        $('#sup-nama-label').innerHTML = `Edit Nama Supplier <span class="font-mono text-indigo-600">#${sp.id_supplier}</span> <span class="text-rose-500">*</span>`;
+        $('#sup-submit-btn').textContent = 'Simpan Perubahan Supplier';
+        $('#sup-cancel-edit-btn').classList.remove('hidden');
+      } else if (act === 'delete-supplier-modal') {
+        if (!confirm('Hapus supplier ini?')) return;
+        if (runAction(() => { Svc.deleteSupplier(id); return true; }, 'Supplier dihapus.')) {
+          refreshSupplierSelects();
+          renderSupplierModalList();
+          if (state.tab === 'pengaturan') renderPengaturan();
+        }
+      }
+
+      // Pemotongan actions
+      else if (act === 'select-order-queue') {
+        const pid = btn.dataset.pesanan;
+        const wid = btn.dataset.warna;
+        const rid = btn.dataset.roll;
+        if ($('#sel-pm-pesanan')) $('#sel-pm-pesanan').value = pid;
+        if (wid && $('#sel-warna-bahan')) {
+          $('#sel-warna-bahan').value = wid;
+          updateUnitBadgeFromWarna();
+        }
+        if (rid && state.gelaranRows.length > 0) state.gelaranRows[0].id_roll = Number(rid);
+        renderGelaranRows();
+        $('#form-pemotongan')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (act === 'remove-gelaran-row') {
+        const idx = Number(btn.dataset.idx);
+        if (state.gelaranRows.length <= 1) return;
+        state.gelaranRows.splice(idx, 1);
+        renderGelaranRows();
+      } else if (act === 'edit-pemotongan') {
+        const pm = DB.find('Pemotongan_Seri', id);
+        if (!pm) return;
+        const pw = DB.where('Detail_Pemotongan_Warna', (w) => Number(w.id_potong) === Number(pm.id_potong))[0];
+        const gk = pw ? DB.where('Detail_Gelaran_Kain', (g) => Number(g.id_potong_warna) === Number(pw.id_potong_warna))[0] : null;
+        const rl = gk ? Q.roll(gk.id_roll) : null;
+        $('#edit-pm-id').value = pm.id_potong;
+        $('#edit-pm-pesanan').value = pm.id_pesanan;
+        $('#edit-pm-cutter').value = pm.id_user_pemotong;
+        $('#edit-pm-kode').value = pm.kode_seri;
+        $('#edit-pm-variasi').value = pm.jenis_variasi || '';
+        $('#edit-pm-tgl').value = toInputDateTime(pm.tgl_potong);
+        if (pw) $('#edit-pm-warna').value = pw.id_detail_warna;
+        $('#edit-pm-rencana').value = pw?.total_lembar_direncanakan || pm.total_lembar_hasil;
+        $('#edit-pm-hasil').value = pm.total_lembar_hasil;
+        $('#edit-pm-kain').value = Number(pw?.kain_terpakai || 0).toFixed(2);
+        if (gk) $('#edit-pm-roll').value = gk.id_roll;
+        $('#edit-pm-panjang').value = Number(gk?.panjang_gelar || 2.5).toFixed(2);
+        $('#edit-pm-tumpuk').value = gk?.jumlah_tumpuk || 50;
+        $('#edit-pm-status-roll').value = rl?.status_roll || 'Dipotong';
+        openModalById('modal-edit-pemotongan');
+      } else if (act === 'delete-pemotongan') {
+        const pm = DB.find('Pemotongan_Seri', id);
+        if (!pm) return;
+        const pws = DB.where('Detail_Pemotongan_Warna', (w) => Number(w.id_potong) === Number(pm.id_potong));
+        const rolls = [];
+        pws.forEach((pw) => {
+          DB.where('Detail_Gelaran_Kain', (g) => Number(g.id_potong_warna) === Number(pw.id_potong_warna)).forEach((g) => {
+            const rl = Q.roll(g.id_roll);
+            rolls.push({ id_roll: g.id_roll, no_roll_ke: rl?.no_roll_ke ?? '?', status_roll: rl?.status_roll ?? '-' });
+          });
+        });
+        $('#del-pm-id').value = pm.id_potong;
+        $('#del-pm-kode').textContent = pm.kode_seri;
+        $('#del-pm-rolls-info').innerHTML = rolls.length
+          ? '<div class="font-semibold text-slate-800 mb-1">Roll terpakai pada seri ini:</div>' + rolls.map((r) => `<div class="font-mono text-[11px]">• Roll #${r.no_roll_ke} (#${r.id_roll}) — Status saat ini: <b>${esc(r.status_roll)}</b></div>`).join('')
+          : '<div class="text-slate-500">Tidak ada roll gelaran tercatat pada seri ini.</div>';
+        openModalById('modal-delete-pemotongan');
+      }
+
+      // QC actions
+      else if (act === 'complete-rework') {
+        $('#rework-qc-id').value = id;
+        $('#rework-tgl-selesai').value = nowLocalIsoMin();
+        openModalById('modal-complete-rework');
+      } else if (act === 'edit-qc') {
+        const qc = DB.find('QC', id);
+        if (!qc) return;
+        $('#edit-qc-id').value = qc.id_qc;
+        $('#edit-qc-pesanan').value = qc.id_pesanan;
+        $('#edit-qc-user').value = qc.id_user_qc;
+        $('#edit-qc-tahap').value = qc.tahap_qc;
+        $('#edit-qc-tgl').value = toInputDateTime(qc.tgl_pemeriksaan) || nowLocalIsoMin();
+        $('#edit-qc-diperiksa').value = qc.jumlah_diperiksa;
+        $('#edit-qc-lolos').value = qc.jumlah_lolos;
+        $('#edit-qc-cacat').value = qc.jumlah_cacat;
+        $('#edit-qc-jenis').value = qc.jenis_cacat || 'Tidak Ada';
+        $('#edit-qc-status').value = qc.status_qc || 'Lolos QC';
+        $('#edit-qc-target').value = datePart(qc.tgl_target_perbaikan);
+        $('#edit-qc-selesai').value = toInputDateTime(qc.tgl_selesai_perbaikan);
+        $('#edit-qc-catatan').value = qc.catatan_qc || '';
+        openModalById('modal-edit-qc');
+      } else if (act === 'delete-qc') {
+        if (!confirm(`Hapus catatan inspeksi QC #${id}? Jika sebelumnya menambah Stok Barang Jadi (Produk Abadi), stok tersebut juga akan dikurangi kembali.`)) return;
+        if (runAction(() => { Svc.deleteQc(id); return true; }, `Catatan QC #${id} berhasil dihapus.`)) renderQc();
+      }
+
+      // Gudang actions
+      else if (act === 'edit-stok-jadi') {
+        const st = DB.find('Stok_Barang_Jadi', id);
+        if (!st) return;
+        $('#edit-stok-id').value = st.id_stok;
+        $('#edit-stok-pola').value = st.id_pola;
+        populateModalSpecsForPola($('#edit-stok-spesifikasi'), st.id_pola, st.id_spesifikasi);
+        $('#edit-stok-warna').value = st.nama_warna;
+        $('#edit-stok-pcs').value = st.jumlah_stok_pcs;
+        openModalById('modal-edit-stok-jadi');
+      } else if (act === 'outbound-stok-jadi') {
+        const st = DB.find('Stok_Barang_Jadi', id);
+        if (!st) return;
+        $('#adj-id-pola').value = st.id_pola;
+        populateModalSpecsForPola($('#adj-id-spesifikasi'), st.id_pola, st.id_spesifikasi);
+        $('#adj-nama-warna').value = st.nama_warna;
+        $('#adj-jenis').value = 'KURANG';
+        toggleMitraFieldRequirement();
+        openModalById('modal-adjust-stok');
+      } else if (act === 'delete-stok-jadi') {
+        const st = DB.find('Stok_Barang_Jadi', id);
+        if (!st || !confirm(`Hapus baris Stok Barang Jadi #${id} (${Q.pola(st.id_pola)?.nama_pola || 'Pola'} · ${st.nama_warna}) beserta riwayat mutasinya?`)) return;
+        if (runAction(() => { Svc.deleteStokJadi(id); return true; }, 'Baris stok barang jadi berhasil dihapus.')) renderGudang();
+      } else if (act === 'quick-acc') {
+        const delta = Number(btn.dataset.delta);
+        const label = delta > 0 ? `Tambahkan +${delta}` : `Kurangi ${delta} (Pemakaian Produksi)`;
+        if (!confirm(`${label} unit pada stok aksesoris #${id}?`)) return;
+        const acc = runAction(() => Svc.quickStockAksesoris(id, delta));
+        if (acc) {
+          showToast(`Stok ${acc.nama_aksesoris} diperbarui menjadi ${fmtNum(acc.stok)} ${acc.satuan}.`, 'success');
+          renderGudang();
+        }
+      } else if (act === 'edit-acc') {
+        const acc = Q.aksesoris(id);
+        if (!acc) return;
+        refreshSupplierSelects();
+        $('#edit-acc-id').value = acc.id_aksesoris;
+        $('#edit-acc-nama').value = acc.nama_aksesoris;
+        $('#edit-acc-ukuran').value = acc.ukuran || '';
+        $('#edit-acc-satuan').value = acc.satuan;
+        $('#edit-acc-stok').value = acc.stok;
+        $('#edit-acc-supplier').value = acc.id_supplier;
+        openModalById('modal-edit-aksesoris');
+      } else if (act === 'delete-acc') {
+        const acc = Q.aksesoris(id);
+        if (!acc || !confirm(`Hapus aksesoris "${acc.nama_aksesoris}" (#${id}) dari inventori?`)) return;
+        if (runAction(() => { Svc.deleteAksesoris(id); return true; }, 'Aksesoris berhasil dihapus!')) renderGudang();
+      } else if (act === 'edit-pola-map') {
+        $('#map-id-pola').value = btn.dataset.pola;
+        $('#map-id-aksesoris').value = btn.dataset.acc;
+        $('#map-jumlah-digunakan').value = btn.dataset.qty;
+        openModalById('modal-map-aksesoris-pola');
+      } else if (act === 'delete-pola-map') {
+        if (!confirm('Hapus hubungan aksesoris ini dari pola?')) return;
+        if (runAction(() => { Svc.deletePolaAksesorisMapping(btn.dataset.pola, btn.dataset.acc); return true; }, 'Pemetaan aksesoris dihapus.')) renderGudang();
+      } else if (act === 'delete-riwayat-stok') {
+        const rw = DB.find('Riwayat_Stok_Barang_Jadi', id);
+        if (!rw) return;
+        const desc = rw.jenis_transaksi === 'KELUAR' ? `mengembalikan +${rw.jumlah_pcs} pcs ke stok` : `membatalkan/mengurangi -${rw.jumlah_pcs} pcs dari stok`;
+        if (!confirm(`Hapus riwayat transaksi #${id} dan ${desc}?`)) return;
+        if (runAction(() => { Svc.deleteRiwayatStok(id); return true; }, 'Riwayat transaksi dihapus dan stok berhasil direverse.')) renderGudang();
+      }
+
+      // Pengaturan actions
+      else if (act === 'edit-user') {
+        const u = Q.user(id);
+        if (!u) return;
+        $('#edit-user-id').value = u.id_user;
+        $('#edit-user-nama').value = u.nama_user;
+        $('#edit-user-username').value = u.username;
+        $('#edit-user-password').value = '';
+        $('#edit-user-role').value = u.role;
+        openModalById('modal-edit-user');
+      } else if (act === 'delete-user') {
+        const u = Q.user(id);
+        if (!u || !confirm(`Hapus akun pengguna "${u.nama_user}" (#${id})?`)) return;
+        if (runAction(() => { Svc.deleteUser(id); return true; }, `Akun pengguna ${u.nama_user} berhasil dihapus.`)) renderPengaturan();
+      } else if (act === 'edit-kat-inline') {
+        const k = Q.kategori(id);
+        if (!k) return;
+        const val = prompt('Nama Kategori Pola:', k.nama_kategori);
+        if (!val || !val.trim()) return;
+        if (runAction(() => Svc.updateKategori(id, val), 'Kategori diperbarui.')) renderPengaturan();
+      } else if (act === 'del-kat-inline') {
+        if (!confirm('Hapus kategori pola ini?')) return;
+        if (runAction(() => { Svc.deleteKategori(id); return true; }, 'Kategori dihapus.')) renderPengaturan();
+      } else if (act === 'edit-sum-inline') {
+        const s = Q.sumber(id);
+        if (!s) return;
+        const val = prompt('Nama Sumber Inisiasi:', s.nama_sumber);
+        if (!val || !val.trim()) return;
+        if (runAction(() => Svc.updateSumber(id, val), 'Sumber inisiasi diperbarui.')) renderPengaturan();
+      } else if (act === 'del-sum-inline') {
+        if (!confirm('Hapus sumber inisiasi ini?')) return;
+        if (runAction(() => { Svc.deleteSumber(id); return true; }, 'Sumber inisiasi dihapus.')) renderPengaturan();
+      } else if (act === 'edit-sup-inline') {
+        const sp = Q.supplier(id);
+        if (!sp) return;
+        const newNama = prompt('Nama Supplier:', sp.nama_supplier);
+        if (!newNama || !newNama.trim()) return;
+        const newKontak = prompt('Kontak / Telepon Supplier:', sp.kontak || '');
+        const newAlamat = prompt('Alamat Supplier:', sp.alamat || '');
+        if (runAction(() => Svc.updateSupplier(id, { nama_supplier: newNama, kontak: newKontak, alamat: newAlamat }), 'Supplier diperbarui.')) renderPengaturan();
+      } else if (act === 'del-sup-inline') {
+        if (!confirm('Hapus supplier ini?')) return;
+        if (runAction(() => { Svc.deleteSupplier(id); return true; }, 'Supplier dihapus.')) renderPengaturan();
+      }
+    });
+  }
+
+  /* --------------------------------------------------------------------------
+   * Boot
+   * ------------------------------------------------------------------------ */
+  function boot() {
+    DB.init();
+    enhanceDateInputs(document);
+    bindEvents();
+    syncAuthVisibility();
+
+    const hashTab = location.hash ? location.hash.slice(1) : 'dashboard';
+    if (Auth.isLoggedIn()) {
+      switchTab(TABS.includes(hashTab) ? hashTab : 'dashboard', { updateHash: false, scrollTop: false });
+    } else {
+      refreshIcons();
+    }
 
     window.addEventListener('hashchange', () => {
-      const t = location.hash.slice(1);
-      if (t && t !== state.tab) switchTab(t, { updateHash: false });
-    });
-    window.addEventListener('popstate', () => {
-      const t = location.hash.slice(1) || 'dashboard';
-      if (t !== state.tab) switchTab(t, { updateHash: false });
-    });
-
-    // Delegated input event listeners for dynamic reactivity
-    document.addEventListener('input', (e) => {
-      const id = e.target.id;
-      if (id === 'inp-deadline-mitra') {
-        const val = e.target.value;
-        if (val) {
-          const diff = diffDays(APP_TODAY, val);
-          const remBadge = $('#deadline-remaining-badge');
-          if (remBadge) {
-            remBadge.textContent = diff < 0 ? `Lewat ${Math.abs(diff)} Hari` : `${diff} Hari Kerja Tersisa`;
-            remBadge.className = `badge font-mono ${diff <= 7 ? 'bg-rose-50 text-rose-700 ring-rose-200' : 'bg-indigo-50 text-indigo-700 ring-indigo-200'}`;
-          }
-          const orderDl = $('#inp-deadline-order');
-          if (orderDl && state.selectedSumber === 1) orderDl.value = val;
-        }
-      } else if (id === 'inp-nama-mitra') {
-        updateSmartJenisPesanan();
-      } else if (id === 'inp-nama-pola') {
-        updateSmartJenisPesanan();
-      } else if (e.target.classList.contains('inp-roll-weight')) {
-        const idx = Number(e.target.dataset.index);
-        if (state.penerimaan.draftRolls[idx]) {
-          state.penerimaan.draftRolls[idx].beratKg = Number(e.target.value) || 0;
-          updateDraftRollsSummary();
-          renderColorGroups();
-        }
-      } else if (e.target.classList.contains('inp-roll-rak')) {
-        const idx = Number(e.target.dataset.index);
-        if (state.penerimaan.draftRolls[idx]) {
-          state.penerimaan.draftRolls[idx].rakAlokasi = e.target.value;
-        }
-      } else if (e.target.classList.contains('inp-cg-nama')) {
-        const cgId = Number(e.target.dataset.cgId);
-        const cg = state.penerimaan.colorGroups.find((g) => g.id === cgId);
-        if (cg) {
-          cg.namaWarna = e.target.value;
-          renderDraftRollsTable();
-        }
-      } else if (e.target.classList.contains('inp-cg-kode')) {
-        const cgId = Number(e.target.dataset.cgId);
-        const cg = state.penerimaan.colorGroups.find((g) => g.id === cgId);
-        if (cg) {
-          cg.kodeWarna = e.target.value;
-          renderDraftRollsTable();
-        }
-      } else if (e.target.classList.contains('inp-cg-rak')) {
-        const cgId = Number(e.target.dataset.cgId);
-        const cg = state.penerimaan.colorGroups.find((g) => g.id === cgId);
-        if (cg) cg.rakDefault = e.target.value;
-      } else if (e.target.classList.contains('color-picker')) {
-        const cgId = Number(e.target.dataset.cgId);
-        const cg = state.penerimaan.colorGroups.find((g) => g.id === cgId);
-        if (cg) cg.hexColor = e.target.value;
-      } else if (e.target.classList.contains('inp-panjang-gelar')) {
-        const idx = Number(e.target.dataset.index);
-        if (state.pemotongan.draftGelarRows[idx]) {
-          state.pemotongan.draftGelarRows[idx].panjang_gelar = Number(e.target.value) || 0;
-          const totalPanjang = state.pemotongan.draftGelarRows.reduce((t, r) => t + (Number(r.panjang_gelar) || 0), 0);
-          const totalPanjangEl = $('#lbl-total-panjang-m');
-          if (totalPanjangEl) totalPanjangEl.textContent = totalPanjang.toFixed(1);
-        }
-      } else if (e.target.classList.contains('inp-jumlah-tumpuk')) {
-        const idx = Number(e.target.dataset.index);
-        if (state.pemotongan.draftGelarRows[idx]) {
-          const ply = Number(e.target.value) || 0;
-          state.pemotongan.draftGelarRows[idx].jumlah_tumpuk = ply;
-          const pcsPerPly = Number($('#inp-pcs-per-ply')?.value) || 2;
-          state.pemotongan.draftGelarRows[idx].total_lembar_gelar = ply * pcsPerPly;
-          const tr = e.target.closest('tr');
-          const lembarInp = tr?.querySelector('.inp-lembar-gelar');
-          if (lembarInp) lembarInp.value = state.pemotongan.draftGelarRows[idx].total_lembar_gelar;
-          updateCuttingYieldSummary();
-        }
-      } else if (e.target.classList.contains('inp-lembar-gelar')) {
-        const idx = Number(e.target.dataset.index);
-        if (state.pemotongan.draftGelarRows[idx]) {
-          state.pemotongan.draftGelarRows[idx].total_lembar_gelar = Number(e.target.value) || 0;
-          updateCuttingYieldSummary();
-        }
-      } else if (id === 'inp-total-lembar-hasil' || id === 'inp-lembar-rencana') {
-        const totalLembar = Number($('#inp-total-lembar-hasil')?.value) || 0;
-        const planned = Number($('#inp-lembar-rencana')?.value) || 120;
-        const yieldVsPlanned = $('#yield-vs-planned');
-        if (yieldVsPlanned) {
-          const pct = Math.round((totalLembar / Math.max(planned, 1)) * 100);
-          const rows = state.pemotongan.draftGelarRows || [];
-          const uniqueRolls = new Set(rows.map((r) => r.id_roll)).size;
-          const avg = uniqueRolls ? Math.round(totalLembar / uniqueRolls) : 0;
-          yieldVsPlanned.innerHTML = `
-            <i data-lucide="${pct >= 100 ? 'check' : 'alert-circle'}" class="w-3.5 h-3.5 ${pct >= 100 ? 'text-emerald-600' : 'text-amber-500'}"></i>
-            <span>${pct}% dari rencana (${planned} Lembar) · Rata-rata ${avg} Pcs/Roll (${rows.length} Gelaran)</span>`;
-          refreshIcons();
-        }
-      }
-    });
-
-    // Delegated change event listeners
-    document.addEventListener('change', (e) => {
-      const id = e.target.id;
-      if (id === 'sel-pola-existing') {
-        state.pesanan.selectedPolaId = Number(e.target.value);
-        renderPesananScreen();
-        refreshIcons();
-      } else if (id === 'sel-pola-kategori') {
-        const katId = Number(e.target.value);
-        const kat = Q.kategori(katId);
-        const isCelana = kat?.nama_kategori?.toLowerCase().includes('celana');
-        renderNewPolaSpecGrid(isCelana);
-        const nextPolaId = BongDB.nextId('Pola');
-        const prefix = isCelana ? 'CLN' : kat?.nama_kategori?.toLowerCase().includes('jaket') ? 'JKT' : kat?.nama_kategori?.toLowerCase().includes('kaos') ? 'KOS' : 'KMJ';
-        const inpKode = $('#inp-kode-pola');
-        if (inpKode) inpKode.value = `${prefix}-NEW-${String(nextPolaId).padStart(2, '0')}`;
-      } else if (id === 'sel-penerimaan-order') {
-        const hasPen = Boolean(e.target.value);
-        const initStatusText = $('#pesanan-initial-status-text');
-        if (initStatusText) {
-          initStatusText.textContent = hasPen ? 'ANTREAN · 15% Persiapan Gelar' : 'ANTREAN · 0% Menunggu Bahan';
-        }
-        const initBadge = $('#pesanan-initial-badge');
-        if (initBadge) {
-          initBadge.className = hasPen ? 'badge bg-indigo-50 text-indigo-700 ring-indigo-200' : 'badge bg-slate-100 text-slate-700 ring-slate-200';
-        }
-      } else if (id === 'sel-supplier') {
-        const sup = Q.supplier(Number(e.target.value));
-        const box = $('#supplier-info-box');
-        if (box && sup) {
-          box.innerHTML = `
-            <div class="flex items-center gap-2 truncate">
-              <span class="font-semibold text-slate-800">${esc(sup.nama_supplier)}</span>
-              <span class="text-slate-300">|</span>
-              <span class="text-slate-600"><i data-lucide="phone" class="w-3 h-3 inline mr-1 text-slate-400"></i>${esc(sup.kontak)}</span>
-              <span class="text-slate-300">|</span>
-              <span class="text-slate-600 truncate"><i data-lucide="map-pin" class="w-3 h-3 inline mr-1 text-slate-400"></i>${esc(sup.alamat)}</span>
-            </div>`;
-          refreshIcons();
-        }
-      } else if (e.target.classList.contains('sel-roll-color')) {
-        const idx = Number(e.target.dataset.index);
-        const cgId = Number(e.target.value);
-        if (state.penerimaan.draftRolls[idx]) {
-          state.penerimaan.draftRolls[idx].colorGroupId = cgId;
-          const cg = state.penerimaan.colorGroups.find((g) => g.id === cgId);
-          if (cg && cg.rakDefault) {
-            state.penerimaan.draftRolls[idx].rakAlokasi = cg.rakDefault;
-            const tr = e.target.closest('tr');
-            const rakInp = tr?.querySelector('.inp-roll-rak');
-            if (rakInp) rakInp.value = cg.rakDefault;
-          }
-          renderColorGroups();
-        }
-      } else if (id === 'sel-potong-pesanan') {
-        state.selectedEdf = Number(e.target.value);
-        renderEdfQueue();
-        renderPemotonganScreen({ selectedOrderId: state.selectedEdf });
-        refreshIcons();
-      } else if (id === 'sel-potong-warna') {
-        renderDraftGelarTable();
-        updateCuttingYieldSummary();
-        refreshIcons();
-      } else if (e.target.classList.contains('sel-gelar-roll')) {
-        const idx = Number(e.target.dataset.index);
-        const newRollId = Number(e.target.value);
-        if (state.pemotongan.draftGelarRows[idx]) {
-          state.pemotongan.draftGelarRows[idx].id_roll = newRollId;
-          if (!state.pemotongan.rollStatusMap[newRollId]) {
-            state.pemotongan.rollStatusMap[newRollId] = 'Dipotong';
-          }
-          updateCuttingYieldSummary();
-        }
-      } else if (e.target.classList.contains('sel-gelar-status')) {
-        const idx = Number(e.target.dataset.index);
-        const rollId = Number(e.target.dataset.rollId);
-        const val = e.target.value;
-        if (state.pemotongan.draftGelarRows[idx]) {
-          state.pemotongan.draftGelarRows[idx].status_akhir = val;
-        }
-        if (rollId) state.pemotongan.rollStatusMap[rollId] = val;
-        updateCuttingYieldSummary();
-      } else if (id === 'sel-qc-pesanan') {
-        state.qc.selectedOrderId = Number(e.target.value);
-        renderQcScreen({ selectedOrderId: state.qc.selectedOrderId });
-        refreshIcons();
-      } else if (id === 'sel-jenis-cacat') {
-        state.qc.selectedDefectCat = e.target.value;
-        renderQcScreen();
-        refreshIcons();
-      }
-    });
-
-    // Global search
-    const input = $('#global-search');
-    let timer = null;
-    input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => runSearch(input.value), 120); });
-    input.addEventListener('focus', () => { if (input.value.trim()) runSearch(input.value); });
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { const first = $('#search-results .search-item'); if (first) { first.click(); input.blur(); } }
-      if (e.key === 'Escape') { input.value = ''; runSearch(''); input.blur(); }
-    });
-
-    document.addEventListener('keydown', (e) => {
-      const typing = /input|textarea|select/i.test(document.activeElement?.tagName || '');
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); input.focus(); input.select(); }
-      else if (e.key === '/' && !typing) { e.preventDefault(); input.focus(); }
-      else if (e.key === 'Escape') { closeModal(); closeDropdowns(); }
+      const t = location.hash ? location.hash.slice(1) : 'dashboard';
+      if (TABS.includes(t) && t !== state.tab) switchTab(t, { updateHash: false });
     });
   }
 
-  /* --------------------------------------------------------------------------
-   * 14. INIT
-   * ------------------------------------------------------------------------ */
-  function renderAll() {
-    renderDashboard();
-    renderSumberTiles();
-    renderEdfQueue();
-    renderShellMeta();
-    renderNotifications();
-    renderPesananScreen();
-    renderPenerimaanScreen();
-    renderPemotonganScreen();
-    renderQcScreen();
-    renderLaporanScreen();
-    refreshIcons();
-    runCountUps();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
   }
-
-  function init() {
-    BongDB.init();
-    const todayEl = $('#today-label');
-    if (todayEl) todayEl.textContent = APP_TODAY_LABEL;
-
-    renderSkeletons();
-    applyRole(state.role);
-    renderAll();
-    bindEvents();
-
-    const initial = location.hash.slice(1);
-    switchTab(TABS.includes(initial) ? initial : 'dashboard', { updateHash: false });
-
-    BongDB.subscribe(() => renderAll());
-  }
-
-  // Public API for Steps 2–6
-  window.BongApp = {
-    state, switchTab, applyRole, showToast, openModal, closeModal, confirmDialog,
-    renderAll, renderDashboard, renderPesananScreen, renderPenerimaanScreen,
-    renderPemotonganScreen, renderQcScreen, renderLaporanScreen,
-    submitPesanan, submitPenerimaan, resetPesananForm, resetPenerimaanForm,
-    submitPemotongan, resetPemotonganForm, submitQc, resetQcForm, approveQcPass, resolveQc,
-    applyLaporanFilter, resetLaporanFilter, printReport,
-    computeMetrics, refreshIcons, Q,
-    utils: { addDays, diffDays, fmtDate, fmtNum, esc, sum, round1, downloadFile, toCsv },
-    constants: { APP_TODAY, APP_TODAY_LABEL, TARGET_HARIAN_PCS, ACTIVE_STATUSES, TABLE_PK, ROLES },
-  };
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
 })();
